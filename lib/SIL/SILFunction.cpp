@@ -268,6 +268,12 @@ SILType ArchetypeBuilder::substDependentType(SILModule &M, SILType type) {
     type);
 }
 
+Type SILFunction::mapTypeOutOfContext(Type type) const {
+  return ArchetypeBuilder::mapTypeOutOfContext(getModule().getSwiftModule(),
+                                               getContextGenericParams(),
+                                               type);
+}
+
 SILBasicBlock *SILFunction::createBasicBlock() {
   return new (getModule()) SILBasicBlock(this);
 }
