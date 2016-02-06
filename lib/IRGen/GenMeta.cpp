@@ -4903,12 +4903,14 @@ namespace {
   class ProtocolDescriptorBuilder {
     IRGenModule &IGM;
     ProtocolDecl *Protocol;
+    SILDefaultWitnessTable *DefaultWitnesses;
 
     SmallVector<llvm::Constant*, 8> Fields;
 
   public:
-    ProtocolDescriptorBuilder(IRGenModule &IGM, ProtocolDecl *protocol)
-      : IGM(IGM), Protocol(protocol) {}
+    ProtocolDescriptorBuilder(IRGenModule &IGM, ProtocolDecl *protocol,
+                              SILDefaultWitnessTable *defaultWitnesses)
+      : IGM(IGM), Protocol(protocol), DefaultWitnesses(defaultWitnesses) {}
 
     void layout() {
       addObjCCompatibilityIsa();
@@ -4917,6 +4919,7 @@ namespace {
       addObjCCompatibilityTables();
       addSize();
       addFlags();
+      addDefaultWitnessTable();
     }
 
     llvm::Constant *null() {
@@ -5002,9 +5005,28 @@ namespace {
         .withDispatchStrategy(
                 Lowering::TypeConverter::getProtocolDispatchStrategy(Protocol))
         .withSpecialProtocol(getSpecialProtocolID(Protocol));
-      
+
+      if (DefaultWitnesses)
+        flags = flags.withResilient(true);
+
       Fields.push_back(llvm::ConstantInt::get(IGM.Int32Ty,
                                               flags.getIntValue()));
+    }
+
+    void addDefaultWitnessTable() {
+      // The runtime ignores these fields if the IsResilient flag is not set.
+      unsigned minimumWitnessTableSize = 0;
+      unsigned defaultWitnessTableSize = 0;
+
+      if (DefaultWitnesses) {
+        minimumWitnessTableSize = DefaultWitnesses->getMinimumWitnessTableSize();
+        defaultWitnessTableSize = DefaultWitnesses->getDefaultWitnessTableSize();
+      }
+
+      Fields.push_back(llvm::ConstantInt::get(IGM.Int16Ty,
+                                              minimumWitnessTableSize));
+      Fields.push_back(llvm::ConstantInt::get(IGM.Int16Ty,
+                                              defaultWitnessTableSize));
     }
 
     llvm::Constant *getInit() {
@@ -5034,8 +5056,9 @@ void IRGenModule::emitProtocolDecl(ProtocolDecl *protocol) {
     getObjCProtocolGlobalVars(protocol);
     return;
   }
-  
-  ProtocolDescriptorBuilder builder(*this, protocol);
+
+  auto *defaultWitnesses = SILMod->lookUpDefaultWitnessTable(protocol);
+  ProtocolDescriptorBuilder builder(*this, protocol, defaultWitnesses);
   builder.layout();
   auto init = builder.getInit();
 
