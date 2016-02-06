@@ -1012,7 +1012,8 @@ public:
   /// retained closure object reference if the constant refers to a local func
   /// decl.
   ManagedValue emitFunctionRef(SILLocation loc, SILDeclRef constant,
-                               SILConstantInfo constantInfo);
+                               SILConstantInfo constantInfo,
+                               ArrayRef<Substitution> subs);
   
   /// Emit the specified VarDecl as an LValue if possible, otherwise return
   /// null.
@@ -1046,7 +1047,8 @@ public:
 
   ManagedValue emitClosureValue(SILLocation loc,
                                 SILDeclRef function,
-                                AnyFunctionRef TheClosure);
+                                AnyFunctionRef TheClosure,
+                                ArrayRef<Substitution> subs);
   
   ArgumentSource prepareAccessorBaseArg(SILLocation loc, ManagedValue base,
                                         CanType baseFormalType,

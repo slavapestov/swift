@@ -439,7 +439,8 @@ emitRValueForDecl(SILLocation loc, ConcreteDeclRef declRef, Type ncRefType,
   auto silDeclRef = SILDeclRef(decl, ResilienceExpansion::Minimal, uncurryLevel);
   auto constantInfo = getConstantInfo(silDeclRef);
 
-  ManagedValue result = emitFunctionRef(loc, silDeclRef, constantInfo);
+  ManagedValue result = emitFunctionRef(loc, silDeclRef, constantInfo,
+                                        declRef.getSubstitutions());
 
   // Get the lowered AST types:
   //  - the original type
@@ -465,25 +466,6 @@ emitRValueForDecl(SILLocation loc, ConcreteDeclRef declRef, Type ncRefType,
   auto substFormalType = cast<AnyFunctionType>(refType);
   auto substLoweredFormalType =
     SGM.Types.getLoweredASTFunctionType(substFormalType, 0, silDeclRef);
-
-  // If the declaration reference is specialized, create the partial
-  // application.
-  if (declRef.isSpecialized()) {
-    // Substitute the function type.
-    auto origFnType = result.getType().castTo<SILFunctionType>();
-    auto substFnType = origFnType->substGenericArgs(
-                                                    SGM.M, SGM.SwiftModule,
-                                                    declRef.getSubstitutions());
-    auto closureType = adjustFunctionType(substFnType,
-                                        SILFunctionType::Representation::Thick);
-
-    SILValue spec = B.createPartialApply(loc, result.forward(*this),
-                                SILType::getPrimitiveObjectType(substFnType),
-                                         declRef.getSubstitutions(),
-                                         { },
-                                SILType::getPrimitiveObjectType(closureType));
-    result = emitManagedRValueWithCleanup(spec);
-  }
 
   // Generalize if necessary.
   return emitOrigToSubstValue(loc, result, origLoweredFormalType,
@@ -1927,7 +1909,9 @@ RValue RValueEmitter::visitAbstractClosureExpr(AbstractClosureExpr *e,
 
   // Generate the closure value (if any) for the closure expr's function
   // reference.
-  return RValue(SGF, e, SGF.emitClosureValue(e, SILDeclRef(e), e));
+  return RValue(SGF, e,
+                SGF.emitClosureValue(e, SILDeclRef(e), e,
+                                     SGF.getForwardingSubstitutions()));
 }
 
 RValue RValueEmitter::

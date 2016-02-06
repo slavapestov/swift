@@ -1110,16 +1110,9 @@ public:
 
     // Otherwise, we have a statically-dispatched call.
     CanFunctionType substFnType = getSubstFnType();
-    ArrayRef<Substitution> subs;
     
     auto afd = dyn_cast<AbstractFunctionDecl>(e->getDecl());
     if (afd) {
-      auto constantInfo = SGF.getConstantInfo(constant);
-
-      // Forward local substitutions to a non-generic local function.
-      if (afd->getParent()->isLocalContext() && !afd->getGenericParams())
-        subs = constantInfo.getForwardingSubstitutions(SGF.getASTContext());
-
       // If there are captures, put the placeholder curry level in the formal
       // type.
       // TODO: Eliminate the need for this.
@@ -1127,9 +1120,13 @@ public:
         substFnType = CanFunctionType::get(
           SGF.getASTContext().TheEmptyTupleType, substFnType);
     }
-    
-    if (e->getDeclRef().isSpecialized()) {
-      assert(subs.empty() && "nested local generics not yet supported");
+
+    // If we're referencing a local function that does not capture any
+    // generic parameters, the function will not be polymorphic even if
+    // Sema handed us substitutions.
+    ArrayRef<Substitution> subs;
+    if (e->getDeclRef().isSpecialized() &&
+        SGF.SGM.Types.getConstantInfo(constant).SILFnType->isPolymorphic()) {
       subs = e->getDeclRef().getSubstitutions();
     }
     
@@ -1143,9 +1140,6 @@ public:
     // If the decl ref requires captures, emit the capture params.
     if (afd) {
       if (afd->getCaptureInfo().hasLocalCaptures()) {
-        assert(!e->getDeclRef().isSpecialized()
-               && "generic local fns not implemented");
-        
         SmallVector<ManagedValue, 4> captures;
         SGF.emitCaptures(e, afd, CaptureEmission::ImmediateApplication,
                          captures);

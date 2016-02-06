@@ -204,17 +204,37 @@ SILGenFunction::emitSiblingMethodRef(SILLocation loc,
 
 ManagedValue SILGenFunction::emitFunctionRef(SILLocation loc,
                                              SILDeclRef constant,
-                                             SILConstantInfo constantInfo) {
+                                             SILConstantInfo constantInfo,
+                                             ArrayRef<Substitution> subs) {
   // If the function has captures, apply them.
   if (auto fn = constant.getAnyFunctionRef()) {
     if (fn->getCaptureInfo().hasLocalCaptures() ||
         fn->getCaptureInfo().hasGenericParamCaptures()) {
-      return emitClosureValue(loc, constant, *fn);
+      return emitClosureValue(loc, constant, *fn, subs);
     }
   }
 
   // Otherwise, use a global FunctionRefInst.
   SILValue c = emitGlobalFunctionRef(loc, constant, constantInfo);
+  auto origFnType = c->getType().castTo<SILFunctionType>();
+
+  // If the declaration reference is specialized, create the partial
+  // application.
+  if (origFnType->isPolymorphic()) {
+    assert(!subs.empty());
+
+    // Substitute the function type.
+    auto substFnType = origFnType->substGenericArgs(SGM.M, SGM.SwiftModule, subs);
+    auto closureType = adjustFunctionType(substFnType,
+                                        SILFunctionType::Representation::Thick);
+
+    c = B.createPartialApply(loc, c,
+                             SILType::getPrimitiveObjectType(substFnType),
+                             subs, { },
+                             SILType::getPrimitiveObjectType(closureType));
+    return emitManagedRValueWithCleanup(c);
+  }
+
   return ManagedValue::forUnmanaged(c);
 }
 
@@ -344,7 +364,8 @@ void SILGenFunction::emitCaptures(SILLocation loc,
 
 ManagedValue
 SILGenFunction::emitClosureValue(SILLocation loc, SILDeclRef constant,
-                                 AnyFunctionRef TheClosure) {
+                                 AnyFunctionRef TheClosure,
+                                 ArrayRef<Substitution> subs) {
   assert(((constant.uncurryLevel == 1 &&
            TheClosure.getCaptureInfo().hasLocalCaptures()) ||
           (constant.uncurryLevel == 0 &&
@@ -358,17 +379,16 @@ SILGenFunction::emitClosureValue(SILLocation loc, SILDeclRef constant,
   auto expectedType =
     cast<FunctionType>(TheClosure.getType()->getCanonicalType());
 
-  // Forward substitutions from the outer scope.
-
+  // Apply substitutions.
   auto pft = constantInfo.SILFnType;
 
-  auto forwardSubs = constantInfo.getForwardingSubstitutions(getASTContext());
-
   bool wasSpecialized = false;
-  if (pft->isPolymorphic() && !forwardSubs.empty()) {
+  if (pft->isPolymorphic()) {
+    assert(!subs.empty());
+
     auto specialized = pft->substGenericArgs(F.getModule(),
                                              F.getModule().getSwiftModule(),
-                                             forwardSubs);
+                                             subs);
     functionTy = SILType::getPrimitiveObjectType(specialized);
     wasSpecialized = true;
   }
@@ -392,10 +412,10 @@ SILGenFunction::emitClosureValue(SILLocation loc, SILDeclRef constant,
   SILType closureTy =
     SILGenBuilder::getPartialApplyResultType(functionRef->getType(),
                                              capturedArgs.size(), SGM.M,
-                                             forwardSubs);
+                                             subs);
   auto toClosure =
     B.createPartialApply(loc, functionRef, functionTy,
-                         forwardSubs, forwardedArgs, closureTy);
+                         subs, forwardedArgs, closureTy);
   auto result = emitManagedRValueWithCleanup(toClosure);
 
   return emitOrigToSubstValue(loc, result,
