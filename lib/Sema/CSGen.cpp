@@ -579,7 +579,7 @@ namespace {
     
     // FIXME: If we ever have derived == for generic types, we may need to
     // revisit this.
-    if (witness.getDecl()->getType()->hasArchetype())
+    if (witness.getDecl()->getInterfaceType()->hasTypeParameter())
       return;
     
     OverloadChoice choice{
@@ -659,7 +659,7 @@ namespace {
           favoredConstraints.push_back(oldConstraint);
           
           favoredTy = overloadChoice.getDecl()->
-              getType()->getAs<AnyFunctionType>()->
+              getInterfaceType()->getAs<AnyFunctionType>()->
               getResult().getPointer();
         }
       }
@@ -807,7 +807,7 @@ namespace {
   /// Return a pair, containing the total parameter count of a function, coupled
   /// with the number of non-default parameters.
   std::pair<size_t, size_t> getParamCount(ValueDecl *VD) {
-    auto fty = VD->getType()->getAs<AnyFunctionType>();
+    auto fty = VD->getInterfaceType()->getAs<AnyFunctionType>();
     assert(fty && "attempting to count parameters of a non-function type");
     
     auto t = fty->getInput();
@@ -837,7 +837,7 @@ namespace {
     
     // Determine whether the given declaration is favored.
     auto isFavoredDecl = [&](ValueDecl *value) -> bool {
-      auto valueTy = value->getType();
+      auto valueTy = value->getInterfaceType();
       
       auto fnTy = valueTy->getAs<AnyFunctionType>();
       if (!fnTy)
@@ -872,7 +872,7 @@ namespace {
       bool haveMultipleApplicableOverloads = false;
       
       for (auto VD : ODR->getDecls()) {
-        if (VD->getType()->getAs<AnyFunctionType>()) {
+        if (VD->getInterfaceType()->is<AnyFunctionType>()) {
           auto nParams = getParamCount(VD);
           
           if (nArgs == nParams.first) {
@@ -887,10 +887,7 @@ namespace {
       
       // Determine whether the given declaration is favored.
       auto isFavoredDecl = [&](ValueDecl *value) -> bool {
-        auto valueTy = value->getType();
-        
-        auto fnTy = valueTy->getAs<AnyFunctionType>();
-        if (!fnTy)
+        if (!value->getInterfaceType()->is<AnyFunctionType>())
           return false;
         
         auto paramCount = getParamCount(value);
@@ -906,7 +903,7 @@ namespace {
     if (auto favoredTy = CS.getFavoredType(expr->getArg())) {
       // Determine whether the given declaration is favored.
       auto isFavoredDecl = [&](ValueDecl *value) -> bool {
-        auto valueTy = value->getType();
+        auto valueTy = value->getInterfaceType();
         
         auto fnTy = valueTy->getAs<AnyFunctionType>();
         if (!fnTy)
@@ -966,7 +963,7 @@ namespace {
     
     // Determine whether the given declaration is favored.
     auto isFavoredDecl = [&](ValueDecl *value) -> bool {
-      auto valueTy = value->getType();
+      auto valueTy = value->getInterfaceType();
       
       auto fnTy = valueTy->getAs<AnyFunctionType>();
       if (!fnTy)
@@ -1373,21 +1370,22 @@ namespace {
                        CS.getConstraintLocator(expr));
 
       // Add constraint on args.
-      DeclName constrName = tc.getObjectLiteralConstructorName(expr);
-      assert(constrName);
-      ArrayRef<ValueDecl *> constrs = protocol->lookupDirect(constrName);
-      if (constrs.size() != 1 || !isa<ConstructorDecl>(constrs.front())) {
+      DeclName ctorName = tc.getObjectLiteralConstructorName(expr);
+      assert(ctorName);
+      ArrayRef<ValueDecl *> ctors = protocol->lookupDirect(ctorName);
+      if (ctors.size() != 1 || !isa<ConstructorDecl>(ctors.front())) {
         tc.diagnose(protocol, diag::object_literal_broken_proto);
         return nullptr;
       }
-      auto *constr = cast<ConstructorDecl>(constrs.front());
+      auto *ctor = cast<ConstructorDecl>(ctors.front());
+      auto argType = ArchetypeBuilder::mapTypeIntoContext(ctor, ctor->getArgumentInterfaceType());
       CS.addConstraint(ConstraintKind::ArgumentTupleConversion,
-        expr->getArg()->getType(), constr->getArgumentType(),
+        expr->getArg()->getType(), argType,
         CS.getConstraintLocator(expr, ConstraintLocator::ApplyArgument));
 
       Type result = tv;
-      if (constr->getFailability() != OTK_None) {
-        result = OptionalType::get(constr->getFailability(), result);
+      if (ctor->getFailability() != OTK_None) {
+        result = OptionalType::get(ctor->getFailability(), result);
       }
 
       return result;
@@ -1400,7 +1398,7 @@ namespace {
       // for the decl that isn't bound to anything.  This will ensure that it
       // is considered ambiguous.
       if (E->getDecl()->hasType() &&
-          E->getDecl()->getType()->is<UnresolvedType>()) {
+          E->getDecl()->getInterfaceType()->is<UnresolvedType>()) {
         return CS.createTypeVariable(CS.getConstraintLocator(E),
                                      TVO_CanBindToLValue);
       }
@@ -1423,9 +1421,9 @@ namespace {
                          OverloadChoice(Type(), E->getDecl(),
                                         E->isSpecialized(), CS));
       
-      if (E->getDecl()->getType() &&
-          !E->getDecl()->getType()->getAs<TypeVariableType>()) {
-        CS.setFavoredType(E, E->getDecl()->getType().getPointer());
+      if (E->getDecl()->hasType() &&
+          !E->getDecl()->getInterfaceType()->getAs<TypeVariableType>()) {
+        CS.setFavoredType(E, E->getDecl()->getInterfaceType().getPointer());
       }
 
       return tv;
@@ -2375,7 +2373,7 @@ namespace {
           if (FD->getHaveSearchedForCommonOverloadReturnType()) {
             
             if (FD->getHaveFoundCommonOverloadReturnType()) {
-              outputTy = FD->getType()->getAs<AnyFunctionType>()->getResult();
+              outputTy = FD->getInterfaceType()->getAs<AnyFunctionType>()->getResult();
             }
             
           } else {
@@ -2387,7 +2385,7 @@ namespace {
             for (auto OD : OSR->getDecls()) {
               
               if (auto OFD = dyn_cast<FuncDecl>(OD)) {
-                auto OFT = OFD->getType()->getAs<AnyFunctionType>();
+                auto OFT = OFD->getInterfaceType()->getAs<AnyFunctionType>();
                 
                 if (!OFT) {
                   commonType = Type();
@@ -2413,6 +2411,8 @@ namespace {
             if (!(commonType.isNull() ||
                   commonType->getAs<TypeVariableType>() ||
                   commonType->getAs<ArchetypeType>() ||
+                  commonType->getAs<GenericTypeParamType>() ||
+                  commonType->getAs<DependentMemberType>() ||
                   commonType->getAs<AnyFunctionType>())) {
               outputTy = commonType;
             }

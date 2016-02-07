@@ -2349,6 +2349,7 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
     }
 
     // Set the initializer type of the constructor.
+#if false
     auto allocType = ctor->getType();
     auto selfTy = ctor->computeSelfType();
     if (auto polyFn = allocType->getAs<PolymorphicFunctionType>()) {
@@ -2362,10 +2363,11 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
                                                  fn->getResult(),
                                                  fn->getExtInfo()));
     }
+#endif
 
     // Set the initializer interface type of the constructor.
-    allocType = ctor->getInterfaceType();
-    selfTy = ctor->computeInterfaceSelfType(/*isInitializingCtor=*/true);
+    auto allocType = ctor->getInterfaceType();
+    auto selfTy = ctor->computeInterfaceSelfType(/*isInitializingCtor=*/true);
     if (auto polyFn = allocType->getAs<GenericFunctionType>()) {
       ctor->setInitializerInterfaceType(
               GenericFunctionType::get(polyFn->getGenericSignature(),
@@ -2583,8 +2585,10 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
     // This must be set after recording the constructor in the map.
     // A polymorphic constructor type needs to refer to the constructor to get
     // its generic parameters.
-    auto signature = getType(signatureID)->castTo<AnyFunctionType>();
-    fn->setType(signature);
+
+    // XXX
+    //auto signature = getType(signatureID)->castTo<AnyFunctionType>();
+    fn->setType(fn->getInterfaceType());
 
     // Set the interface type.
     if (auto interfaceType = getType(interfaceTypeID)) {
@@ -2600,9 +2604,12 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
     // If the first parameter list is (self), mark it implicit.
     if (numParamPatterns && DC->isTypeContext())
       paramLists[0]->get(0)->setImplicit();
-    
+   
+   // XXX
+   #if 0
     fn->setDeserializedSignature(paramLists,
                                  TypeLoc::withoutLoc(signature->getResult()));
+#endif
 
     if (auto errorConvention = maybeReadForeignErrorConvention())
       fn->setForeignErrorConvention(*errorConvention);

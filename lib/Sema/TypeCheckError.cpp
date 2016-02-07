@@ -373,11 +373,6 @@ classifyFunctionByType(Type type, unsigned numArgs) {
   }
 }
 
-template <class T>
-static ThrowingKind classifyFunctionBodyWithoutContext(T *fn) {
-  return classifyFunctionByType(fn->getType(), fn->getNaturalArgumentCount());
-}
-
 /// A class for collecting information about rethrowing functions.
 class ApplyClassifier {
   llvm::DenseMap<void*, ThrowingKind> Cache;
@@ -817,9 +812,8 @@ public:
   };
 
 private:
-  template <class T>
-  static Kind getKindForFunctionBody(T *fn) {
-    switch (classifyFunctionBodyWithoutContext(fn)) {
+  static Kind getKindForFunctionBody(Type type, unsigned numArgs) {
+    switch (classifyFunctionByType(type, numArgs)) {
     case ThrowingKind::None:
       return Kind::NonThrowingFunction;
     case ThrowingKind::Invalid:
@@ -852,7 +846,8 @@ public:
       result.RethrowsDC = D;
       return result;
     }
-    return Context(getKindForFunctionBody(D));
+    return Context(getKindForFunctionBody(D->getInterfaceType(),
+                                          D->getNaturalArgumentCount()));
   }
 
   static Context forInitializer(Initializer *init) {
@@ -875,7 +870,8 @@ public:
   }
 
   static Context forClosure(AbstractClosureExpr *E) {
-    auto kind = getKindForFunctionBody(E);
+    auto kind = getKindForFunctionBody(E->getType(),
+                                       E->getNaturalArgumentCount());
     if (kind != Kind::Handled && isa<AutoClosureExpr>(E))
       kind = Kind::NonThrowingAutoClosure;
     return Context(kind);

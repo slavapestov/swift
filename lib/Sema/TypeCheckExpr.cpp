@@ -760,7 +760,8 @@ namespace {
     /// will need to distinguish outer and inner type parameters here.
     void checkType(Type type) {
       // Nothing to do if the type is concrete.
-      if (!type || !type->hasArchetype())
+      // FIXME: Should not get archetypes here.
+      if (!type || (!type->hasArchetype() && !type->hasTypeParameter()))
         return;
 
       // Easy case.
@@ -772,7 +773,11 @@ namespace {
       // This type contains both an archetype and an open existential. Walk the
       // type to see if we have any archetypes that are *not* open existentials.
       if (type.findIf([](Type t) -> bool {
-            return (t->is<ArchetypeType>() && !t->isOpenedExistential());
+            if (t->is<ArchetypeType>() && !t->isOpenedExistential())
+              return true;
+            if (t->is<GenericTypeParamType>())
+              return true;
+            return false;
           }))
         capturesTypes = true;
     }
@@ -1059,7 +1064,7 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
   AFR.getBody()->walk(finder);
 
   if (AFR.hasType())
-    finder.checkType(AFR.getType());
+    finder.checkType(AFR.getInterfaceType());
 
   // If this is an init(), explicitly walk the initializer values for members of
   // the type.  They will be implicitly emitted by SILGen into the generated

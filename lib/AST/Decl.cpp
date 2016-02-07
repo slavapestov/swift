@@ -2468,7 +2468,7 @@ bool ProtocolDecl::existentialTypeSupportedSlow(LazyResolver *resolver) {
   if (resolver && !hasType())
     resolver->resolveDeclSignature(this);
 
-  auto selfType = getProtocolSelf()->getArchetype();
+  auto selfType = getProtocolSelf()->getDeclaredType();
   for (auto member : getMembers()) {
     if (auto vd = dyn_cast<ValueDecl>(member)) {
       if (resolver && !vd->hasType())
@@ -2493,7 +2493,7 @@ bool ProtocolDecl::existentialTypeSupportedSlow(LazyResolver *resolver) {
 
     // Extract the type of the member, ignoring the 'self' parameter and return
     // type of functions.
-    auto memberTy = valueMember->getType();
+    auto memberTy = valueMember->getInterfaceType();
     if (memberTy->is<ErrorType>())
       continue;
     if (isa<AbstractFunctionDecl>(valueMember)) {
@@ -2507,8 +2507,8 @@ bool ProtocolDecl::existentialTypeSupportedSlow(LazyResolver *resolver) {
     // existential type.
     if (memberTy.findIf([&](Type type) -> bool {
           // If we found our archetype, return null.
-          if (auto archetype = type->getAs<ArchetypeType>()) {
-            return archetype == selfType;
+          if (auto genericParamType = type->getAs<GenericTypeParamType>()) {
+            return genericParamType->isEqual(selfType);
           }
 
           return false;
@@ -3945,11 +3945,28 @@ Type FuncDecl::getResultType() const {
   return resultTy;
 }
 
+Type FuncDecl::getResultInterfaceType() const {
+  if (!hasType())
+    return nullptr;
+
+  Type resultTy = getInterfaceType();
+  if (resultTy->is<ErrorType>())
+    return resultTy;
+
+  for (unsigned i = 0, e = getNaturalArgumentCount(); i != e; ++i)
+    resultTy = resultTy->castTo<AnyFunctionType>()->getResult();
+
+  if (!resultTy)
+    resultTy = TupleType::getEmpty(getASTContext());
+
+  return resultTy;
+}
+
 bool AbstractFunctionDecl::isBodyThrowing() const {
   if (!hasType())
     return false;
 
-  Type type = getType();
+  Type type = getInterfaceType();
   if (type->is<ErrorType>())
     return false;
 
@@ -4081,9 +4098,9 @@ bool FuncDecl::hasArchetypeSelf() const {
   if (!getDeclContext()->isProtocolExtensionContext())
     return false;
 
-  auto selfTy = getDeclContext()->getProtocolSelf()->getArchetype();
+  auto selfTy = getDeclContext()->getProtocolSelf()->getDeclaredType();
 
-  auto resultTy = getResultType();
+  auto resultTy = getResultInterfaceType();
   auto optionalResultTy = resultTy->getAnyOptionalObjectType();
   if (optionalResultTy)
     return optionalResultTy->isEqual(selfTy);
@@ -4187,8 +4204,22 @@ Type ConstructorDecl::getArgumentType() const {
   return ArgTy;
 }
 
+Type ConstructorDecl::getArgumentInterfaceType() const {
+  Type ArgTy = getInterfaceType();
+  ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
+  ArgTy = ArgTy->castTo<AnyFunctionType>()->getInput();
+  return ArgTy;
+}
+
 Type ConstructorDecl::getResultType() const {
   Type ArgTy = getType();
+  ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
+  ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
+  return ArgTy;
+}
+
+Type ConstructorDecl::getResultInterfaceType() const {
+  Type ArgTy = getInterfaceType();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
   return ArgTy;

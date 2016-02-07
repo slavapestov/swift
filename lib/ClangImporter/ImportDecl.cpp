@@ -316,6 +316,7 @@ static FuncDecl *makeRawValueTrivialGetter(ClangImporter::Implementation &Impl,
   getterDecl->setImplicit();
   
   getterDecl->setBodyResultType(rawType);
+  getterDecl->setInterfaceType(toRawType);
   getterDecl->setAccessibility(Accessibility::Public);
 
   // Don't bother synthesizing the body if we've already finished type-checking.
@@ -373,6 +374,7 @@ static FuncDecl *makeRawValueTrivialSetter(ClangImporter::Implementation &Impl,
   setterDecl->setMutating();
   
   setterDecl->setType(ParameterList::getFullType(voidTy, params));
+  setterDecl->setInterfaceType(ParameterList::getFullType(voidTy, params));
   setterDecl->setBodyResultType(voidTy);
   setterDecl->setAccessibility(Accessibility::Public);
 
@@ -438,6 +440,7 @@ makeEnumRawValueConstructor(ClangImporter::Implementation &Impl,
   auto allocFnTy = FunctionType::get(metaTy, fnTy);
   auto initFnTy = FunctionType::get(enumTy, fnTy);
   ctorDecl->setType(allocFnTy);
+  ctorDecl->setInterfaceType(allocFnTy);
   ctorDecl->setInitializerType(initFnTy);
 
   // Don't bother synthesizing the body if we've already finished type-checking.
@@ -493,6 +496,8 @@ static FuncDecl *makeEnumRawValueGetter(ClangImporter::Implementation &Impl,
   getterDecl->setImplicit();
   getterDecl->setType(ParameterList::getFullType(enumDecl->getRawType(),
                                                  params));
+  getterDecl->setInterfaceType(ParameterList::getFullType(enumDecl->getRawType(),
+                                                          params));
   getterDecl->setBodyResultType(enumDecl->getRawType());
   getterDecl->setAccessibility(Accessibility::Public);
 
@@ -540,6 +545,7 @@ static FuncDecl *makeFieldGetterDecl(ClangImporter::Implementation &Impl,
                                      importedDecl, clangNode);
   getterDecl->setAccessibility(Accessibility::Public);
   getterDecl->setType(ParameterList::getFullType(getterType, params));
+  getterDecl->setInterfaceType(ParameterList::getFullType(getterType, params));
   getterDecl->setBodyResultType(getterType);
 
   return getterDecl;
@@ -571,6 +577,7 @@ static FuncDecl *makeFieldSetterDecl(ClangImporter::Implementation &Impl,
                                      importedDecl, clangNode);
 
   setterDecl->setType(ParameterList::getFullType(voidTy, params));
+  setterDecl->setInterfaceType(ParameterList::getFullType(voidTy, params));
   setterDecl->setBodyResultType(voidTy);
   setterDecl->setAccessibility(Accessibility::Public);
   setterDecl->setMutating();
@@ -1154,7 +1161,7 @@ static void inferProtocolMemberAvailability(ClangImporter::Implementation &impl,
     return;
 
   AvailabilityContext requiredRange =
-      AvailabilityInference::inferForType(valueDecl->getType());
+      AvailabilityInference::inferForType(valueDecl->getInterfaceType());
 
   ASTContext &C = impl.SwiftContext;
 
@@ -1212,6 +1219,7 @@ static bool addErrorDomain(NominalTypeDecl *swiftDecl,
   getterDecl->setImplicit();
   getterDecl->setStatic(isStatic);
   getterDecl->setBodyResultType(stringTy);
+  getterDecl->setInterfaceType(toStringTy);
   getterDecl->setAccessibility(Accessibility::Public);
 
   auto ret = new (swiftCtx) ReturnStmt(noLoc, domainDeclRef);
@@ -1629,6 +1637,7 @@ namespace {
       auto allocFnTy = FunctionType::get(selfMetatype, fnTy);
       auto initFnTy = FunctionType::get(selfType, fnTy);
       constructor->setType(allocFnTy);
+      constructor->setInterfaceType(allocFnTy);
       constructor->setInitializerType(initFnTy);
       
       constructor->setAccessibility(Accessibility::Public);
@@ -1720,6 +1729,7 @@ namespace {
       auto allocFnTy = FunctionType::get(selfMetatype, fnTy);
       auto initFnTy = FunctionType::get(selfType, fnTy);
       constructor->setType(allocFnTy);
+      constructor->setInterfaceType(allocFnTy);
       constructor->setInitializerType(initFnTy);
       
       constructor->setAccessibility(Accessibility::Public);
@@ -2578,6 +2588,7 @@ namespace {
           TypeLoc::withoutLoc(resultTy), dc, decl);
 
       result->setBodyResultType(resultTy);
+      result->setInterfaceType(type);
 
       result->setAccessibility(Accessibility::Public);
 
@@ -3038,6 +3049,8 @@ namespace {
 
       // Add the 'self' parameter to the function type.
       type = FunctionType::get(selfVar->getType(), type);
+      if (!interfaceType)
+        interfaceType = type;
 
       if (auto proto = dyn_cast<ProtocolDecl>(dc)) {
         std::tie(type, interfaceType)
@@ -3494,6 +3507,8 @@ namespace {
 
         result->setInitializerInterfaceType(interfaceInitType);
         result->setInterfaceType(interfaceAllocType);
+      } else {
+        result->setInterfaceType(allocType);
       }
 
       result->setType(allocType);
@@ -3636,6 +3651,8 @@ namespace {
       if (dc->isProtocolOrProtocolExtensionContext()) {
         std::tie(getterType, interfaceType)
           = getProtocolMethodType(dc, getterType->castTo<AnyFunctionType>());
+      } else {
+        interfaceType = getterType;
       }
 
       // Create the getter thunk.
@@ -3701,6 +3718,8 @@ namespace {
       if (dc->isProtocolOrProtocolExtensionContext()) {
         std::tie(setterType, interfaceType)
           = getProtocolMethodType(dc, setterType->castTo<AnyFunctionType>());
+      } else {
+        interfaceType = setterType;
       }
 
       // Create the setter thunk.
@@ -4045,6 +4064,7 @@ namespace {
       auto indicesType = bodyParams->getType(context);
       
       subscript->setType(FunctionType::get(indicesType, elementTy));
+      subscript->setInterfaceType(FunctionType::get(indicesType, elementTy));
       addObjCAttribute(subscript, None);
 
       // Optional subscripts in protocols.
@@ -5772,6 +5792,7 @@ ClangImporter::Implementation::createConstant(Identifier name, DeclContext *dc,
                                getterArgs, TypeLoc::withoutLoc(type), dc);
   func->setStatic(isStatic);
   func->setBodyResultType(type);
+  func->setInterfaceType(getterType);
   func->setAccessibility(Accessibility::Public);
 
   // If we're not done type checking, build the getter body.

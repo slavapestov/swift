@@ -172,7 +172,7 @@ bool swift::removeShadowedDecls(SmallVectorImpl<ValueDecl*> &decls,
     if (decl->isBeingTypeChecked())
       continue;
 
-    signature = decl->getType()->getCanonicalType();
+    signature = decl->getInterfaceType()->getCanonicalType();
 
     // If we've seen a declaration with this signature before, note it.
     auto &knownDecls =

@@ -1117,8 +1117,10 @@ static void checkRedeclaration(TypeChecker &tc, ValueDecl *current) {
       tc.diagnose(other, diag::invalid_redecl_prev, other->getFullName());
 
       current->setInvalid();
-      if (current->hasType())
+      if (current->hasType()) {
         current->overwriteType(ErrorType::get(tc.Context));
+        current->setInterfaceType(ErrorType::get(tc.Context));
+      }
       break;
     }
   }
@@ -1375,6 +1377,9 @@ void swift::configureConstructorType(ConstructorDecl *ctor,
     initFnType = FunctionType::get(selfType, fnType);
   }
   ctor->setType(allocFnType);
+  // FIXME: should just be isGenericContext()
+  if (!ctor->getGenericParams() && !ctor->getDeclContext()->isGenericTypeContext())
+    ctor->setInterfaceType(allocFnType);
   ctor->setInitializerType(initFnType);
 }
 
@@ -3005,7 +3010,8 @@ public:
         auto elementTy = ArchetypeBuilder::mapTypeOutOfContext(
                            dc, SD->getElementType());
         SD->setInterfaceType(FunctionType::get(indicesTy, elementTy));
-      }
+      } else
+        SD->setInterfaceType(FunctionType::get(indicesType, SD->getElementType()));
     }
 
     validateAttributes(TC, SD);
@@ -3587,6 +3593,7 @@ public:
 
     if (badType) {
       FD->setType(ErrorType::get(TC.Context));
+      FD->setInterfaceType(ErrorType::get(TC.Context));
       FD->setInvalid();
       return;
     }
@@ -3611,6 +3618,7 @@ public:
       Type argTy = paramLists[e - i - 1]->getType(TC.Context);
       if (!argTy) {
         FD->setType(ErrorType::get(TC.Context));
+        FD->setInterfaceType(ErrorType::get(TC.Context));
         FD->setInvalid();
         return;
       }
@@ -3632,6 +3640,9 @@ public:
       }
     }
     FD->setType(funcTy);
+    if (!genericParams && !outerGenericParams)
+      FD->setInterfaceType(funcTy);
+
     FD->setBodyResultType(bodyResultType);
 
     // For a non-generic method that returns dynamic Self, we need to
@@ -3988,7 +3999,7 @@ public:
       return;
 
     // This type check should have created a non-dependent type.
-    assert(!FD->getType()->hasTypeParameter());
+    // assert(!FD->getType()->hasTypeParameter());
 
     validateAttributes(TC, FD);
 
@@ -5484,8 +5495,10 @@ public:
       FnTy = PolymorphicFunctionType::get(SelfTy,
                                           TupleType::getEmpty(TC.Context),
                              DD->getDeclContext()->getGenericParamsOfContext());
-    else
+    else {
       FnTy = FunctionType::get(SelfTy, TupleType::getEmpty(TC.Context));
+      DD->setInterfaceType(FnTy);
+    }
 
     DD->setType(FnTy);
 

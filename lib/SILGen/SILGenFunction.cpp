@@ -377,7 +377,7 @@ SILGenFunction::emitClosureValue(SILLocation loc, SILDeclRef constant,
   SILType functionTy = functionRef->getType();
 
   auto expectedType =
-    cast<FunctionType>(TheClosure.getType()->getCanonicalType());
+    cast<FunctionType>(TheClosure.getInterfaceType()->getCanonicalType());
 
   // Apply substitutions.
   auto pft = constantInfo.SILFnType;
@@ -426,7 +426,8 @@ SILGenFunction::emitClosureValue(SILLocation loc, SILDeclRef constant,
 void SILGenFunction::emitFunction(FuncDecl *fd) {
   MagicFunctionName = SILGenModule::getMagicFunctionName(fd);
 
-  Type resultTy = fd->getResultType();
+  Type resultTy = fd->getResultInterfaceType();
+  resultTy = ArchetypeBuilder::mapTypeIntoContext(fd, resultTy);
   emitProlog(fd, fd->getParameterLists(), resultTy);
   prepareEpilog(resultTy, fd->isBodyThrowing(), CleanupLocation(fd));
 

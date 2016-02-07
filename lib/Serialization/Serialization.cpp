@@ -2437,7 +2437,7 @@ void Serializer::writeDecl(const Decl *D) {
                            fn->isMutating(),
                            fn->hasDynamicSelf(),
                            fn->getParameterLists().size(),
-                           addTypeRef(fn->getType()),
+                           addTypeRef(Type()),
                            addTypeRef(fn->getInterfaceType()),
                            addDeclRef(fn->getOperatorDecl()),
                            addDeclRef(fn->getOverriddenDecl()),
@@ -2557,7 +2557,7 @@ void Serializer::writeDecl(const Decl *D) {
                                   ctor->hasStubImplementation(),
                                   getStableCtorInitializerKind(
                                     ctor->getInitKind()),
-                                  addTypeRef(ctor->getType()),
+                                  addTypeRef(Type()),
                                   addTypeRef(ctor->getInterfaceType()),
                                   addDeclRef(ctor->getOverriddenDecl()),
                                   rawAccessLevel,

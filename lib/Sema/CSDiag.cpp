@@ -704,7 +704,7 @@ namespace {
     Type entityType;
 
     UncurriedCandidate(ValueDecl *decl, unsigned level)
-      : declOrExpr(decl), level(level), entityType(decl->getType()) {
+      : declOrExpr(decl), level(level), entityType(decl->getInterfaceType()) {
     }
     UncurriedCandidate(Expr *expr)
       : declOrExpr(expr), level(0), entityType(expr->getType()) {
@@ -4600,14 +4600,15 @@ bool FailureDiagnosis::visitObjectLiteralExpr(ObjectLiteralExpr *E) {
   auto protocol = TC.getLiteralProtocol(E);
   if (!protocol)
     return false;
-  DeclName constrName = TC.getObjectLiteralConstructorName(E);
-  assert(constrName);
-  ArrayRef<ValueDecl *> constrs = protocol->lookupDirect(constrName);
-  if (constrs.size() != 1 || !isa<ConstructorDecl>(constrs.front()))
+  DeclName ctorName = TC.getObjectLiteralConstructorName(E);
+  assert(ctorName);
+  ArrayRef<ValueDecl *> ctors = protocol->lookupDirect(ctorName);
+  if (ctors.size() != 1 || !isa<ConstructorDecl>(ctors.front()))
     return false;
-  auto *constr = cast<ConstructorDecl>(constrs.front());
+  auto *ctor = cast<ConstructorDecl>(ctors.front());
+  auto argTy = ArchetypeBuilder::mapTypeIntoContext(ctor, ctor->getArgumentInterfaceType());
   if (!typeCheckChildIndependently(
-        E->getArg(), constr->getArgumentType(), CTP_CallArgument))
+        E->getArg(), argTy, CTP_CallArgument))
     return true;
 
   // Conditions for showing this diagnostic:

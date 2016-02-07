@@ -163,6 +163,8 @@ getBuiltinFunction(Identifier Id, ArrayRef<Type> argTypes, Type ResType,
                           SourceLoc(), Name, SourceLoc(), SourceLoc(),
                           SourceLoc(), /*GenericParams=*/nullptr, FnType,
                           paramList, TypeLoc::withoutLoc(ResType), DC);
+
+  FD->setInterfaceType(FnType);
   FD->setImplicit();
   FD->setAccessibility(Accessibility::Public);
   return FD;

@@ -2180,9 +2180,12 @@ public:
   SourceLoc getNameLoc() const { return NameLoc; }
   SourceLoc getLoc() const { return NameLoc; }
 
-  bool hasType() const { return !TypeAndAccess.getPointer().isNull(); }
+  bool hasType() const {
+    return !TypeAndAccess.getPointer().isNull();
+  }
   Type getType() const {
     assert(hasType() && "declaration has no type set yet");
+    assert(!isa<AbstractFunctionDecl>(this) && "functions only have interface types");
     return TypeAndAccess.getPointer();
   }
 
@@ -4871,10 +4874,14 @@ public:
   /// \sa getBodyResultType
   Type getResultType() const;
 
+  /// Retrieve the result interface type of this function.
+  ///
+  /// \sa getBodyResultType
+  Type getResultInterfaceType() const;
+
   /// Retrieve the result type of this function for use within the function
   /// definition.
   ///
-  /// FIXME: The statement below is a wish, not reality.
   /// The "body" result type will only differ from the result type within the
   /// interface to the function for a polymorphic function, where the interface
   /// may contain generic parameters while the definition will contain
@@ -5285,8 +5292,14 @@ public:
   /// getArgumentType - get the type of the argument tuple
   Type getArgumentType() const;
 
+  /// getArgumentType - get the interface type of the argument tuple
+  Type getArgumentInterfaceType() const;
+
   /// \brief Get the type of the constructed object.
   Type getResultType() const;
+
+  /// \brief Get the interface type of the constructed object.
+  Type getResultInterfaceType() const;
 
   /// Get the type of the initializing constructor.
   Type getInitializerType() const { return InitializerType; }

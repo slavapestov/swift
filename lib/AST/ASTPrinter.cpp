@@ -2021,7 +2021,7 @@ void PrintAST::visitFuncDecl(FuncDecl *decl) {
         });
 
       auto &Context = decl->getASTContext();
-      Type ResultTy = decl->getResultType();
+      Type ResultTy = decl->getResultInterfaceType();
       if (ResultTy && !ResultTy->isEqual(TupleType::getEmpty(Context))) {
         Printer << " -> ";
         if (Options.pTransformer) {

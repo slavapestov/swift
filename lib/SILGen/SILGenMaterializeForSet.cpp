@@ -476,12 +476,14 @@ static FunctionType *getMaterializeForSetCallbackType(ASTContext &ctx,
   return FunctionType::get(input, result, extInfo);
 }
 
-static Type getSelfTypeForCallbackDeclaration(FuncDecl *witness) {
+static Type getSelfTypeForCallbackDeclaration(SILFunction &F, FuncDecl *witness) {
   // We're intentionally using non-interface types here: we want
   // something specified in terms of the witness's archetypes, because
   // we're going to build the closure as if it were contextually
   // within the witness.
-  auto type = witness->getType()->castTo<AnyFunctionType>()->getInput();
+  auto type = witness->getInterfaceType()->castTo<AnyFunctionType>()->getInput();
+  type = F.mapTypeIntoContext(type);
+
   if (auto tuple = type->getAs<TupleType>()) {
     assert(tuple->getNumElements() == 1);
     type = tuple->getElementType(0);
@@ -504,7 +506,7 @@ SILFunction *MaterializeForSetEmitter::createCallback(SILFunction &F, GeneratorF
                         /*discriminator*/ 0,
                         /*context*/ Witness);
     closure.setType(getMaterializeForSetCallbackType(ctx,
-                                 getSelfTypeForCallbackDeclaration(Witness)));
+                                 getSelfTypeForCallbackDeclaration(F, Witness)));
     closure.getCaptureInfo().setGenericParamCaptures(true);
 
     Mangle::Mangler mangler;
