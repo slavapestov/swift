@@ -15,3 +15,8 @@ extension OtherResilientProtocol {
     set { x = newValue }
   }
 }
+
+public protocol OtherResilientRefinedProtocol : OtherResilientProtocol {
+  var propertyInExtension: Int { get set }
+  static var staticPropertyInExtension: Int { get set }
+}

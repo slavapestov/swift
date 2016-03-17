@@ -4232,6 +4232,7 @@ void DefaultWitnessChecker::recordWitness(ValueDecl *requirement,
 }
 
 void TypeChecker::inferDefaultWitnesses(ProtocolDecl *proto) {
+  validateDecl(proto);
   DefaultWitnessChecker checker(*this, proto);
 
   for (auto *requirement : proto->getMembers()) {

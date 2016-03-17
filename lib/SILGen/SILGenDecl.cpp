@@ -1528,11 +1528,27 @@ public:
     // If the requirement is witnessed by its own default implementation,
     // we just emit a reference to the default witness thunk.
     auto *proto = Conformance->getProtocol();
-    auto defaultWitness = proto->getDefaultWitness(requirementRef.getDecl());
-    if (defaultWitness && defaultWitness.getDecl() == witnessRef.getDecl()) {
+
+    bool isDefault;
+    {
+      auto *requirement = requirementRef.getDecl();
+      auto *witness = witnessRef.getDecl();
+
+      if (auto *requirementFD = dyn_cast<FuncDecl>(requirement)) {
+        if (auto *requirementASD = requirementFD->getAccessorStorageDecl()) {
+          requirement = requirementASD;
+          witness = cast<FuncDecl>(witness)->getAccessorStorageDecl();
+        }
+      }
+
+      auto defaultWitness = proto->getDefaultWitness(requirement);
+      isDefault = (defaultWitness && defaultWitness.getDecl() == witness);
+    }
+
+    if (isDefault) {
       auto *assocDC = SGM.M.getAssociatedContext();
       bool deserializeLazily =
-          (proto->getModuleContext()->isChildContextOf(assocDC));
+          !(proto->getModuleContext()->isChildContextOf(assocDC));
 
       // Get the name of a previously-emitted default witness thunk by
       // searching the protocol's default witness table, if any.
