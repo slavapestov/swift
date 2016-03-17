@@ -1525,11 +1525,36 @@ public:
       return;
     }
 
+    // If the requirement is witnessed by its own default implementation,
+    // we just emit a reference to the default witness thunk.
+    auto *proto = Conformance->getProtocol();
+    auto defaultWitness = proto->getDefaultWitness(requirementRef.getDecl());
+    if (defaultWitness && defaultWitness.getDecl() == witnessRef.getDecl()) {
+      auto *assocDC = SGM.M.getAssociatedContext();
+      bool deserializeLazily =
+          (proto->getModuleContext()->isChildContextOf(assocDC));
+
+      // Get the name of a previously-emitted default witness thunk by
+      // searching the protocol's default witness table, if any.
+      auto *witnessFn = SGM.M.lookUpFunctionInDefaultWitnessTable(
+          proto, requirementRef, deserializeLazily).first;
+
+      if (witnessFn != nullptr) {
+        // There is an existing default witness thunk we can use.
+        // Reference it from our conformance table instead of emitting
+        // a new concrete witness thunk.
+        SILWitnessTable::MethodWitness entry{requirementRef, witnessFn};
+        Entries.push_back(entry);
+        return;
+      }
+    }
+
+    // We have to emit a concrete witness thunk.
     SILFunction *witnessFn =
       SGM.emitProtocolWitness(Conformance, Linkage, requirementRef, witnessRef,
                               isFree, witnessSubs);
-    Entries.push_back(
-                    SILWitnessTable::MethodWitness{requirementRef, witnessFn});
+    SILWitnessTable::MethodWitness entry{requirementRef, witnessFn};
+    Entries.push_back(entry);
   }
 
   void addAssociatedType(AssociatedTypeDecl *td,
@@ -1937,9 +1962,30 @@ void SILGenModule::emitDefaultWitnessTable(ProtocolDecl *protocol) {
   SILGenDefaultWitnessTable builder(*this, protocol, linkage);
   builder.visitProtocolDecl(protocol);
 
-  SILDefaultWitnessTable *defaultWitnesses =
-      M.createDefaultWitnessTableDeclaration(protocol, linkage);
-  defaultWitnesses->convertToDefinition(builder.DefaultWitnesses);
+  SILDefaultWitnessTable *wt;
+
+  // Check if we already have a declaration for this default witness
+  // table.
+  wt = M.lookUpDefaultWitnessTable(protocol, false);
+  if (wt) {
+    assert(wt->isDeclaration());
+
+    // Since we had a declaration before, its linkage should be external,
+    // ensure that we have a compatible linkage for sanity. *NOTE* we are ok
+    // with both being shared since we do not have a shared_external
+    // linkage.
+    assert(stripExternalFromLinkage(wt->getLinkage()) == linkage &&
+           "Default witness table declaration has inconsistent linkage with"
+           " silgen definition.");
+
+    // And then override the linkage with the new linkage.
+    wt->setLinkage(linkage);
+  } else {
+    // Otherwise if we have no default witness table yet, create it.
+    wt = M.createDefaultWitnessTableDeclaration(protocol, linkage);
+  }
+
+  wt->convertToDefinition(builder.DefaultWitnesses);
 }
 
 SILFunction *SILGenModule::
