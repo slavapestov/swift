@@ -940,20 +940,17 @@ void Mangler::mangleType(Type type, unsigned uncurryLevel) {
     Buffer << '_';
     return;
 
-  case TypeKind::UnboundGeneric: {
+  case TypeKind::UnboundGeneric:
     // We normally reject unbound types in IR-generation, but there
     // are several occasions in which we'd like to mangle them in the
     // abstract.
-    auto decl = cast<UnboundGenericType>(tybase)->getDecl();
-    mangleNominalType(cast<NominalTypeDecl>(decl));
+    mangleNominalType(tybase->getAnyNominal(), tybase);
     return;
-  }
 
   case TypeKind::Class:
   case TypeKind::Enum:
-  case TypeKind::Struct: {
-    return mangleNominalType(cast<NominalType>(tybase)->getDecl());
-  }
+  case TypeKind::Struct:
+    return mangleNominalType(tybase->getAnyNominal(), tybase);
 
   case TypeKind::BoundGenericClass:
   case TypeKind::BoundGenericEnum:
@@ -961,7 +958,7 @@ void Mangler::mangleType(Type type, unsigned uncurryLevel) {
     // type ::= 'G' <type> <type>+ '_'
     auto *boundType = cast<BoundGenericType>(tybase);
     Buffer << 'G';
-    mangleNominalType(boundType->getDecl());
+    mangleNominalType(boundType->getDecl(), boundType);
     for (auto arg : boundType->getGenericArgs()) {
       mangleType(arg, /*uncurry*/ 0);
     }
@@ -1312,13 +1309,13 @@ static char getSpecifierForNominalType(const NominalTypeDecl *decl) {
   llvm_unreachable("bad decl kind");
 }
 
-void Mangler::mangleNominalType(const NominalTypeDecl *decl) {
+void Mangler::mangleNominalType(const NominalTypeDecl *decl, Type type) {
   // Check for certain standard types.
   if (tryMangleStandardSubstitution(decl))
     return;
 
-  // For generic types, this uses the unbound type.
-  TypeBase *key = decl->getDeclaredType().getPointer();
+  TypeBase *key = (type ? type : decl->getDeclaredType())
+      ->getCanonicalType().getPointer();
 
   // Try to mangle the entire name as a substitution.
   // type ::= substitution
@@ -1326,7 +1323,34 @@ void Mangler::mangleNominalType(const NominalTypeDecl *decl) {
     return;
 
   Buffer << getSpecifierForNominalType(decl);
-  mangleContextOf(decl);
+
+  Type parentType;
+  if (type) {
+    if (auto *nominalType = type->getAs<NominalType>())
+      parentType = nominalType->getParent();
+    else if (auto *unboundType = type->getAs<UnboundGenericType>())
+      parentType = unboundType->getParent();
+    else if (auto *boundType = type->getAs<BoundGenericType>())
+      parentType = boundType->getParent();
+    else
+      llvm_unreachable("Bad type");
+  }
+
+  // If we are mangling a type nested inside a generic type where
+  // the parent type is specialized, mangle the parent type,
+  // including it's generic arguments.
+  //
+  // Otherwise, just mangle the DeclContext that contains the
+  // type.
+  //
+  // FIXME: This is wrong for types nested inside extensions
+  // of generic types where the parent is specialized, because we
+  // lose the extension context in the mangling, but we don't
+  // support those yet anyway.
+  if (parentType && parentType->isSpecialized())
+    mangleType(parentType, 0);
+  else
+    mangleContextOf(decl);
   mangleDeclName(decl);
 
   addSubstitution(key);

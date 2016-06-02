@@ -1154,9 +1154,46 @@ private:
     return nullptr;
   }
 
+  NodePointer demangleBoundGenericType() {
+    NodePointer nominalType = demangleNominalType();
+    if (!nominalType)
+      return nullptr;
+    NodePointer unboundType = NodeFactory::create(Node::Kind::Type);
+    unboundType->addChild(nominalType);
+
+    NodePointer args = NodeFactory::create(Node::Kind::TypeList);
+    while (!Mangled.nextIf('_')) {
+      NodePointer type = demangleType();
+      if (!type)
+        return nullptr;
+      args->addChild(type);
+      if (Mangled.isEmpty())
+        return nullptr;
+    }
+    Node::Kind kind;
+    switch (nominalType->getKind()) { // look through Type node
+      case Node::Kind::Class:
+        kind = Node::Kind::BoundGenericClass;
+        break;
+      case Node::Kind::Structure:
+        kind = Node::Kind::BoundGenericStructure;
+        break;
+      case Node::Kind::Enum:
+        kind = Node::Kind::BoundGenericEnum;
+        break;
+      default:
+        return nullptr;
+    }
+    NodePointer result = NodeFactory::create(kind);
+    result->addChild(unboundType);
+    result->addChild(args);
+    return result;
+  }
+
   NodePointer demangleContext() {
     // context ::= module
     // context ::= entity
+    // context ::= bound-generic-type
     // context ::= 'E' module context (extension defined in a different module)
     // context ::= 'e' module context generic-signature (constrained extension)
     if (!Mangled) return nullptr;
@@ -1191,6 +1228,8 @@ private:
       return demangleSubstitutionIndex();
     if (Mangled.nextIf('s'))
       return NodeFactory::create(Node::Kind::Module, STDLIB_NAME);
+    if (Mangled.nextIf('G'))
+      return demangleBoundGenericType();
     if (isStartOfEntity(Mangled.peek()))
       return demangleEntity();
     return demangleModule();
@@ -1872,37 +1911,7 @@ private:
       return demangleFunctionType(Node::Kind::UncurriedFunctionType);
     }
     if (c == 'G') {
-      NodePointer unboundType = demangleType();
-      if (!unboundType)
-        return nullptr;
-      NodePointer type_list = NodeFactory::create(Node::Kind::TypeList);
-      while (!Mangled.nextIf('_')) {
-        NodePointer type = demangleType();
-        if (!type)
-          return nullptr;
-        type_list->addChild(type);
-        if (Mangled.isEmpty())
-          return nullptr;
-      }
-      Node::Kind bound_type_kind;
-      switch (unboundType->getChild(0)->getKind()) { // look through Type node
-        case Node::Kind::Class:
-          bound_type_kind = Node::Kind::BoundGenericClass;
-          break;
-        case Node::Kind::Structure:
-          bound_type_kind = Node::Kind::BoundGenericStructure;
-          break;
-        case Node::Kind::Enum:
-          bound_type_kind = Node::Kind::BoundGenericEnum;
-          break;
-        default:
-          return nullptr;
-      }
-      NodePointer type_application =
-          NodeFactory::create(bound_type_kind);
-      type_application->addChild(unboundType);
-      type_application->addChild(type_list);
-      return type_application;
+      return demangleBoundGenericType();
     }
     if (c == 'X') {
       if (Mangled.nextIf('b')) {
@@ -2049,10 +2058,8 @@ private:
 
       return nullptr;
     }
-    if (isStartOfNominalType(c)) {
-      NodePointer nominal_type = demangleDeclarationName(nominalTypeMarkerToNodeKind(c));
-      return nominal_type;
-    }
+    if (isStartOfNominalType(c))
+      return demangleDeclarationName(nominalTypeMarkerToNodeKind(c));
     return nullptr;
   }
 

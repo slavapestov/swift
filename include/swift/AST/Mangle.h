@@ -91,7 +91,7 @@ public:
                            unsigned uncurryingLevel);
   void mangleClosureEntity(const AbstractClosureExpr *closure,
                            unsigned uncurryingLevel);
-  void mangleNominalType(const NominalTypeDecl *decl);
+  void mangleNominalType(const NominalTypeDecl *decl, Type type = Type());
   void mangleProtocolDecl(const ProtocolDecl *protocol);
   void mangleType(Type type, unsigned uncurryingLevel);
   void mangleDirectness(bool isIndirect);
