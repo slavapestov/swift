@@ -1668,9 +1668,9 @@ class NominalType : public TypeBase {
   Type Parent;
 
 protected:
-  NominalType(TypeKind K, const ASTContext *C, NominalTypeDecl *TheDecl,
+  NominalType(TypeKind K, const ASTContext &C, NominalTypeDecl *TheDecl,
               Type Parent, RecursiveTypeProperties properties)
-    : TypeBase(K, (!Parent || Parent->isCanonical())? C : nullptr,
+    : TypeBase(K, (!Parent || Parent->isCanonical())? &C : nullptr,
                properties),
       TheDecl(TheDecl), Parent(Parent) { }
 
@@ -3407,7 +3407,7 @@ class ProtocolType : public NominalType, public llvm::FoldingSetNode {
 public:
   /// \brief Retrieve the type when we're referencing the given protocol.
   /// declaration.
-  static ProtocolType *get(ProtocolDecl *D, const ASTContext &C);
+  static ProtocolType *get(ProtocolDecl *D, Type Parent, const ASTContext &C);
 
   ProtocolDecl *getDecl() const {
     return reinterpret_cast<ProtocolDecl *>(NominalType::getDecl());
@@ -3442,7 +3442,8 @@ public:
 
 private:
   friend class NominalTypeDecl;
-  ProtocolType(ProtocolDecl *TheDecl, const ASTContext &Ctx);
+  ProtocolType(const ASTContext &C, ProtocolDecl *TheDecl, Type Parent,
+               RecursiveTypeProperties properties);
 };
 BEGIN_CAN_TYPE_WRAPPER(ProtocolType, NominalType)
   void getAnyExistentialTypeProtocols(SmallVectorImpl<ProtocolDecl *> &protos) {

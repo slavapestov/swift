@@ -2158,8 +2158,6 @@ addRequirements(
     llvm::SmallPtrSet<ArchetypeBuilder::PotentialArchetype *, 16> &knownPAs,
     SmallVectorImpl<Requirement> &requirements) {
 
-  auto &ctx = builder.getASTContext();
-
   // If the potential archetype has been bound away to a concrete type,
   // it needs no requirements.
   if (pa->isConcreteType())
@@ -2185,7 +2183,7 @@ addRequirements(
   ProtocolType::canonicalizeProtocols(protocols);
   for (auto proto : protocols) {
     requirements.push_back(Requirement(RequirementKind::Conformance, type,
-                                       ProtocolType::get(proto, ctx)));
+                                       proto->getDeclaredInterfaceType()));
   }
 }
 

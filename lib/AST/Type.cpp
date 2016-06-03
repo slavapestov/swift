@@ -918,7 +918,7 @@ static void addMinimumProtocols(Type T,
     if (Visited.insert(Proto->getDecl()).second) {
       Stack.push_back(Proto->getDecl());
       for (auto Inherited : Proto->getDecl()->getInheritedProtocols(nullptr))
-        addMinimumProtocols(Inherited->getDeclaredType(), Protocols, Known,
+        addMinimumProtocols(Inherited->getDeclaredInterfaceType(), Protocols, Known,
                             Visited, Stack, ZappedAny);
     }
     return;
@@ -980,7 +980,7 @@ void ProtocolType::canonicalizeProtocols(
     
     // Add the protocols we inherited.
     for (auto Inherited : Current->getInheritedProtocols(nullptr)) {
-      addMinimumProtocols(Inherited->getDeclaredType(), protocols, known,
+      addMinimumProtocols(Inherited->getDeclaredInterfaceType(), protocols, known,
                           visited, stack, zappedAny);
     }
   }
@@ -1025,14 +1025,14 @@ CanType TypeBase::getCanonicalType() {
 
   case TypeKind::Enum:
   case TypeKind::Struct:
-  case TypeKind::Class: {
+  case TypeKind::Class:
+  case TypeKind::Protocol: {
     auto nominalTy = cast<NominalType>(this);
     auto parentTy = nominalTy->getParent()->getCanonicalType();
     Result = NominalType::get(nominalTy->getDecl(), parentTy,
                               parentTy->getASTContext());
     break;
   }
-
   case TypeKind::Tuple: {
     TupleType *TT = cast<TupleType>(this);
     assert(TT->getNumElements() != 0 && "Empty tuples are always canonical");
@@ -1230,6 +1230,7 @@ TypeBase *TypeBase::getDesugaredType() {
   case TypeKind::Enum:
   case TypeKind::Struct:
   case TypeKind::Class:
+  case TypeKind::Protocol:
   case TypeKind::GenericTypeParam:
   case TypeKind::DependentMember:
   case TypeKind::UnownedStorage:
@@ -1394,6 +1395,7 @@ bool TypeBase::isSpelledLike(Type other) {
   case TypeKind::Enum:
   case TypeKind::Struct:
   case TypeKind::Class:
+  case TypeKind::Protocol:
   case TypeKind::NameAlias:
   case TypeKind::Substituted:
   case TypeKind::AssociatedType:
@@ -3036,7 +3038,8 @@ case TypeKind::Id:
 
   case TypeKind::Enum:
   case TypeKind::Struct:
-  case TypeKind::Class: {
+  case TypeKind::Class:
+  case TypeKind::Protocol: {
     auto nominalTy = cast<NominalType>(base);
     if (auto parentTy = nominalTy->getParent()) {
       parentTy = parentTy.transform(fn);

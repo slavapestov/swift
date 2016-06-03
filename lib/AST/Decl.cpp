@@ -1960,7 +1960,7 @@ static Type computeNominalType(NominalTypeDecl *decl, DeclTypeKind kind) {
   }
 
   if (auto proto = dyn_cast<ProtocolDecl>(decl)) {
-    return ProtocolType::get(proto, ctx);
+    return ProtocolType::get(proto, Ty, ctx);
   } else if (auto params = decl->getGenericParams()) {
     if (kind == DeclTypeKind::DeclaredType)
       return UnboundGenericType::get(decl, Ty, ctx);
@@ -2837,7 +2837,10 @@ GenericParamList *ProtocolDecl::createGenericParams(DeclContext *dc) {
   auto protoRef = new (ctx) SimpleIdentTypeRepr(loc, getName());
   protoRef->setValue(this);
   TypeLoc selfInherited[1] = { TypeLoc(protoRef) };
-  selfInherited[0].setType(ProtocolType::get(this, ctx));
+
+  assert(getDeclaredType());
+  selfInherited[0].setType(getDeclaredType());
+
   selfDecl->setInherited(ctx.AllocateCopy(selfInherited));
   selfDecl->setImplicit();
 

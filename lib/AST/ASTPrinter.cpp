@@ -4012,6 +4012,13 @@ public:
   }
 
   void visitProtocolType(ProtocolType *T) {
+    if (auto ParentType = T->getParent()) {
+      visit(ParentType);
+      Printer << ".";
+    } else if (shouldPrintFullyQualified(T)) {
+      printModuleContext(T);
+    }
+
     printTypeDeclName(T);
   }
 

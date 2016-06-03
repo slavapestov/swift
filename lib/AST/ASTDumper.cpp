@@ -2739,6 +2739,8 @@ namespace {
     void visitProtocolType(ProtocolType *T, StringRef label) {
       printCommon(T, label, "protocol_type");
       printField("decl", T->getDecl()->printRef());
+      if (T->getParent())
+        printRec("parent", T->getParent());
       OS << ")";
     }
 
