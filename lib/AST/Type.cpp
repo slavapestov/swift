@@ -2910,10 +2910,6 @@ TypeSubstitutionMap TypeBase::getMemberSubstitutions(const DeclContext *dc) {
     assert(baseTy && "Couldn't find appropriate context");
   }
 
-  // If the base type isn't specialized, there's nothing to substitute.
-  if (!baseTy->isSpecialized())
-    return substitutions;
-
   // Gather all of the substitutions for all levels of generic arguments.
   GenericParamList *curGenericParams = dc->getGenericParamsOfContext();
   while (baseTy) {
@@ -2930,6 +2926,18 @@ TypeSubstitutionMap TypeBase::getMemberSubstitutions(const DeclContext *dc) {
 
       // Continue looking into the parent.
       baseTy = boundGeneric->getParent();
+      curGenericParams = curGenericParams->getOuterParameters();
+      continue;
+    }
+
+    // Continue looking into the parent.
+    if (auto protoTy = baseTy->getAs<ProtocolType>()) {
+      auto protoSelf = protoTy->getDecl()->getProtocolSelf();
+      auto selfType = protoSelf->getDeclaredType()->getCanonicalType();
+      substitutions[selfType->castTo<GenericTypeParamType>()] =
+          protoSelf->getArchetype();
+
+      baseTy = protoTy->getParent();
       curGenericParams = curGenericParams->getOuterParameters();
       continue;
     }
