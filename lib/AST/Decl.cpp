@@ -2838,8 +2838,8 @@ GenericParamList *ProtocolDecl::createGenericParams(DeclContext *dc) {
   protoRef->setValue(this);
   TypeLoc selfInherited[1] = { TypeLoc(protoRef) };
 
-  assert(getDeclaredType());
-  selfInherited[0].setType(getDeclaredType());
+  assert(getDeclaredInterfaceType());
+  selfInherited[0].setType(getDeclaredInterfaceType());
 
   selfDecl->setInherited(ctx.AllocateCopy(selfInherited));
   selfDecl->setImplicit();
