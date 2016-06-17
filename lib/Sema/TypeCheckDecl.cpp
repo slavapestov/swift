@@ -3712,7 +3712,6 @@ public:
         if (Super->isFinal()) {
           TC.diagnose(CD, diag::inheritance_from_final_class,
                       Super->getName());
-          return;
         }
 
         if (Super->hasClangNode() && Super->getGenericParams()
@@ -5604,7 +5603,7 @@ public:
     
     if (EED->isBeingTypeChecked()) {
       TC.diagnose(EED->getLoc(), diag::circular_reference);
-      EED->setType(ErrorType::get(TC.Context));
+      EED->overwriteType(ErrorType::get(TC.Context));
       EED->setInvalid();
       return;
     }
