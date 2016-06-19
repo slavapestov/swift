@@ -213,7 +213,7 @@ bool FulfillmentMap::searchParentTypeMetadata(IRGenModule &IGM,
   if (!parent) return false;
 
   // Only class types properly initialize their parent type.
-  if (!isa<ClassDecl>(decl)) return false;
+  //if (!isa<ClassDecl>(decl)) return false;
 
   // If we do, it has to be nominal one way or another.
   path.addNominalParentComponent();
