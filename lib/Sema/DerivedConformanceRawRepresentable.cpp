@@ -267,12 +267,13 @@ static ConstructorDecl *deriveRawRepresentable_init(TypeChecker &tc,
   }
 
   Type enumType = parentDC->getDeclaredTypeInContext();
-  auto *selfDecl = ParamDecl::createUnboundSelf(SourceLoc(), parentDC,
+  auto *selfDecl = ParamDecl::createSelf(SourceLoc(), parentDC,
                                          /*static*/false, /*inout*/true);
 
   auto *rawDecl = new (C) ParamDecl(/*IsLet*/true, SourceLoc(), SourceLoc(),
                                     C.Id_rawValue, SourceLoc(),
                                     C.Id_rawValue, rawType, parentDC);
+  rawDecl->setInterfaceType(rawInterfaceType);
   rawDecl->setImplicit();
   auto paramList = ParameterList::createWithoutLoc(rawDecl);
   
@@ -300,8 +301,7 @@ static ConstructorDecl *deriveRawRepresentable_init(TypeChecker &tc,
   
   Type type = FunctionType::get(argType, retTy);
 
-  Type selfType = initDecl->computeSelfType();
-  selfDecl->overwriteType(selfType);
+  Type selfType = selfDecl->getType();
   Type selfMetatype = MetatypeType::get(selfType->getInOutObjectType());
   
   Type allocType;

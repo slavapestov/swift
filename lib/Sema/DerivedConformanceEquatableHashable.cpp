@@ -194,11 +194,15 @@ deriveEquatable_enum_eq(TypeChecker &tc, Decl *parentDecl, EnumDecl *enumDecl) {
   
   auto parentDC = cast<DeclContext>(parentDecl);
   auto enumTy = parentDC->getDeclaredTypeInContext();
+  auto enumInterfaceTy = parentDC->getDeclaredInterfaceType();
   
   auto getParamDecl = [&](StringRef s) -> ParamDecl* {
-    return new (C) ParamDecl(/*isLet*/true, SourceLoc(), SourceLoc(),
+    auto *paramDecl =
+           new (C) ParamDecl(/*isLet*/true, SourceLoc(), SourceLoc(),
                              Identifier(), SourceLoc(), C.getIdentifier(s),
                              enumTy, parentDC);
+    paramDecl->setInterfaceType(enumInterfaceTy);
+    return paramDecl;
   };
   
   auto params = ParameterList::create(C, {
@@ -365,7 +369,7 @@ deriveHashable_enum_hashValue(TypeChecker &tc, Decl *parentDecl,
     return nullptr;
   }
   
-  auto selfDecl = ParamDecl::createUnboundSelf(SourceLoc(), parentDC);
+  auto selfDecl = ParamDecl::createSelf(SourceLoc(), parentDC);
   
   ParameterList *params[] = {
     ParameterList::createWithoutLoc(selfDecl),
@@ -386,8 +390,7 @@ deriveHashable_enum_hashValue(TypeChecker &tc, Decl *parentDecl,
   // Compute the type of hashValue().
   GenericParamList *genericParams = getterDecl->getGenericParamsOfContext();
   Type methodType = FunctionType::get(TupleType::getEmpty(tc.Context), intType);
-  Type selfType = getterDecl->computeSelfType();
-  selfDecl->overwriteType(selfType);
+  Type selfType = selfDecl->getType();
   
   Type type;
   if (genericParams)
@@ -399,7 +402,7 @@ deriveHashable_enum_hashValue(TypeChecker &tc, Decl *parentDecl,
   
   // Compute the interface type of hashValue().
   Type interfaceType;
-  Type selfIfaceType = getterDecl->computeInterfaceSelfType(false);
+  Type selfIfaceType = selfDecl->getInterfaceType();
   if (auto sig = parentDC->getGenericSignatureOfContext()) {
     getterDecl->setGenericSignature(sig);
     interfaceType = GenericFunctionType::get(sig, selfIfaceType, methodType,

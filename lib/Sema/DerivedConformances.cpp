@@ -129,7 +129,7 @@ FuncDecl *DerivedConformance::declareDerivedPropertyGetter(TypeChecker &tc,
                                                  bool isStatic) {
   auto &C = tc.Context;
   auto parentDC = cast<DeclContext>(parentDecl);
-  auto selfDecl = ParamDecl::createUnboundSelf(SourceLoc(), parentDC, isStatic);
+  auto selfDecl = ParamDecl::createSelf(SourceLoc(), parentDC, isStatic);
   ParameterList *params[] = {
     ParameterList::createWithoutLoc(selfDecl),
     ParameterList::createEmpty(C)
@@ -149,8 +149,7 @@ FuncDecl *DerivedConformance::declareDerivedPropertyGetter(TypeChecker &tc,
   GenericParamList *genericParams = getterDecl->getGenericParamsOfContext();
   Type type = FunctionType::get(TupleType::getEmpty(C),
                                 propertyContextType);
-  Type selfType = getterDecl->computeSelfType();
-  selfDecl->overwriteType(selfType);
+  Type selfType = selfDecl->getType();
   
   if (genericParams)
     type = PolymorphicFunctionType::get(selfType, type, genericParams);
@@ -162,7 +161,7 @@ FuncDecl *DerivedConformance::declareDerivedPropertyGetter(TypeChecker &tc,
   // Compute the interface type of the getter.
   Type interfaceType = FunctionType::get(TupleType::getEmpty(C),
                                          propertyInterfaceType);
-  Type selfInterfaceType = getterDecl->computeInterfaceSelfType(false);
+  Type selfInterfaceType = selfDecl->getInterfaceType();
   if (auto sig = parentDC->getGenericSignatureOfContext()) {
     getterDecl->setGenericSignature(sig);
     interfaceType = GenericFunctionType::get(sig, selfInterfaceType,
