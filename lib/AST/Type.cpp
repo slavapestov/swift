@@ -2968,6 +2968,18 @@ TypeSubstitutionMap TypeBase::getMemberSubstitutions(const DeclContext *dc) {
       continue;
     }
 
+    if (auto protoTy = baseTy->getAs<ProtocolType>()) {
+      auto params = curGenericParams->getParams();
+      for (unsigned i = 0, n = params.size(); i != n; ++i) {
+        substitutions[params[i]->getDeclaredType()->getCanonicalType()
+                        ->castTo<GenericTypeParamType>()]
+          = params[i]->getArchetype();
+      }
+      curGenericParams = curGenericParams->getOuterParameters();
+      baseTy = protoTy->getParent();
+      continue;
+    }
+
     // Continue looking into the parent.
     if (auto nominalTy = baseTy->getAs<NominalType>()) {
       baseTy = nominalTy->getParent();
