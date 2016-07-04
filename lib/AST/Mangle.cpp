@@ -490,7 +490,7 @@ Type Mangler::getDeclTypeForMangling(const ValueDecl *decl,
   if (!decl->hasType())
     return ErrorType::get(C);
 
-  Type type = decl->getInterfaceType();
+  Type type = decl->hasInterfaceType() ? decl->getInterfaceType() : decl->getType();
 
   initialParamDepth = 0;
   CanGenericSignature sig;
