@@ -452,7 +452,7 @@ Type TypeChecker::getTypeOfRValue(ValueDecl *value, bool wantInterfaceType) {
   validateDecl(value);
 
   Type type;
-  if (wantInterfaceType)
+  if (wantInterfaceType && !isa<ParamDecl>(value))
     type = value->getInterfaceType();
   else
     type = value->getType();
