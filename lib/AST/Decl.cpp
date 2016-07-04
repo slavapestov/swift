@@ -3674,6 +3674,7 @@ ParamDecl *ParamDecl::createSelf(SourceLoc loc, DeclContext *DC,
   auto *selfDecl = new (C) ParamDecl(/*IsLet*/!isInOut, SourceLoc(),SourceLoc(),
                                      Identifier(), loc, C.Id_self, selfType,DC);
   selfDecl->setImplicit();
+  selfDecl->getTypeLoc().setType(selfType);
   selfDecl->setInterfaceType(selfInterfaceType);
   return selfDecl;
 }

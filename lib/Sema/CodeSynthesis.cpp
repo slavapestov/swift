@@ -61,7 +61,7 @@ static ParamDecl *buildArgument(SourceLoc loc, DeclContext *DC, StringRef name,
   auto *param = new (context) ParamDecl(isLet, SourceLoc(), SourceLoc(),
                                         Identifier(), loc,
                                         context.getIdentifier(name),
-                                        Type(), DC);
+                                        type, DC);
   param->setImplicit();
   param->getTypeLoc().setType(type);
   param->setInterfaceType(interfaceType);
