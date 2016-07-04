@@ -1066,18 +1066,6 @@ static void validatePatternBindingDecl(TypeChecker &tc,
   if (binding->getPattern(entryNumber)->hasType())
     if (auto var = binding->getSingleVar())
       tc.checkTypeModifyingDeclAttributes(var);
-
-  // If we're in a generic type context, provide interface types for all of
-  // the variables.
-  {
-    auto dc = binding->getDeclContext();
-    if (dc->isGenericContext() && dc->isTypeContext()) {
-      binding->getPattern(entryNumber)->forEachVariable([&](VarDecl *var) {
-        var->setInterfaceType(
-          ArchetypeBuilder::mapTypeOutOfContext(dc, var->getType()));
-      });
-    }
-  }
 }
 
 void swift::makeFinal(ASTContext &ctx, ValueDecl *D) {
