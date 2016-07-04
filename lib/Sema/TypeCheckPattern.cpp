@@ -1428,7 +1428,7 @@ bool TypeChecker::coercePatternToType(Pattern *&P, DeclContext *dc, Type type,
              && "enum with resolved element doesn't specify parent type?!");
       auto parentTy = EEP->getParentType().getType();
       // If the type matches exactly, use it.
-      if (parentTy->isEqual(type)) {
+      if (parentTy->isEqual(type) || type->is<ErrorType>()) {
         enumTy = type;
       }
       // Otherwise, if the type is an unbound generic of the context type, use
