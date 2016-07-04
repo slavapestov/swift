@@ -131,8 +131,8 @@ Type ParameterList::getType(const ASTContext &C) const {
   return TupleType::get(argumentInfo, C);
 }
 
-/// Hack to deal with the fact that Sema/CodeSynthesis.cpp creates ParamDecls
-/// containing contextual types.
+/// Return a TupleType or ParenType for this parameter list.  This returns a
+/// null type if one of the ParamDecls does not have a type set for it yet.
 Type ParameterList::getInterfaceType(DeclContext *DC) const {
   auto &C = DC->getASTContext();
 
@@ -142,15 +142,7 @@ Type ParameterList::getInterfaceType(DeclContext *DC) const {
   SmallVector<TupleTypeElt, 8> argumentInfo;
 
   for (auto P : *this) {
-    assert(P->hasType());
-
-    Type type;
-    if (P->hasInterfaceType())
-      type = P->getInterfaceType();
-    else if (!P->getTypeLoc().hasLocation())
-      type = ArchetypeBuilder::mapTypeOutOfContext(DC, P->getType());
-    else
-      type = P->getType();
+    Type type = P->getInterfaceType();
     assert(!type->hasArchetype());
 
     argumentInfo.push_back({

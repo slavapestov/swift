@@ -3630,49 +3630,17 @@ Type DeclContext::getSelfInterfaceType() const {
   return getDeclaredInterfaceType();
 }
 
-/// \brief Retrieve the type of 'self' for the given context.
-/// FIXME: Can this be integrated with getSelfTypeInContext above?
-static Type getSelfTypeOfContext(DeclContext *dc) {
-  // For a protocol or extension thereof, the type is 'Self'.
-  // FIXME: Weird that we're producing an archetype for protocol Self,
-  // but the declared type of the context in non-protocol cases.
-  if (dc->getAsProtocolOrProtocolExtensionContext()) {
-    // In the parser, generic parameters won't be wired up yet, just give up on
-    // producing a type.
-    if (!dc->isInnermostContextGeneric())
-      return Type();
-    return dc->getProtocolSelf()->getArchetype();
-  }
-  return dc->getDeclaredTypeOfContext();
-}
-
 /// Create an implicit 'self' decl for a method in the specified decl context.
 /// If 'static' is true, then this is self for a static method in the type.
 ///
 /// Note that this decl is created, but it is returned with an incorrect
 /// DeclContext that needs to be set correctly.  This is automatically handled
 /// when a function is created with this as part of its argument list.
-/// For a generic context, this also gives the parameter an unbound generic
-/// type with the expectation that type-checking will fill in the context
-/// generic parameters.
 ParamDecl *ParamDecl::createUnboundSelf(SourceLoc loc, DeclContext *DC,
                                         bool isStaticMethod, bool isInOut) {
   ASTContext &C = DC->getASTContext();
-  auto selfType = getSelfTypeOfContext(DC);
-
-  // If we have a valid selfType (i.e. we're not in the parser before we
-  // know such things, or we're nested inside an invalid extension),
-  // configure it.
-  if (selfType && !selfType->is<ErrorType>()) {
-    if (isStaticMethod)
-      selfType = MetatypeType::get(selfType);
-    
-    if (isInOut)
-      selfType = InOutType::get(selfType);
-  }
-    
   auto *selfDecl = new (C) ParamDecl(/*IsLet*/!isInOut, SourceLoc(),SourceLoc(),
-                                     Identifier(), loc, C.Id_self, selfType,DC);
+                                     Identifier(), loc, C.Id_self, Type(), DC);
   selfDecl->setImplicit();
   return selfDecl;
 }
@@ -3683,25 +3651,24 @@ ParamDecl *ParamDecl::createUnboundSelf(SourceLoc loc, DeclContext *DC,
 /// Note that this decl is created, but it is returned with an incorrect
 /// DeclContext that needs to be set correctly.  This is automatically handled
 /// when a function is created with this as part of its argument list.
-/// For a generic context, this also gives the parameter an unbound generic
-/// type with the expectation that type-checking will fill in the context
-/// generic parameters.
 ParamDecl *ParamDecl::createSelf(SourceLoc loc, DeclContext *DC,
                                  bool isStaticMethod, bool isInOut) {
   ASTContext &C = DC->getASTContext();
   auto selfType = DC->getSelfTypeInContext();
   auto selfInterfaceType = DC->getSelfInterfaceType();
-  assert(selfType && !selfType->is<ErrorType>());
-  assert(selfInterfaceType && !selfType->is<ErrorType>());
+  assert(selfType);
+  assert(selfInterfaceType);
 
-  if (isStaticMethod) {
-    selfType = MetatypeType::get(selfType);
-    selfInterfaceType = MetatypeType::get(selfInterfaceType);
-  }
-  
-  if (isInOut) {
-    selfType = InOutType::get(selfType);
-    selfInterfaceType = InOutType::get(selfInterfaceType);
+  if (!selfType->is<ErrorType>()) {
+    if (isStaticMethod) {
+      selfType = MetatypeType::get(selfType);
+      selfInterfaceType = MetatypeType::get(selfInterfaceType);
+    }
+
+    if (isInOut) {
+      selfType = InOutType::get(selfType);
+      selfInterfaceType = InOutType::get(selfInterfaceType);
+    }
   }
 
   auto *selfDecl = new (C) ParamDecl(/*IsLet*/!isInOut, SourceLoc(),SourceLoc(),

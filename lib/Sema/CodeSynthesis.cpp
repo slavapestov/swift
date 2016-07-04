@@ -55,35 +55,47 @@ static VarDecl *getFirstParamDecl(FuncDecl *fn) {
 };
 
 
-static ParamDecl *buildArgument(SourceLoc loc, DeclContext *DC,
-                               StringRef name, Type type, bool isLet) {
+static ParamDecl *buildArgument(SourceLoc loc, DeclContext *DC, StringRef name,
+                                Type type, Type interfaceType, bool isLet) {
   auto &context = DC->getASTContext();
   auto *param = new (context) ParamDecl(isLet, SourceLoc(), SourceLoc(),
                                         Identifier(), loc,
-                                        context.getIdentifier(name),Type(), DC);
+                                        context.getIdentifier(name),
+                                        Type(), DC);
   param->setImplicit();
   param->getTypeLoc().setType(type);
+  param->setInterfaceType(interfaceType);
   return param;
 }
 
 static ParamDecl *buildLetArgument(SourceLoc loc, DeclContext *DC,
-                                   StringRef name, Type type) {
-  return buildArgument(loc, DC, name, type, /*isLet*/ true);
+                                   StringRef name,
+                                   Type type,
+                                   Type interfaceType) {
+  return buildArgument(loc, DC, name, type, interfaceType, /*isLet*/ true);
 }
 
 static ParamDecl *buildInOutArgument(SourceLoc loc, DeclContext *DC,
-                                     StringRef name, Type type) {
-  return buildArgument(loc, DC, name, InOutType::get(type), /*isLet*/ false);
+                                     StringRef name,
+                                     Type type,
+                                     Type interfaceType) {
+  return buildArgument(loc, DC, name,
+                       InOutType::get(type),
+                       InOutType::get(interfaceType),
+                       /*isLet*/ false);
 }
 
 static Type getTypeOfStorage(AbstractStorageDecl *storage,
-                             TypeChecker &TC) {
+                             TypeChecker &TC, bool wantInterfaceType) {
   if (auto var = dyn_cast<VarDecl>(storage)) {
-    return TC.getTypeOfRValue(var, /*want interface type*/ false);
+    return TC.getTypeOfRValue(var, wantInterfaceType);
   } else {
     // None of the transformations done by getTypeOfRValue are
     // necessary for subscripts.
     auto subscript = cast<SubscriptDecl>(storage);
+    if (wantInterfaceType)
+      return ArchetypeBuilder::mapTypeOutOfContext(storage->getDeclContext(),
+                                                   subscript->getElementType());
     return subscript->getElementType();
   }
 }
@@ -128,7 +140,7 @@ static FuncDecl *createGetterPrototype(AbstractStorageDecl *storage,
 
   // The implicit 'self' argument if in a type context.
   if (storage->getDeclContext()->isTypeContext())
-    getterParams.push_back(ParameterList::createUnboundSelf(loc,
+    getterParams.push_back(ParameterList::createSelf(loc,
                                                      storage->getDeclContext(),
                                                      /*isStatic*/false));
     
@@ -141,7 +153,7 @@ static FuncDecl *createGetterPrototype(AbstractStorageDecl *storage,
       staticLoc = var->getLoc();
   }
 
-  auto storageType = getTypeOfStorage(storage, TC);
+  auto storageType = getTypeOfStorage(storage, TC, /*wantInterfaceType=*/false);
 
   auto getter = FuncDecl::create(
       TC.Context, staticLoc, StaticSpellingKind::None, loc, Identifier(), loc,
@@ -174,16 +186,19 @@ static FuncDecl *createSetterPrototype(AbstractStorageDecl *storage,
 
   // The implicit 'self' argument if in a type context.
   if (storage->getDeclContext()->isTypeContext()) {
-    params.push_back(ParameterList::createUnboundSelf(loc,
+    params.push_back(ParameterList::createSelf(loc,
                                                storage->getDeclContext(),
                                                /*isStatic*/false));
   }
   
   // Add a "(value : T, indices...)" argument list.
-  auto storageType = getTypeOfStorage(storage, TC);
+  auto storageType =
+      getTypeOfStorage(storage, TC, /*wantInterfaceType=*/false);
+  auto storageInterfaceType =
+      getTypeOfStorage(storage, TC, /*wantInterfaceType=*/true);
   valueDecl = buildLetArgument(storage->getLoc(),
                                storage->getDeclContext(), "value",
-                               storageType);
+                               storageType, storageInterfaceType);
   params.push_back(buildIndexForwardingParamList(storage, valueDecl));
 
   Type setterRetTy = TupleType::getEmpty(TC.Context);
@@ -240,14 +255,18 @@ static FuncDecl *createMaterializeForSetPrototype(AbstractStorageDecl *storage,
   //  - The implicit 'self' argument if in a type context.
   auto DC = storage->getDeclContext();
   if (DC->isTypeContext())
-    params.push_back(ParameterList::createUnboundSelf(loc, DC, /*isStatic*/false));
+    params.push_back(ParameterList::createSelf(loc, DC, /*isStatic*/false));
 
   //  - The buffer parameter, (buffer: Builtin.RawPointer,
   //                           inout storage: Builtin.UnsafeValueBuffer,
   //                           indices...).
   ParamDecl *bufferElements[] = {
-    buildLetArgument(loc, DC, "buffer", ctx.TheRawPointerType),
-    buildInOutArgument(loc, DC, "callbackStorage", ctx.TheUnsafeValueBufferType)
+    buildLetArgument(loc, DC, "buffer",
+                     ctx.TheRawPointerType,
+                     ctx.TheRawPointerType),
+    buildInOutArgument(loc, DC, "callbackStorage",
+                       ctx.TheUnsafeValueBufferType,
+                       ctx.TheUnsafeValueBufferType)
   };
   params.push_back(buildIndexForwardingParamList(storage, bufferElements));
 
@@ -1978,7 +1997,7 @@ ConstructorDecl *swift::createImplicitConstructor(TypeChecker &tc,
   
   // Create the constructor.
   DeclName name(context, context.Id_init, paramList);
-  auto *selfParam = ParamDecl::createUnboundSelf(Loc, decl,
+  auto *selfParam = ParamDecl::createSelf(Loc, decl,
                                           /*static*/false, /*inout*/true);
   auto *ctor =
     new (context) ConstructorDecl(name, Loc,
@@ -2080,7 +2099,7 @@ swift::createDesignatedInitOverride(TypeChecker &tc,
   auto &ctx = tc.Context;
 
   // Create the 'self' declaration and patterns.
-  auto *selfDecl = ParamDecl::createUnboundSelf(SourceLoc(), classDecl);
+  auto *selfDecl = ParamDecl::createSelf(SourceLoc(), classDecl);
 
   // Create the initializer parameter patterns.
   OptionSet<ParameterList::CloneFlags> options = ParameterList::Implicit;
@@ -2218,7 +2237,7 @@ void TypeChecker::addImplicitDestructor(ClassDecl *CD) {
   if (CD->hasDestructor() || CD->isInvalid())
     return;
 
-  auto *selfDecl = ParamDecl::createUnboundSelf(CD->getLoc(), CD);
+  auto *selfDecl = ParamDecl::createSelf(CD->getLoc(), CD);
 
   auto *DD = new (Context) DestructorDecl(Context.Id_deinit, CD->getLoc(),
                                           selfDecl, CD);
