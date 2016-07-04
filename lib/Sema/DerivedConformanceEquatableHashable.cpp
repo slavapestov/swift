@@ -391,6 +391,7 @@ deriveHashable_enum_hashValue(TypeChecker &tc, Decl *parentDecl,
   GenericParamList *genericParams = getterDecl->getGenericParamsOfContext();
   Type methodType = FunctionType::get(TupleType::getEmpty(tc.Context), intType);
   Type selfType = selfDecl->getType();
+  assert(selfType->isEqual(getterDecl->computeSelfType()));
   
   Type type;
   if (genericParams)
