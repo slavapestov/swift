@@ -88,7 +88,12 @@ static ParamDecl *buildInOutArgument(SourceLoc loc, DeclContext *DC,
 static Type getTypeOfStorage(AbstractStorageDecl *storage,
                              TypeChecker &TC, bool wantInterfaceType) {
   if (auto var = dyn_cast<VarDecl>(storage)) {
-    return TC.getTypeOfRValue(var, wantInterfaceType);
+    auto type = TC.getTypeOfRValue(var, wantInterfaceType);
+    // FIXME: This should not be neccesary
+    if (wantInterfaceType && type->hasArchetype())
+      return ArchetypeBuilder::mapTypeOutOfContext(storage->getDeclContext(),
+                                                   type);
+    return type;
   } else {
     // None of the transformations done by getTypeOfRValue are
     // necessary for subscripts.
