@@ -2154,6 +2154,8 @@ public:
   bool hasType() const { return !TypeAndAccess.getPointer().isNull(); }
   Type getType() const {
     assert(hasType() && "declaration has no type set yet");
+    assert(!isa<AbstractFunctionDecl>(this) &&
+           "functions only have an interface type");
     return TypeAndAccess.getPointer();
   }
 

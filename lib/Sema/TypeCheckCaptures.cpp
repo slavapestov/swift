@@ -96,7 +96,7 @@ public:
     }
 
     // Nothing to do if the type is concrete.
-    if (!type->hasArchetype())
+    if (!type->hasArchetype() && !type->hasTypeParameter())
       return;
 
     // Walk the type to see if we have any archetypes that are *not* open
@@ -119,7 +119,8 @@ public:
         // Perhaps this entire analysis should happen at the SILGen level,
         // instead, but even there we don't really have enough information to
         // perform it accurately.
-        if (t->is<ArchetypeType>() && !t->isOpenedExistential()) {
+        if (t->is<GenericTypeParamType>() ||
+            (t->is<ArchetypeType>() && !t->isOpenedExistential())) {
           if (GenericParamCaptureLoc.isInvalid())
             GenericParamCaptureLoc = CurLoc;
           return Action::Continue;
@@ -610,7 +611,7 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
   }
 
   if (AFR.hasType() && !AFR.isObjC()) {
-    finder.checkType(AFR.getType(), AFR.getLoc());
+    finder.checkType(AFR.getInterfaceType(), AFR.getLoc());
   }
 
   // If this is an init(), explicitly walk the initializer values for members of

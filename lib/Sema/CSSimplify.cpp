@@ -2822,7 +2822,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclName memberName,
       if (favoredType && result.FavoredChoice == ~0U) {
         // Only try and favor monomorphic initializers.
         if (auto fnTypeWithSelf =
-            ctor->getType()->getAs<FunctionType>()) {
+            ctor->getInterfaceType()->getAs<FunctionType>()) {
           
           if (auto fnType =
                   fnTypeWithSelf->getResult()->getAs<FunctionType>()) {

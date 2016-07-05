@@ -3845,7 +3845,7 @@ ConcreteDeclRef Solution::resolveLocatorToDecl(
               if (decl->getInnermostDeclContext()->isGenericContext()) {
                 SmallVector<Substitution, 4> subs;
                 computeSubstitutions(
-                  decl->getType(),
+                  decl->getInterfaceType(),
                   decl->getInnermostDeclContext(),
                   openedType, locator, subs);
                 return ConcreteDeclRef(cs.getASTContext(), decl, subs);

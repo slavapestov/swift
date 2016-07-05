@@ -147,7 +147,8 @@ static void deriveBodyEquatable_enum_eq(AbstractFunctionDecl *eqDecl) {
   FuncDecl *cmpFunc = C.getEqualIntDecl(nullptr);
   assert(cmpFunc && "should have a == for int as we already checked for it");
   
-  auto fnType = dyn_cast<FunctionType>(cmpFunc->getType()->getCanonicalType());
+  auto fnType = cast<FunctionType>(
+      cmpFunc->getInterfaceType()->getCanonicalType());
   auto tType = fnType.getInput();
   
   TupleExpr *abTuple = TupleExpr::create(C, SourceLoc(), { aIndex, bIndex },
@@ -157,7 +158,7 @@ static void deriveBodyEquatable_enum_eq(AbstractFunctionDecl *eqDecl) {
   auto *cmpFuncExpr = new (C) DeclRefExpr(cmpFunc, DeclNameLoc(),
                                           /*implicit*/ true,
                                           AccessSemantics::Ordinary,
-                                          cmpFunc->getType());
+                                          cmpFunc->getInterfaceType());
   auto *cmpExpr = new (C) BinaryExpr(cmpFuncExpr, abTuple, /*implicit*/ true,
                                      boolTy);
   statements.push_back(new (C) ReturnStmt(SourceLoc(), cmpExpr));

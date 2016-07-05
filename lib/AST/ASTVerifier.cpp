@@ -668,8 +668,11 @@ struct ASTNodeBase {};
       if (D->hasName())
         checkMangling(D);
 
-      if (D->hasType())
+      if (!isa<AbstractFunctionDecl>(D) && D->hasType())
         verifyChecked(D->getType());
+
+      if (D->hasInterfaceType())
+        verifyChecked(D->getInterfaceType());
 
       if (auto Overridden = D->getOverriddenDecl()) {
         if (D->getDeclContext() == Overridden->getDeclContext()) {
@@ -2280,7 +2283,7 @@ struct ASTNodeBase {};
 
       // If a decl has the Throws bit set, the function type should throw,
       // and vice versa.
-      auto fnTy = AFD->getType()->castTo<AnyFunctionType>();
+      auto fnTy = AFD->getInterfaceType()->castTo<AnyFunctionType>();
       for (unsigned i = 1, e = AFD->getNaturalArgumentCount(); i != e; ++i)
         fnTy = fnTy->getResult()->castTo<AnyFunctionType>();
 
