@@ -2739,7 +2739,7 @@ void PrintAST::visitFuncDecl(FuncDecl *decl) {
           printFunctionParameters(decl);
         });
 
-      Type ResultTy = decl->getResultType();
+      Type ResultTy = decl->getResultInterfaceType();
       if (ResultTy && !ResultTy->isVoid()) {
         Printer << " -> ";
         // Use the non-repr external type, but reuse the TypeLoc printing code.

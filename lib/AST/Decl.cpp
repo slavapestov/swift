@@ -4313,11 +4313,11 @@ void FuncDecl::setDeserializedSignature(ArrayRef<ParameterList *> BodyParams,
   this->FnRetType = FnRetType;
 }
 
-Type FuncDecl::getResultType() const {
+Type FuncDecl::getResultInterfaceType() const {
   if (!hasType())
     return nullptr;
 
-  Type resultTy = getType();
+  Type resultTy = getInterfaceType();
   if (resultTy->is<ErrorType>())
     return resultTy;
 
@@ -4538,15 +4538,15 @@ SourceRange ConstructorDecl::getSourceRange() const {
   return { getConstructorLoc(), End };
 }
 
-Type ConstructorDecl::getArgumentType() const {
-  Type ArgTy = getType();
+Type ConstructorDecl::getArgumentInterfaceType() const {
+  Type ArgTy = getInterfaceType();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getInput();
   return ArgTy;
 }
 
-Type ConstructorDecl::getResultType() const {
-  Type ArgTy = getType();
+Type ConstructorDecl::getResultInterfaceType() const {
+  Type ArgTy = getInterfaceType();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
   return ArgTy;

@@ -892,8 +892,10 @@ ConstraintSystem::compareSolutions(ConstraintSystem &cs,
             
             // If both are convenience initializers, and the instance type of
             // one is a subtype of the other's, favor the subtype constructor.
-            auto resType1 = ctor1->getResultType();
-            auto resType2 = ctor2->getResultType();
+            auto resType1 = ctor1->getResultInterfaceType();
+            resType1 = ArchetypeBuilder::mapTypeIntoContext(ctor1, resType1);
+            auto resType2 = ctor2->getResultInterfaceType();
+            resType2 = ArchetypeBuilder::mapTypeIntoContext(ctor2, resType2);
             
             if (!resType1->isEqual(resType2)) {
               if (tc.isSubtypeOf(resType1, resType2, cs.DC)) {

@@ -5106,7 +5106,7 @@ public:
   /// Retrieve the result type of this function.
   ///
   /// \sa getBodyResultType
-  Type getResultType() const;
+  Type getResultInterfaceType() const;
 
   /// Retrieve the result type of this function for use within the function
   /// definition.
@@ -5533,11 +5533,11 @@ public:
   SourceLoc getStartLoc() const { return getConstructorLoc(); }
   SourceRange getSourceRange() const;
 
-  /// getArgumentType - get the type of the argument tuple
-  Type getArgumentType() const;
+  /// getArgumentInterfaceType - get the type of the argument tuple
+  Type getArgumentInterfaceType() const;
 
   /// \brief Get the type of the constructed object.
-  Type getResultType() const;
+  Type getResultInterfaceType() const;
 
   /// Get the interface type of the initializing constructor.
   Type getInitializerInterfaceType();
