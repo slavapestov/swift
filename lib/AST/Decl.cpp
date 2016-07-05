@@ -1708,13 +1708,15 @@ Type ValueDecl::getInterfaceType() const {
   assert(!isa<AbstractFunctionDecl>(this) &&
          "functions should have an interface type");
 
-  // If the type involves a type variable, don't cache it.
   auto type = getType();
-  assert((type.isNull() || !type->is<PolymorphicFunctionType>())
-         && "decl has polymorphic function type but no interface type");
 
-  if (type->hasTypeVariable())
+  // Don't cache types of variables, because we do really funny
+  // things with them.
+  if (isa<VarDecl>(this))
     return type;
+
+  // We should not have any type variables at this point.
+  assert(!type->hasTypeVariable());
 
   InterfaceTy = type;
   return InterfaceTy;
