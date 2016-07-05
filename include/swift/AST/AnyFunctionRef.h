@@ -96,12 +96,6 @@ public:
     return TheFunction.get<AbstractClosureExpr *>()->getResultType();
   }
 
-  unsigned getNaturalArgumentCount() const {
-    if (auto *AFD = TheFunction.dyn_cast<AbstractFunctionDecl *>())
-      return AFD->getNaturalArgumentCount();
-    return TheFunction.get<AbstractClosureExpr *>()->getNaturalArgumentCount();
-  }
-
   BraceStmt *getBody() const {
     if (auto *AFD = TheFunction.dyn_cast<AbstractFunctionDecl *>())
       return AFD->getBody();
