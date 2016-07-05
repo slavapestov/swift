@@ -164,15 +164,23 @@ public:
 
     // Visit the type of the capture, if it isn't a class reference, since
     // we'd need the metadata to do so.
-    if (VD->hasType()
-        && (!AFR.isObjC()
-            || !VD->getType()->hasRetainablePointerRepresentation()))
-      checkType(VD->getType(), VD->getLoc());
+    if (VD->hasType()) {
+      auto type = VD->getInterfaceType();
+      if (type->is<AnyFunctionType>()) {
+        checkType(type, VD->getLoc());
+      } else {
+        type = VD->getType();
+        if (!AFR.isObjC() ||
+            !type->hasRetainablePointerRepresentation())
+          checkType(type, VD->getLoc());
+      }
+    }
 
     // If VD is a noescape decl, then the closure we're computing this for
     // must also be noescape.
-    if (VD->hasType() && VD->getType()->is<AnyFunctionType>() &&
-        VD->getType()->castTo<AnyFunctionType>()->isNoEscape() &&
+    if (VD->hasType() &&
+        VD->getInterfaceType()->is<AnyFunctionType>() &&
+        VD->getInterfaceType()->castTo<AnyFunctionType>()->isNoEscape() &&
         !capture.isNoEscape() &&
         // Don't repeatedly diagnose the same thing.
         Diagnosed.insert(VD).second) {
@@ -183,7 +191,7 @@ public:
       TC.diagnose(Loc, isDecl ? diag::decl_closure_noescape_use :
                   diag::closure_noescape_use, VD->getName());
 
-      if (VD->getType()->castTo<AnyFunctionType>()->isAutoClosure())
+      if (VD->getInterfaceType()->castTo<AnyFunctionType>()->isAutoClosure())
         TC.diagnose(VD->getLoc(), diag::noescape_autoclosure,
                     VD->getName());
     }
