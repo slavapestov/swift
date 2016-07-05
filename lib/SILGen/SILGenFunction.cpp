@@ -786,7 +786,12 @@ void SILGenFunction::emitCurryThunk(ValueDecl *vd,
     assert(from.uncurryLevel == 0 && to.uncurryLevel == 1
            && "currying constructor at level other than one?!");
     F.setBare(IsBare);
-    auto selfMetaTy = vd->getType()->getAs<AnyFunctionType>()->getInput();
+
+    // FIXME: This is very similar to emitConstructorMetatypeArg()
+    auto selfMetaTy = vd->getInterfaceType()
+                        ->castTo<AnyFunctionType>()->getInput();
+    selfMetaTy = ArchetypeBuilder::mapTypeIntoContext(vd->getInnermostDeclContext(),
+                                                      selfMetaTy);
     auto metatypeVal = new (F.getModule()) SILArgument(F.begin(),
                                             getLoweredLoadableType(selfMetaTy));
     curriedArgs.push_back(metatypeVal);

@@ -3427,11 +3427,11 @@ RValue RValueEmitter::visitPointerToPointerExpr(PointerToPointerExpr *E,
 
   // Get the original pointer value, abstracted to the converter function's
   // expected level.
-  AbstractionPattern origTy(converter->getType()->castTo<AnyFunctionType>()
-                                                ->getInput());
+  AbstractionPattern origFnTy(converter->getInterfaceType());
+  auto origInputTy = origFnTy.getFunctionInputType();
   CanType inputTy = E->getSubExpr()->getType()->getCanonicalType();
-  auto &origTL = SGF.getTypeLowering(origTy, inputTy);
-  ManagedValue orig = SGF.emitRValueAsOrig(E->getSubExpr(), origTy, origTL);
+  auto &origTL = SGF.getTypeLowering(origInputTy, inputTy);
+  ManagedValue orig = SGF.emitRValueAsOrig(E->getSubExpr(), origInputTy, origTL);
 
   CanType outputTy = E->getType()->getCanonicalType();
   return SGF.emitPointerToPointer(E, orig, inputTy, outputTy, C);
