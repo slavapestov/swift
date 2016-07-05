@@ -753,8 +753,8 @@ static bool isRelaxedIBAction(TypeChecker &TC) {
 void AttributeChecker::visitIBActionAttr(IBActionAttr *attr) {
   // IBActions instance methods must have type Class -> (...) -> ().
   auto *FD = cast<FuncDecl>(D);
-  Type CurriedTy = FD->getType()->castTo<AnyFunctionType>()->getResult();
-  Type ResultTy = CurriedTy->castTo<AnyFunctionType>()->getResult();
+
+  Type ResultTy = FD->getResultInterfaceType();
   if (!ResultTy->isEqual(TupleType::getEmpty(TC.Context))) {
     TC.diagnose(D, diag::invalid_ibaction_result, ResultTy);
     attr->setInvalid();
@@ -1454,7 +1454,7 @@ void AttributeChecker::visitSpecializeAttr(SpecializeAttr *attr) {
       auto superTy = req.getSecondType().subst(currentModule, subMap, None);
       if (!TC.isSubtypeOf(firstTy, superTy, DC)) {
         TC.diagnose(attr->getLocation(), diag::type_does_not_inherit,
-                    FD->getType(), firstTy, superTy);
+                    FD->getInterfaceType(), firstTy, superTy);
       }
       break;
     }
@@ -1464,8 +1464,8 @@ void AttributeChecker::visitSpecializeAttr(SpecializeAttr *attr) {
       auto firstTy = req.getFirstType().subst(currentModule, subMap, None);
       auto sameTy = req.getSecondType().subst(currentModule, subMap, None);
       if (!firstTy->isEqual(sameTy)) {
-        TC.diagnose(attr->getLocation(), diag::types_not_equal, FD->getType(),
-                    firstTy, sameTy);
+        TC.diagnose(attr->getLocation(), diag::types_not_equal,
+                    FD->getInterfaceType(), firstTy, sameTy);
 
         return;
       }

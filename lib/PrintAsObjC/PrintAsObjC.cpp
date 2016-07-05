@@ -395,7 +395,9 @@ private:
 
     Optional<ForeignErrorConvention> errorConvention
       = AFD->getForeignErrorConvention();
-    Type rawMethodTy = AFD->getType()->castTo<AnyFunctionType>()->getResult();
+    Type rawMethodTy = AFD->getInterfaceType()
+                          ->castTo<AnyFunctionType>()->getResult();
+    rawMethodTy = ArchetypeBuilder::mapTypeIntoContext(AFD, rawMethodTy);
     auto methodTy = rawMethodTy->castTo<FunctionType>();
     auto resultTy = getForeignResultType(AFD, methodTy, errorConvention);
 
@@ -508,9 +510,8 @@ private:
     printDocumentationComment(FD);
     Optional<ForeignErrorConvention> errorConvention
       = FD->getForeignErrorConvention();
-    auto resultTy = getForeignResultType(FD,
-                                         FD->getType()->castTo<FunctionType>(),
-                                         errorConvention);
+    auto funcTy = FD->getInterfaceType()->castTo<FunctionType>();
+    auto resultTy = getForeignResultType(FD, funcTy, errorConvention);
     
     // The result type may be a partial function type we need to close
     // up later.
@@ -1668,7 +1669,7 @@ public:
         continue;
       }
 
-      ReferencedTypeFinder::walk(VD->getType(),
+      ReferencedTypeFinder::walk(VD->getInterfaceType(),
                                  [this](ReferencedTypeFinder &finder,
                                         const TypeDecl *TD) {
         if (auto CD = dyn_cast<ClassDecl>(TD)) {

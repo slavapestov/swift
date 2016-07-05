@@ -4646,7 +4646,7 @@ public:
     DiagnosticTransaction tentativeDiags(TC.Diags);
 
     {
-      Type baseTy = base->getType();
+      Type baseTy = base->getInterfaceType();
       if (baseTy->is<ErrorType>())
         return false;
 
@@ -4656,6 +4656,8 @@ public:
         // input arguments.
         baseTy = baseTy->getAs<AnyFunctionType>()->getResult();
         Type argTy = baseTy->getAs<AnyFunctionType>()->getInput();
+        argTy = ArchetypeBuilder::mapTypeIntoContext(
+            decl->getInnermostDeclContext(), argTy);
         auto diagKind = diag::override_type_mismatch_with_fixits_init;
         unsigned numArgs = baseInit->getParameters()->size();
         activeDiag.emplace(TC.diagnose(decl, diagKind,
@@ -4664,6 +4666,9 @@ public:
       } else {
         if (isa<AbstractFunctionDecl>(base))
           baseTy = baseTy->getAs<AnyFunctionType>()->getResult();
+
+        baseTy = ArchetypeBuilder::mapTypeIntoContext(
+            decl->getInnermostDeclContext(), baseTy);
 
         activeDiag.emplace(TC.diagnose(decl,
                                        diag::override_type_mismatch_with_fixits,

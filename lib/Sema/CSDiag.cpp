@@ -738,7 +738,18 @@ namespace {
     Type entityType;
 
     UncurriedCandidate(ValueDecl *decl, unsigned level)
-      : declOrExpr(decl), level(level), entityType(decl->getType()) {
+      : declOrExpr(decl), level(level) {
+      entityType = decl->getInterfaceType();
+
+      // FIXME: Use GenericFunctionType directly here
+      auto *dc = decl->getInnermostDeclContext();
+      if (auto *genericFnType = entityType->getAs<GenericFunctionType>()) {
+        entityType = genericFnType->substGenericArgs(
+            dc->getParentModule(),
+            dc->getGenericParamsOfContext()->getForwardingSubstitutions(
+                dc->getASTContext()));
+      }
+
       // For some reason, subscripts and properties don't include their self
       // type.  Tack it on for consistency with other members.
       if (isa<AbstractStorageDecl>(decl)) {
@@ -1334,7 +1345,7 @@ void CalleeCandidateInfo::collectCalleeCandidates(Expr *fn) {
     auto decl = declRefExpr->getDecl();
     candidates.push_back({ decl, getCalleeLevel(decl) });
     
-    if (auto fTy = decl->getType()->getAs<AnyFunctionType>())
+    if (auto fTy = decl->getInterfaceType()->getAs<AnyFunctionType>())
       declName = fTy->getInput()->getRValueInstanceType()->getString()+".init";
     else
       declName = "init";
