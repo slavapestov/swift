@@ -813,7 +813,7 @@ namespace {
   /// Return a pair, containing the total parameter count of a function, coupled
   /// with the number of non-default parameters.
   std::pair<size_t, size_t> getParamCount(ValueDecl *VD) {
-    auto fty = VD->getType()->getAs<AnyFunctionType>();
+    auto fty = VD->getInterfaceType()->getAs<AnyFunctionType>();
     assert(fty && "attempting to count parameters of a non-function type");
     
     auto t = fty->getInput();
@@ -878,7 +878,7 @@ namespace {
       bool haveMultipleApplicableOverloads = false;
       
       for (auto VD : ODR->getDecls()) {
-        if (VD->getType()->getAs<AnyFunctionType>()) {
+        if (VD->getInterfaceType()->is<AnyFunctionType>()) {
           auto nParams = getParamCount(VD);
           
           if (nArgs == nParams.first) {
@@ -893,10 +893,7 @@ namespace {
       
       // Determine whether the given declaration is favored.
       auto isFavoredDecl = [&](ValueDecl *value) -> bool {
-        auto valueTy = value->getType();
-        
-        auto fnTy = valueTy->getAs<AnyFunctionType>();
-        if (!fnTy)
+        if (!value->getInterfaceType()->is<AnyFunctionType>())
           return false;
         
         auto paramCount = getParamCount(value);
@@ -1410,14 +1407,16 @@ namespace {
     }
 
     Type visitDeclRefExpr(DeclRefExpr *E) {
+      auto *decl = E->getDecl();
+
       // If this is a ParamDecl for a closure argument that has an Unresolved
       // type, then this is a situation where CSDiags is trying to perform
       // error recovery within a ClosureExpr.  Just create a new type variable
       // for the decl that isn't bound to anything.  This will ensure that it
       // is considered ambiguous.
-      if (isa<ParamDecl>(E->getDecl()) &&
-          E->getDecl()->hasType() &&
-          E->getDecl()->getType()->is<UnresolvedType>()) {
+      if (isa<ParamDecl>(decl) &&
+          decl->hasType() &&
+          decl->getType()->is<UnresolvedType>()) {
         return CS.createTypeVariable(CS.getConstraintLocator(E),
                                      TVO_CanBindToLValue);
       }
@@ -1427,8 +1426,8 @@ namespace {
       // FIXME: If the decl is in error, we get no information from this.
       // We may, alternatively, want to use a type variable in that case,
       // and possibly infer the type of the variable that way.
-      CS.getTypeChecker().validateDecl(E->getDecl(), true);
-      if (E->getDecl()->isInvalid())
+      CS.getTypeChecker().validateDecl(decl, true);
+      if (decl->isInvalid())
         return nullptr;
 
       auto locator = CS.getConstraintLocator(E);
@@ -1440,8 +1439,9 @@ namespace {
                          OverloadChoice(Type(), E->getDecl(),
                                         E->isSpecialized(), CS));
       
-      if (E->getDecl()->getType() &&
-          !E->getDecl()->getType()->getAs<TypeVariableType>()) {
+      if (/*isa<VarDecl>(decl) &&*/
+          decl->getType() &&
+          !decl->getType()->getAs<TypeVariableType>()) {
         CS.setFavoredType(E, E->getDecl()->getType().getPointer());
       }
 
