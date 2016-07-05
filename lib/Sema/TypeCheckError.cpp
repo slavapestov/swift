@@ -380,9 +380,9 @@ classifyFunctionByType(Type type, unsigned numArgs) {
   }
 }
 
-template <class T>
-static ThrowingKind classifyFunctionBodyWithoutContext(T *fn) {
-  return classifyFunctionByType(fn->getType(), fn->getNaturalArgumentCount());
+static ThrowingKind classifyFunctionBodyWithoutContext(AnyFunctionRef fn) {
+  return classifyFunctionByType(fn.getInterfaceType(),
+                                fn.getNaturalArgumentCount());
 }
 
 /// A class for collecting information about rethrowing functions.
@@ -850,8 +850,7 @@ public:
   };
 
 private:
-  template <class T>
-  static Kind getKindForFunctionBody(T *fn) {
+  static Kind getKindForFunctionBody(AnyFunctionRef fn) {
     switch (classifyFunctionBodyWithoutContext(fn)) {
     case ThrowingKind::None:
       return Kind::NonThrowingFunction;

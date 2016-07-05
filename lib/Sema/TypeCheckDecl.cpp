@@ -4233,7 +4233,7 @@ public:
       return;
 
     // This type check should have created a non-dependent type.
-    assert(!FD->getType()->hasTypeParameter());
+    assert(!FD->getInterfaceType()->hasTypeParameter());
 
     validateAttributes(TC, FD);
 
