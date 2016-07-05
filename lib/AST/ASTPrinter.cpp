@@ -2741,6 +2741,8 @@ void PrintAST::visitFuncDecl(FuncDecl *decl) {
 
       Type ResultTy = decl->getResultInterfaceType();
       if (ResultTy && !ResultTy->isVoid()) {
+        ResultTy = ArchetypeBuilder::mapTypeIntoContext(decl, ResultTy);
+
         Printer << " -> ";
         // Use the non-repr external type, but reuse the TypeLoc printing code.
         Printer.callPrintStructurePre(PrintStructureKind::FunctionReturnType);
