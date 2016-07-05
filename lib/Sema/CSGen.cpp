@@ -1436,13 +1436,12 @@ namespace {
       // resolve it. This records the overload for use later.
       auto tv = CS.createTypeVariable(locator, TVO_CanBindToLValue);
       CS.resolveOverload(locator, tv,
-                         OverloadChoice(Type(), E->getDecl(),
+                         OverloadChoice(Type(), decl,
                                         E->isSpecialized(), CS));
       
-      if (/*isa<VarDecl>(decl) &&*/
-          decl->getType() &&
+      if (decl->getType() &&
           !decl->getType()->getAs<TypeVariableType>()) {
-        CS.setFavoredType(E, E->getDecl()->getType().getPointer());
+        CS.setFavoredType(E, decl->getType().getPointer());
       }
 
       return tv;
