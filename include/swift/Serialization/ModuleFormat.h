@@ -854,7 +854,6 @@ namespace decls_block {
     BCFixed<1>,  // stub implementation?
     BCFixed<1>,  // throws?
     CtorInitializerKindField,  // initializer kind
-    TypeIDField, // type (signature)
     TypeIDField, // type (interface)
     DeclIDField, // overridden decl
     AccessibilityKindField, // accessibility
@@ -908,7 +907,6 @@ namespace decls_block {
     BCFixed<1>,   // has dynamic self?
     BCFixed<1>,   // throws?
     BCVBR<5>,     // number of parameter patterns
-    TypeIDField,  // type (signature)
     TypeIDField,  // interface type
     DeclIDField,  // operator decl
     DeclIDField,  // overridden function
@@ -1008,7 +1006,6 @@ namespace decls_block {
     DeclContextIDField, // context decl
     BCFixed<1>,  // implicit?
     BCFixed<1>,  // objc?
-    TypeIDField, // type (signature)
     TypeIDField  // interface type
     // Trailed by a pattern for self.
   >;
