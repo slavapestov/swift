@@ -249,7 +249,7 @@ bool constraints::hasTrailingClosure(const ConstraintLocatorBuilder &locator) {
 static unsigned getNumArgs(ValueDecl *value) {
   if (!isa<FuncDecl>(value)) return ~0U;
 
-  AnyFunctionType *fnTy = value->getType()->castTo<AnyFunctionType>();
+  AnyFunctionType *fnTy = value->getInterfaceType()->castTo<AnyFunctionType>();
   if (value->getDeclContext()->isTypeContext())
     fnTy = fnTy->getResult()->castTo<AnyFunctionType>();
   Type argTy = fnTy->getInput();
@@ -261,7 +261,7 @@ static unsigned getNumArgs(ValueDecl *value) {
 }
 
 static bool matchesDeclRefKind(ValueDecl *value, DeclRefKind refKind) {
-  if (value->getType()->is<ErrorType>())
+  if (value->getInterfaceType()->is<ErrorType>())
     return true;
 
   switch (refKind) {

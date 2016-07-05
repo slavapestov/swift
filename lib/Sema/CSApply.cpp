@@ -5546,7 +5546,8 @@ static Type adjustSelfTypeForMember(Type baseTy, ValueDecl *member,
   if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
     // If 'self' is an inout type, turn the base type into an lvalue
     // type with the same qualifiers.
-    auto selfTy = func->getType()->getAs<AnyFunctionType>()->getInput();
+    auto selfTy = func->getInterfaceType()->getAs<AnyFunctionType>()->getInput();
+    selfTy = ArchetypeBuilder::mapTypeIntoContext(func, selfTy);
     if (selfTy->is<InOutType>()) {
       // Unless we're looking at a nonmutating existential member.  In which
       // case, the member will be modeled as an inout but ExistentialMemberRef

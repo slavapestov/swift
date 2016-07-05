@@ -1415,7 +1415,8 @@ namespace {
       // error recovery within a ClosureExpr.  Just create a new type variable
       // for the decl that isn't bound to anything.  This will ensure that it
       // is considered ambiguous.
-      if (E->getDecl()->hasType() &&
+      if (isa<ParamDecl>(E->getDecl()) &&
+          E->getDecl()->hasType() &&
           E->getDecl()->getType()->is<UnresolvedType>()) {
         return CS.createTypeVariable(CS.getConstraintLocator(E),
                                      TVO_CanBindToLValue);
