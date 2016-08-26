@@ -921,6 +921,12 @@ void IRGenModule::emitBuiltinReflectionMetadata() {
     addUsedGlobal(var);
 }
 
+void IRGenerator::emitBuiltinReflectionMetadata() {
+  for (auto &m : *this) {
+    m.second->emitBuiltinReflectionMetadata();
+  }
+}
+
 void IRGenModule::emitFieldMetadataRecord(const NominalTypeDecl *Decl) {
   if (!IRGen.Opts.EnableReflectionMetadata)
     return;
@@ -940,4 +946,10 @@ void IRGenModule::emitReflectionMetadataVersion() {
                                           "__swift_reflection_version");
   Version->setVisibility(llvm::GlobalValue::HiddenVisibility);
   addUsedGlobal(Version);
+}
+
+void IRGenerator::emitReflectionMetadataVersion() {
+  for (auto &m : *this) {
+    m.second->emitReflectionMetadataVersion();
+  }
 }

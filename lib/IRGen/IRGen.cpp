@@ -778,6 +778,10 @@ static void performParallelIRGeneration(IRGenOptions &Opts,
 
   irgen.emitProtocolConformances();
 
+  // Emit reflection metadata for builtin and imported types.
+  irgen.emitBuiltinReflectionMetadata();
+  irgen.emitReflectionMetadataVersion();
+
   // Okay, emit any definitions that we suddenly need.
   irgen.emitLazyDefinitions();
   
