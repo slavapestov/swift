@@ -71,30 +71,36 @@ using namespace swift;
 // Creates a new substituted generic signature.
 SubstitutedGenericSignature::SubstitutedGenericSignature(
     ModuleDecl *M,
-    CanGenericSignature originalSig,
-    CanGenericSignature replacementSig,
+    GenericSignature *originalSig,
+    GenericSignature *replacementSig,
     const TypeSubstitutionMap &subMap,
     const TypeConformanceMap &conformanceMap)
-  : originalSig(originalSig),
-    replacementSig(replacementSig),
-    subMap(subMap),
-    conformanceMap(conformanceMap) {
-  thunkSig = substGenericSignature(M, originalSig, replacementSig,
+  : SubMap(subMap),
+    ConformanceMap(conformanceMap) {
+  if (originalSig)
+    OriginalSig = originalSig->getCanonicalSignature();
+  if (replacementSig)
+    ReplacementSig = replacementSig->getCanonicalSignature();
+  ThunkSig = substGenericSignature(M, OriginalSig, ReplacementSig,
                                    subMap, conformanceMap);
 }
 
 // Constructor for the case where the thunk signature is already known.
 SubstitutedGenericSignature::SubstitutedGenericSignature(
-    CanGenericSignature originalSig,
-    CanGenericSignature replacementSig,
-    CanGenericSignature thunkSig,
+    GenericSignature *originalSig,
+    GenericSignature *replacementSig,
+    GenericSignature *thunkSig,
     const TypeSubstitutionMap &subMap,
     const TypeConformanceMap &conformanceMap)
-  : originalSig(originalSig),
-    replacementSig(replacementSig),
-    thunkSig(thunkSig),
-    subMap(subMap),
-    conformanceMap(conformanceMap) {}
+  : SubMap(subMap),
+    ConformanceMap(conformanceMap) {
+  if (originalSig)
+    OriginalSig = originalSig->getCanonicalSignature();
+  if (replacementSig)
+    ReplacementSig = replacementSig->getCanonicalSignature();
+  if (thunkSig)
+    ThunkSig = thunkSig->getCanonicalSignature();
+}
 
 /// This is a hack to deal with the fact that TypeBase::subst() does not have
 /// a conformanceMap plumbed through; it needs to go away.
@@ -198,26 +204,26 @@ SubstitutedGenericSignature::substGenericSignature(
 void SubstitutedGenericSignature::transformSubstitutions(
     ModuleDecl *M,
     ArrayRef<Substitution> originalSubs,
-    SmallVectorImpl<Substitution> &thunkSubs) {
+    SmallVectorImpl<Substitution> &thunkSubs) const {
 
   // If the thunk has no generic signature, we just drop the original
   // substitutions on the floor.
-  if (!thunkSig)
+  if (!ThunkSig)
     return;
 
   // Otherwise, we need to build new caller-side substitutions
   // written in terms of the thunk's generic signature.
 
   // We start with a copy of the the replacement signature substitutions.
-  TypeSubstitutionMap subMap = this->subMap;
-  TypeConformanceMap conformanceMap = this->conformanceMap;
+  TypeSubstitutionMap subMap = SubMap;
+  TypeConformanceMap conformanceMap = ConformanceMap;
 
-  if (originalSig) {
+  if (OriginalSig) {
     // We take apart the original substitutions.
     TypeSubstitutionMap origSubMap;
     TypeConformanceMap origConformanceMap;
 
-    originalSig->getSubstitutionMap(originalSubs, origSubMap, origConformanceMap);
+    OriginalSig->getSubstitutionMap(originalSubs, origSubMap, origConformanceMap);
 
     // Next, filter any original substitutions whose left hand side has been
     // eliminated by replacement substitutions.
@@ -239,5 +245,5 @@ void SubstitutedGenericSignature::transformSubstitutions(
 
   // Finally, build a new substitution list using the thunk's generic signature,
   // suitable for statically-dispatched calls to the thunk.
-  thunkSig->getSubstitutions(*M, subMap, conformanceMap, thunkSubs);
+  ThunkSig->getSubstitutions(*M, subMap, conformanceMap, thunkSubs);
 }

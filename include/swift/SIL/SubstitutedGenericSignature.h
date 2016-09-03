@@ -25,18 +25,18 @@ namespace swift {
 /// Describes the mapping of substitution lists between two generic signatures.
 class SubstitutedGenericSignature final {
   // The original generic signature as seen by callers of a function.
-  CanGenericSignature originalSig;
+  CanGenericSignature OriginalSig;
 
   // The replacement generic signature of the function's context.
-  CanGenericSignature replacementSig;
+  CanGenericSignature ReplacementSig;
 
   // The signature of the thunk.
-  CanGenericSignature thunkSig;
+  CanGenericSignature ThunkSig;
 
   // Substitutions mapping generic parameters of the original signature to
   // interface types written in terms of the substituted signature.
-  TypeSubstitutionMap subMap;
-  TypeConformanceMap conformanceMap;
+  TypeSubstitutionMap SubMap;
+  TypeConformanceMap ConformanceMap;
 
   static CanGenericSignature substGenericSignature(
       ModuleDecl *M,
@@ -46,29 +46,34 @@ class SubstitutedGenericSignature final {
       const TypeConformanceMap &conformanceMap);
 
 public:
-  // Creates a new substituted generic signature.
+  // Creates a new substituted generic signature. Either one of the given
+  // generic signatures may be null.
   SubstitutedGenericSignature(ModuleDecl *M,
-                              CanGenericSignature originalSig,
-                              CanGenericSignature substSig,
+                              GenericSignature *originalSig,
+                              GenericSignature *substSig,
                               const TypeSubstitutionMap &subMap,
                               const TypeConformanceMap &conformanceMap);
 
-  // Constructor for the case where the thunk signature is already known.
-  SubstitutedGenericSignature(CanGenericSignature originalSig,
-                              CanGenericSignature replacementSig,
-                              CanGenericSignature thunkSig,
+  // Creates a new substituted generic signature. Either one of the given
+  // generic signatures may be null.
+  //
+  // This is a special constructor for the case where the thunk signature
+  // is already known.
+  SubstitutedGenericSignature(GenericSignature *originalSig,
+                              GenericSignature *replacementSig,
+                              GenericSignature *thunkSig,
                               const TypeSubstitutionMap &subMap,
                               const TypeConformanceMap &conformanceMap);
 
   // Returns the substituted GenericSignature.
-  CanGenericSignature getGenericSignature() {
-    return thunkSig;
+  CanGenericSignature getGenericSignature() const {
+    return ThunkSig;
   }
 
   void transformSubstitutions(
       ModuleDecl *M,
       ArrayRef<Substitution> originalSubs,
-      SmallVectorImpl<Substitution> &thunkSubs);
+      SmallVectorImpl<Substitution> &thunkSubs) const;
 };
 
 } // end namespace swift

@@ -1771,16 +1771,16 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
   conformanceMap.insert({selfParamTy.getPointer(), conformances});
 
   SubstitutedGenericSignature substSig(M.getSwiftModule(),
-                                       reqtTy->getGenericSignature()
-                                          ->getCanonicalSignature(),
-                                       conformance->getGenericSignature()
-                                          ->getCanonicalSignature(),
+                                       reqtTy->getGenericSignature(),
+                                       conformance->getGenericSignature(),
                                        subMap, conformanceMap);
 
   CanGenericSignature sig = substSig.getGenericSignature();
 >>>>>>> 71936b8... use subs generic sig in SILGenDecl
 
   // Substitute away `Self` in parameter and result types.
+  // XXX -- we need the conformance subs here...
+  //
   auto input = reqtTy->getInput().subst(M.getSwiftModule(), subMap,
                                         SubstFlags::IgnoreMissing);
   auto result = reqtTy->getResult().subst(M.getSwiftModule(), subMap,
