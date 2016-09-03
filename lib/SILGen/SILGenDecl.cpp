@@ -21,6 +21,7 @@
 #include "swift/SIL/SILDebuggerClient.h"
 #include "swift/SIL/SILType.h"
 #include "swift/SIL/SILWitnessVisitor.h"
+#include "swift/SIL/SubstitutedGenericSignature.h"
 #include "swift/SIL/TypeLowering.h"
 #include "swift/AST/AST.h"
 #include "swift/AST/GenericEnvironment.h"
@@ -1675,32 +1676,6 @@ static bool maybeOpenCodeProtocolWitness(SILGenFunction &gen,
   return false;
 }
 
-static void addConformanceToSubstitutionMap(SILModule &M,
-                                TypeSubstitutionMap &subs,
-                                GenericEnvironment *genericEnv,
-                                CanType base,
-                                const ProtocolConformance *conformance) {
-  conformance->forEachTypeWitness(nullptr, [&](AssociatedTypeDecl *assocTy,
-                                               Substitution sub,
-                                               TypeDecl *) -> bool {
-    auto depTy =
-      CanDependentMemberType::get(base, assocTy, M.getASTContext());
-    auto replacement = sub.getReplacement()->getCanonicalType();
-    replacement = ArchetypeBuilder::mapTypeOutOfContext(M.getSwiftModule(),
-                                                        genericEnv,
-                                                        replacement)
-      ->getCanonicalType();
-    subs.insert({depTy.getPointer(), replacement});
-    for (auto conformance : sub.getConformances()) {
-      if (conformance.isAbstract())
-        continue;
-      addConformanceToSubstitutionMap(M, subs, genericEnv,
-                                      depTy, conformance.getConcrete());
-    }
-    return false;
-  });
-}
-
 /// Substitute the `Self` type from a protocol conformance into a protocol
 /// requirement's type to get the type of the witness.
 static CanAnyFunctionType
@@ -1717,6 +1692,7 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
   auto &C = M.getASTContext();
   CanType selfParamTy = CanGenericTypeParamType::get(0, 0, C);
   
+<<<<<<< HEAD
   TypeSubstitutionMap subs;
   subs.insert({selfParamTy.getPointer(), conformance->getInterfaceType()
                                                     ->getCanonicalType()});
@@ -1784,30 +1760,53 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
     }
     }
   }
+=======
+  TypeSubstitutionMap subMap;
+  TypeConformanceMap conformanceMap;
+  subMap.insert({selfParamTy.getPointer(),
+                 conformance->getInterfaceType()});
+  ArrayRef<ProtocolConformanceRef> conformances
+    = {ProtocolConformanceRef(conformance)};
+
+  conformanceMap.insert({selfParamTy.getPointer(), conformances});
+
+  SubstitutedGenericSignature substSig(M.getSwiftModule(),
+                                       reqtTy->getGenericSignature()
+                                          ->getCanonicalSignature(),
+                                       conformance->getGenericSignature()
+                                          ->getCanonicalSignature(),
+                                       subMap, conformanceMap);
+
+  CanGenericSignature sig = substSig.getGenericSignature();
+>>>>>>> 71936b8... use subs generic sig in SILGenDecl
 
   // Substitute away `Self` in parameter and result types.
-  auto input = reqtTy->getInput().subst(M.getSwiftModule(), subs,
-                                        SubstFlags::IgnoreMissing)
-    ->getCanonicalType();
-  auto result = reqtTy->getResult().subst(M.getSwiftModule(), subs,
-                                          SubstFlags::IgnoreMissing)
-    ->getCanonicalType();
+  auto input = reqtTy->getInput().subst(M.getSwiftModule(), subMap,
+                                        SubstFlags::IgnoreMissing);
+  auto result = reqtTy->getResult().subst(M.getSwiftModule(), subMap,
+                                          SubstFlags::IgnoreMissing);
 
   // The result might be fully concrete, if the witness had no generic
   // signature, and the requirement had no additional generic parameters
   // beyond `Self`.
+<<<<<<< HEAD
   if (!allParams.empty()) {
     auto invalid = builder.finalize(SourceLoc());
     assert(!invalid && "invalid requirements should not be seen in SIL");
 
     auto *sig = builder.getGenericSignature(allParams);
 
+=======
+  if (sig) {
+>>>>>>> 71936b8... use subs generic sig in SILGenDecl
     return cast<GenericFunctionType>(
       GenericFunctionType::get(sig, input, result, reqtTy->getExtInfo())
         ->getCanonicalType());
   }
 
-  return CanFunctionType::get(input, result, reqtTy->getExtInfo());
+  return cast<FunctionType>(
+    FunctionType::get(input, result, reqtTy->getExtInfo())
+      ->getCanonicalType());
 }
 
 static GenericEnvironment *
