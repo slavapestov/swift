@@ -31,6 +31,7 @@ add_swift_library(swiftSIL STATIC
   SILVerifier.cpp
   SILVTable.cpp
   SILWitnessTable.cpp
+  SubstitutedGenericSignature.cpp
   TypeLowering.cpp
   LINK_LIBRARIES
     swiftSerialization
