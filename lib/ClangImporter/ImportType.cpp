@@ -828,8 +828,6 @@ namespace {
               importedTypeArg = ProtocolCompositionType::get(
                   Impl.SwiftContext, protocolTypes);
             }
-            importedTypeArg = SubstitutedType::get(
-                typeParam->getArchetype(), importedTypeArg, Impl.SwiftContext);
             importedTypeArgs.push_back(importedTypeArg);
           }
           assert(importedTypeArgs.size() == typeParamCount);

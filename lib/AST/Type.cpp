@@ -2905,8 +2905,7 @@ Type Type::subst(Module *module,
       auto known =
         substitutions.find(depMemTy->getCanonicalType().getPointer());
       if (known != substitutions.end() && known->second) {
-        return SubstitutedType::get(type, known->second,
-                                    module->getASTContext());
+        return known->second;
       }
     
       auto newBase = depMemTy->getBase().subst(module, substitutions, options);
@@ -2929,8 +2928,7 @@ Type Type::subst(Module *module,
     auto key = substOrig->getCanonicalType()->castTo<SubstitutableType>();
     auto known = substitutions.find(key);
     if (known != substitutions.end() && known->second)
-      return SubstitutedType::get(type, known->second,
-                                  module->getASTContext());
+      return known->second;
 
     // If we don't have a substitution for this type and it doesn't have a
     // parent, then we're not substituting it.
@@ -3323,7 +3321,7 @@ case TypeKind::Id:
           alias->getDecl()->getUnderlyingType().getPointer())
       return *this;
 
-    return SubstitutedType::get(*this, underlyingTy, Ptr->getASTContext());
+    return underlyingTy;
   }
 
   case TypeKind::Paren: {

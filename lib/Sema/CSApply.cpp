@@ -97,9 +97,7 @@ Type Solution::computeSubstitutions(
   auto type = openedType.transform([&](Type type) -> Type {
     if (auto tv = dyn_cast<TypeVariableType>(type.getPointer())) {
       auto archetype = tv->getImpl().getArchetype();
-      auto simplified = getFixedType(tv);
-      return SubstitutedType::get(archetype, simplified,
-                                  tc.Context);
+      return getFixedType(tv);
     }
 
     return type;
