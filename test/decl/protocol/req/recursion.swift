@@ -22,8 +22,8 @@ public protocol P {
 }
 public struct S<A: P> where A.T == S<A> {} // expected-error{{type may not reference itself as a requirement}}
 
-protocol I { // expected-note{{protocol requires initializer 'init()' with type '()'}}
-  init()
+protocol I {
+  init() // expected-note{{protocol requires initializer 'init()' with type '()'}}
 }
 
 protocol PI {
