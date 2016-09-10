@@ -1057,6 +1057,15 @@ void ConstraintSystem::openGeneric(
                                         TVO_PrefersSubtypeBinding |
                                         TVO_MustBeMaterializable);
       replacements[gp->getCanonicalType()] = typeVar;
+    } else {
+      // FIXME
+      auto typeVar = createTypeVariable(getConstraintLocator(
+                                          locator/*.withPathElement(
+                                            LocatorPathElt(archetype))*/),
+                                        TVO_PrefersSubtypeBinding |
+                                        TVO_MustBeMaterializable);
+      replacements[gp->getCanonicalType()] = typeVar;
+
     }
   }
 
