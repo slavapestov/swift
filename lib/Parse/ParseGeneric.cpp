@@ -130,12 +130,22 @@ Parser::parseGenericParameters(SourceLoc LAngleLoc) {
     }
     
     // Skip until we hit the '>'.
-    RAngleLoc = skipUntilGreaterInTypeList();
+    skipUntilGreaterInTypeList();
+    if (startsWithGreater(Tok))
+      RAngleLoc = consumeStartingGreater();
+    else
+      Invalid = true;
   } else {
     RAngleLoc = consumeStartingGreater();
   }
 
-  if (GenericParams.empty())
+  if (GenericParams.empty() || Invalid) {
+    // FIXME: We should really return the generic parameter list here,
+    // even if some generic parameters were invalid, since we rely on
+    // decl->setGenericParams() to re-parent the GenericTypeParamDecls
+    // into the right DeclContext.
+    for (auto Param : GenericParams)
+      Param->setInvalid();
     return nullptr;
   }
 
@@ -298,9 +308,6 @@ ParserStatus Parser::parseGenericWhereClause(
     }
     // If there's a comma, keep parsing the list.
   } while (consumeIf(tok::comma));
-
-  if (Requirements.empty())
-    WhereLoc = SourceLoc();
 
   return Status;
 }
