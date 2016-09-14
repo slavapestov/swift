@@ -1160,14 +1160,12 @@ bool ArchetypeBuilder::addSameTypeRequirementBetweenArchetypes(
   // Don't allow two generic parameters to be equivalent, because then we
   // don't actually have two parameters.
   // FIXME: Should we simply allow this?
-#if 0
   if (T1Depth == 0 && T2Depth == 0) {
     Diags.diagnose(Source.getLoc(), diag::requires_generic_params_made_equal,
                    T1->getName(), T2->getName());
     return true;
   }
-#endif
-
+  
   // Merge any concrete constraints.
   Type concrete1 = T1->ArchetypeOrConcreteType.getAsConcreteType();
   Type concrete2 = T2->ArchetypeOrConcreteType.getAsConcreteType();
@@ -1255,15 +1253,13 @@ bool ArchetypeBuilder::addSameTypeRequirementToConcrete(
   // Don't allow a generic parameter to be equivalent to a concrete type,
   // because then we don't actually have a parameter.
   // FIXME: Should we simply allow this?
-#if 0
   if (T->getNestingDepth() == 0) {
     Diags.diagnose(Source.getLoc(), 
                    diag::requires_generic_param_made_equal_to_concrete,
                    T->getName());
     return true;
   }
-#endif
-
+  
   // Make sure the concrete type fulfills the requirements on the archetype.
   DenseMap<ProtocolDecl *, ProtocolConformance*> conformances;
   if (!Concrete->is<ArchetypeType>()) {
