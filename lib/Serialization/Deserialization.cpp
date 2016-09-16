@@ -744,8 +744,6 @@ GenericParamList *ModuleFile::maybeReadGenericParams(DeclContext *DC,
         error();
       }
 
-      requirements.back().setAsWrittenString(blobData);
-
       break;
     }
     case LAST_GENERIC_REQUIREMENT:

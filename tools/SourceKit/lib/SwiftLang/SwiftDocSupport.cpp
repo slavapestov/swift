@@ -273,7 +273,7 @@ static void initDocGenericParams(const Decl *D, DocEntityInfo &Info) {
   for (auto &Req : GenParams->getRequirements()) {
     std::string ReqStr;
     llvm::raw_string_ostream OS(ReqStr);
-    Req.printAsWritten(OS);
+    Req.print(OS);
     OS.flush();
     Info.GenericRequirements.push_back(std::move(ReqStr));
   }

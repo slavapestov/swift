@@ -1113,8 +1113,7 @@ namespace decls_block {
     GENERIC_REQUIREMENT,
     GenericRequirementKindField, // requirement kind
     TypeIDField,                 // types involved (two for conformance,
-    TypeIDField,                 // same-type; one for value witness marker)
-    BCBlob                       // as written string
+    TypeIDField                  // same-type; one for value witness marker)
   >;
 
   /// Placeholder that marks the last generic requirement in the generic

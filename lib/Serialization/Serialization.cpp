@@ -946,8 +946,7 @@ void Serializer::writeGenericRequirements(ArrayRef<Requirement> requirements) {
       Out, ScratchRecord, reqAbbrCode,
       getRawStableRequirementKind(req.getKind()),
       addTypeRef(req.getFirstType()),
-      addTypeRef(req.getSecondType()),
-      StringRef());
+      addTypeRef(req.getSecondType()));
   }
 }
 
@@ -968,27 +967,21 @@ bool Serializer::writeGenericParams(const GenericParamList *genericParams) {
   }
 
   abbrCode = DeclTypeAbbrCodes[GenericRequirementLayout::Code];
-  SmallString<64> ReqStr;
   for (auto next : genericParams->getRequirements()) {
-    ReqStr.clear();
-    llvm::raw_svector_ostream ReqOS(ReqStr);
-    next.printAsWritten(ReqOS);
     switch (next.getKind()) {
     case RequirementReprKind::TypeConstraint:
       GenericRequirementLayout::emitRecord(
                                       Out, ScratchRecord, abbrCode,
                                       GenericRequirementKind::Conformance,
                                       addTypeRef(next.getSubject()),
-                                      addTypeRef(next.getConstraint()),
-                                      ReqOS.str());
+                                      addTypeRef(next.getConstraint()));
       break;
     case RequirementReprKind::SameType:
       GenericRequirementLayout::emitRecord(
                                       Out, ScratchRecord, abbrCode,
                                       GenericRequirementKind::SameType,
                                       addTypeRef(next.getFirstType()),
-                                      addTypeRef(next.getSecondType()),
-                                      ReqOS.str());
+                                      addTypeRef(next.getSecondType()));
       break;
     }
   }
