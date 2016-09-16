@@ -532,19 +532,20 @@ PrintOptions PrintOptions::printTypeInterface(Type T, DeclContext *DC) {
 
 void PrintOptions::setArchetypeSelfTransform(Type T, DeclContext *DC) {
   TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC));
+    new ArchetypeSelfTransformer(T, *DC), T);
 }
 
 void PrintOptions::setArchetypeSelfTransformForQuickHelp(Type T,
                                                          DeclContext *DC) {
   TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC));
+    new ArchetypeSelfTransformer(T, *DC), T);
 }
 
 void PrintOptions::setArchetypeAndDynamicSelfTransform(Type T,
                                                        DeclContext *DC) {
   TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC));
+    new ArchetypeSelfTransformer(T, *DC), T);
+  StripDynamicSelf = true;
 }
 
 void PrintOptions::
@@ -567,8 +568,6 @@ struct TypeTransformContext::Implementation {
 
   SmallVector<const Decl *, 4> Decls;
 
-  Implementation(PrinterTypeTransformer *Transformer):
-    Transformer(Transformer) {}
   Implementation(PrinterTypeTransformer *Transformer, Type T):
     Transformer(Transformer), BaseType(T) {}
   Implementation(PrinterTypeTransformer *Transformer, NominalTypeDecl* NTD,
@@ -579,10 +578,6 @@ struct TypeTransformContext::Implementation {
 };
 
 TypeTransformContext::~TypeTransformContext() { delete &Impl; }
-
-TypeTransformContext::TypeTransformContext(
-  PrinterTypeTransformer *Transformer):
-    Impl(* new Implementation(Transformer)){};
 
 TypeTransformContext::TypeTransformContext(
   PrinterTypeTransformer *Transformer, Type T):
@@ -1010,6 +1005,7 @@ class PrintAST : public ASTVisitor<PrintAST> {
       FreshOptions.PrintAsInParamType = Options.PrintAsInParamType;
       FreshOptions.ExcludeAttrList = Options.ExcludeAttrList;
       FreshOptions.ExclusiveAttrList = Options.ExclusiveAttrList;
+      FreshOptions.StripDynamicSelf = Options.StripDynamicSelf;
       T.print(Printer, FreshOptions);
       return;
     }
@@ -3734,6 +3730,11 @@ public:
   }
 
   void visitDynamicSelfType(DynamicSelfType *T) {
+    if (Options.StripDynamicSelf) {
+      visit(T->getSelfType());
+      return;
+    }
+
     if (Options.PrintInSILBody) {
       Printer << "@dynamic_self ";
       visit(T->getSelfType());

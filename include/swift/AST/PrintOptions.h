@@ -197,6 +197,10 @@ struct PrintOptions {
   /// ([] and ?), even if there are no sugar type nodes.
   bool SynthesizeSugarOnTypes = false;
 
+  /// \brief Print a dynamic Self type as its underlying type, rather than
+  /// the keyword `Self`.
+  bool StripDynamicSelf = false;
+
   /// \brief If true, the printer will explode a pattern like this:
   /// \code
   ///   var (a, b) = f()
