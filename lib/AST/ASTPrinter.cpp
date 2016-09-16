@@ -708,9 +708,8 @@ void PrintOptions::clearArchetypeTransformerForSynthesizedExtensions() {
 struct TypeTransformContext::Implementation {
   std::shared_ptr<PrinterTypeTransformer> Transformer;
 
-  // When printing a type interface, this is the type to print.
-  // When synthesizing extensions, this is the target nominal.
-  llvm::PointerUnion<TypeBase*, NominalTypeDecl*> TypeBaseOrNominal;
+  Type BaseType;
+  NominalTypeDecl *Nominal = nullptr;
   SynthesizedExtensionAnalyzer *SynAnalyzer = nullptr;
 
   SmallVector<const Decl *, 4> Decls;
@@ -718,10 +717,12 @@ struct TypeTransformContext::Implementation {
   Implementation(PrinterTypeTransformer *Transformer):
     Transformer(Transformer) {}
   Implementation(PrinterTypeTransformer *Transformer, Type T):
-    Transformer(Transformer), TypeBaseOrNominal(T.getPointer()) {}
+    Transformer(Transformer), BaseType(T) {}
   Implementation(PrinterTypeTransformer *Transformer, NominalTypeDecl* NTD,
                  SynthesizedExtensionAnalyzer *SynAnalyzer):
-    Transformer(Transformer), TypeBaseOrNominal(NTD), SynAnalyzer(SynAnalyzer) {}
+    Transformer(Transformer), Nominal(NTD), SynAnalyzer(SynAnalyzer) {
+      BaseType = NTD->getDeclaredTypeInContext(); 
+    }
 };
 
 TypeTransformContext::~TypeTransformContext() { delete &Impl; }
@@ -754,11 +755,11 @@ const Decl *TypeTransformContext::getCurrentDecl() {
 }
 
 NominalTypeDecl *TypeTransformContext::getNominal() {
-  return Impl.TypeBaseOrNominal.get<NominalTypeDecl*>();
+  return Impl.Nominal;
 }
 
 Type TypeTransformContext::getTypeBase() {
-  return Impl.TypeBaseOrNominal.get<TypeBase*>();
+  return Impl.BaseType;
 }
 
 PrinterTypeTransformer*
@@ -767,12 +768,10 @@ TypeTransformContext::getTransformer() {
 }
 
 bool TypeTransformContext::isPrintingSynthesizedExtension() {
-  return !Impl.TypeBaseOrNominal.isNull() &&
-         Impl.TypeBaseOrNominal.is<NominalTypeDecl*>();
+  return Impl.Nominal != nullptr;
 }
 bool TypeTransformContext::isPrintingTypeInterface() {
-  return !Impl.TypeBaseOrNominal.isNull() &&
-          Impl.TypeBaseOrNominal.is<TypeBase*>();
+  return Impl.Nominal == nullptr && Impl.BaseType;
 }
 
 Type TypeTransformContext::transform(Type Input) {
@@ -1160,33 +1159,52 @@ class PrintAST : public ASTVisitor<PrintAST> {
 
   void printType(Type T) {
     if (Options.TransformContext) {
-      if (auto RT = Options.TransformContext->transform(T)) {
-        // FIXME: it's not clear exactly what we want to keep from the existing
-        // options, and what we want to discard.
-        PrintOptions FreshOptions;
-        FreshOptions.PrintAsInParamType = Options.PrintAsInParamType;
-        FreshOptions.ExcludeAttrList = Options.ExcludeAttrList;
-        FreshOptions.ExclusiveAttrList = Options.ExclusiveAttrList;
-        RT.print(Printer, FreshOptions);
-        return;
-      }
+      // FIXME: it's not clear exactly what we want to keep from the existing
+      // options, and what we want to discard.
+      PrintOptions FreshOptions;
+      FreshOptions.PrintAsInParamType = Options.PrintAsInParamType;
+      FreshOptions.ExcludeAttrList = Options.ExcludeAttrList;
+      FreshOptions.ExclusiveAttrList = Options.ExclusiveAttrList;
+      T.print(Printer, FreshOptions);
+      return;
     }
 
     T.print(Printer, Options);
   }
 
+  void printTransformedType(Type T) {
+    if (Options.TransformContext &&
+        Options.TransformContext->getTypeBase()) {
+      auto *DC = Options.TransformContext->getCurrentDecl()
+          ->getInnermostDeclContext();
+
+      // Get the interface type, since TypeLocs still have
+      // contextual types in them.
+      T = ArchetypeBuilder::mapTypeOutOfContext(DC, T);
+
+      // Get the innermost nominal type context.
+      DC = DC->getInnermostTypeContext();
+      if (isa<TypeAliasDecl>(DC))
+        DC = DC->getParent()->getInnermostTypeContext();
+      assert(DC);
+
+      // Get the substitutions from our base type.
+      auto subMap = Options.TransformContext->getTypeBase()
+          ->getMemberSubstitutions(DC);
+      auto *M = DC->getParentModule();
+
+      T = T.subst(M, subMap, SubstFlags::DesugarMemberTypes);
+    }
+
+    printType(T);
+  }
+
   void printTypeLoc(const TypeLoc &TL) {
-    if (Options.TransformContext && TL.getType()) {
-      if (auto RT = Options.TransformContext->transform(TL.getType())) {
-        // FIXME: it's not clear exactly what we want to keep from the existing
-        // options, and what we want to discard.
-        PrintOptions FreshOptions;
-        FreshOptions.PrintAsInParamType = Options.PrintAsInParamType;
-        FreshOptions.ExcludeAttrList = Options.ExcludeAttrList;
-        FreshOptions.ExclusiveAttrList = Options.ExclusiveAttrList;
-        RT.print(Printer, FreshOptions);
-        return;
-      }
+    if (Options.TransformContext &&
+        Options.TransformContext->getTypeBase() &&
+        TL.getType()) {
+      printTransformedType(TL.getType());
+      return;
     }
 
     // Print a TypeRepr if instructed to do so by options, or if the type
@@ -1211,6 +1229,7 @@ public:
     PrintParams = 1,
     PrintRequirements = 2,
     InnermostOnly = 4,
+    SkipSelfRequirement = 8,
   };
 
   void printGenericSignature(const GenericSignature *genericSig,
@@ -1562,10 +1581,9 @@ void PrintAST::printSingleDepthOfGenericSignature(
   ModuleDecl *M = nullptr;
 
   if (Options.TransformContext &&
-      Options.TransformContext->isPrintingTypeInterface()) {
+      Options.TransformContext->getTypeBase()) {
     auto *DC = Options.TransformContext->getCurrentDecl()
         ->getInnermostDeclContext()->getInnermostTypeContext();
-    assert(DC);
     subMap = Options.TransformContext->getTypeBase()
         ->getMemberSubstitutions(DC);
     M = DC->getParentModule();
@@ -1601,6 +1619,24 @@ void PrintAST::printSingleDepthOfGenericSignature(
       if (req.getKind() == RequirementKind::WitnessMarker)
         continue;
 
+      auto first = req.getFirstType();
+      auto second = req.getSecondType();
+
+      if ((flags & SkipSelfRequirement) &&
+          req.getKind() == RequirementKind::Conformance) {
+        auto proto = cast<ProtocolDecl>(second->getAnyNominal());
+        if (first->isEqual(proto->getProtocolSelf()->getDeclaredType()))
+          continue;
+      }
+
+      if (!subMap.empty()) {
+        first = first.subst(M, subMap, SubstOptions());
+        second = second.subst(M, subMap, SubstOptions());
+        if (!(first->is<ArchetypeType>() || first->isTypeParameter()) &&
+            !(second->is<ArchetypeType>() || second->isTypeParameter()))
+          continue;
+      }
+
       if (isFirstReq) {
         Printer << " " << tok::kw_where << " ";
         isFirstReq = false;
@@ -1608,7 +1644,7 @@ void PrintAST::printSingleDepthOfGenericSignature(
         Printer << ", ";
       }
 
-      printType(req.getFirstType());
+      printType(first);
       switch (req.getKind()) {
       case RequirementKind::Conformance:
       case RequirementKind::Superclass:
@@ -1622,7 +1658,7 @@ void PrintAST::printSingleDepthOfGenericSignature(
       case RequirementKind::WitnessMarker:
         llvm_unreachable("Handled above");
       }
-      printType(req.getSecondType());
+      printType(second);
     }
   }
 
@@ -2326,8 +2362,13 @@ void PrintAST::printExtension(ExtensionDecl *decl) {
     printInherited(decl);
 
     if (decl->getGenericParams())
-      if (auto *genericSig = decl->getGenericSignature())
-        printGenericSignature(genericSig, PrintRequirements | InnermostOnly);
+      if (auto *genericSig = decl->getGenericSignature()) {
+        // For protocol extensions, don't print the 'Self : ...' requirement.
+        unsigned flags = PrintRequirements | InnermostOnly;
+        if (decl->getAsProtocolExtensionContext())
+          flags |= SkipSelfRequirement;
+        printGenericSignature(genericSig, flags);
+      }
   }
   if (Options.TypeDefinitions) {
     printMembersOfDecl(decl, false,

@@ -1312,7 +1312,7 @@ protocol ProtocolToExtend {
 }
 
 extension ProtocolToExtend where Self.Assoc == Int {}
-// PREFER_TYPE_REPR_PRINTING: extension ProtocolToExtend where Self : ProtocolToExtend, Self.Assoc == Int {
+// PREFER_TYPE_REPR_PRINTING: extension ProtocolToExtend where Self.Assoc == Int {
 
 #if true
 #elseif false
