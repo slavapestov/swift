@@ -3107,41 +3107,6 @@ bool swift::typeCheckUnresolvedExpr(DeclContext &DC,
   return !PossibleTypes.empty();
 }
 
-Type swift::checkMemberType(DeclContext &DC, Type BaseTy,
-                            ArrayRef<Identifier> Names) {
-  if (Names.empty())
-    return BaseTy;
-  ConstraintSystemOptions Options = ConstraintSystemFlags::AllowFixes;
-
-  std::unique_ptr<TypeChecker> CreatedTC;
-  // If the current ast context has no type checker, create one for it.
-  auto *TC = static_cast<TypeChecker*>(DC.getASTContext().getLazyResolver());
-  if (!TC) {
-    CreatedTC.reset(new TypeChecker(DC.getASTContext()));
-    TC = CreatedTC.get();
-  }
-  ConstraintSystem CS(*TC, &DC, Options);
-  auto Loc = CS.getConstraintLocator(nullptr);
-
-  Type Ty = BaseTy;
-  for (auto Id : Names) {
-    auto TV = CS.createTypeVariable(CS.getConstraintLocator(nullptr),
-                                    TypeVariableOptions::TVO_CanBindToLValue);
-    CS.addConstraint(Constraint::createDisjunction(CS, {
-      Constraint::create(CS, ConstraintKind::TypeMember, Ty,
-                         TV, DeclName(Id), FunctionRefKind::Compound, Loc),
-      Constraint::create(CS, ConstraintKind::ValueMember, Ty,
-                         TV, DeclName(Id), FunctionRefKind::DoubleApply, Loc)
-    }, Loc));
-    Ty = TV;
-  }
-  assert(Ty->getKind() == TypeKind::TypeVariable && "Type is not variable");
-  if (auto OS = CS.solveSingle()) {
-    return OS.getValue().typeBindings[Ty->getAs<TypeVariableType>()];
-  }
-  return Type();
-}
-
 bool swift::isExtensionApplied(DeclContext &DC, Type BaseTy,
                                const ExtensionDecl *ED) {
   ConstraintSystemOptions Options;

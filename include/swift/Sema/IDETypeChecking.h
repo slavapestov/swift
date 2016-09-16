@@ -57,11 +57,6 @@ namespace swift {
   bool typeCheckUnresolvedExpr(DeclContext &DC, Expr* E,
                                Expr *P, SmallVectorImpl<Type> &PossibleTypes);
 
-  /// \brief Given the base type and the trailing identifiers, this function tries
-  /// to infer the type of BaseType.Name1.Name2.Name3
-  /// \returns Resolved type on success, nullptr on error.
-  Type checkMemberType(DeclContext &DC, Type BaseTy, ArrayRef<Identifier> Names);
-
   struct ResolveMemberResult {
     ValueDecl *Favored = nullptr;
     std::vector<ValueDecl*> OtherViables;

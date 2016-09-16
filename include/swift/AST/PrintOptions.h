@@ -31,7 +31,6 @@ class DeclContext;
 class Type;
 class ModuleDecl;
 enum DeclAttrKind : unsigned;
-class PrinterTypeTransformer;
 class SynthesizedExtensionAnalyzer;
 struct PrintOptions;
 
@@ -44,15 +43,11 @@ struct TypeTransformContext {
   const Decl *getCurrentDecl();
 
   NominalTypeDecl *getNominal();
-  PrinterTypeTransformer *getTransformer();
   bool isPrintingSynthesizedExtension();
   bool isPrintingTypeInterface();
-  TypeTransformContext(PrinterTypeTransformer *Transformer);
-  TypeTransformContext(PrinterTypeTransformer *Transformer,
-                            Type T);
-  TypeTransformContext(PrinterTypeTransformer *Transformer,
-                            NominalTypeDecl *NTD,
-                            SynthesizedExtensionAnalyzer *Analyzer);
+  TypeTransformContext(Type T);
+  TypeTransformContext(NominalTypeDecl *NTD,
+                       SynthesizedExtensionAnalyzer *Analyzer);
 
   ~TypeTransformContext();
 private:

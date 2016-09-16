@@ -53,39 +53,6 @@
 using namespace swift;
 namespace swift {
 
-class PrinterTypeTransformer {
-public:
-  virtual ~PrinterTypeTransformer() {};
-};
-
-class ArchetypeSelfTransformer : public PrinterTypeTransformer {
-protected:
-  Type BaseTy;
-  DeclContext &DC;
-  const ASTContext &Ctx;
-
-public:
-  ArchetypeSelfTransformer(NominalTypeDecl *NTD):
-    BaseTy(NTD->getDeclaredTypeInContext()),
-    DC(*NTD),
-    Ctx(NTD->getASTContext()) {}
-
-  ArchetypeSelfTransformer(Type BaseTy, DeclContext &DC):
-    BaseTy(BaseTy->getRValueType()), DC(DC), Ctx(DC.getASTContext()) {}
-
-  Type checkMemberTypeInternal(StringRef TypeName) {
-    llvm::SmallVector<StringRef, 4> Parts;
-    TypeName.split(Parts, '.');
-    std::vector<Identifier> Names;
-    for (unsigned I = 0; I < Parts.size(); ++ I) {
-      if (I == 0 && Parts[I] == "Self")
-        continue;
-      Names.push_back(Ctx.getIdentifier(Parts[I]));
-    }
-    return checkMemberType(DC, BaseTy, Names);
-  }
-};
-
 struct SynthesizedExtensionAnalyzer::Implementation {
   static bool isMemberFavored(const NominalTypeDecl* Target, const Decl* D) {
     DeclContext* DC = Target->getDeclContext();
@@ -140,7 +107,7 @@ struct SynthesizedExtensionAnalyzer::Implementation {
     struct Requirement {
       Type First;
       Type Second;
-      RequirementReprKind Kind;
+      RequirementKind Kind;
       bool operator< (const Requirement& Rhs) const {
         if (Kind != Rhs.Kind)
           return Kind < Rhs.Kind;
@@ -157,7 +124,7 @@ struct SynthesizedExtensionAnalyzer::Implementation {
     bool HasDocComment;
     unsigned InheritsCount;
     std::set<Requirement> Requirements;
-    void addRequirement(Type First, Type Second, RequirementReprKind Kind) {
+    void addRequirement(Type First, Type Second, RequirementKind Kind) {
       Requirements.insert({First, Second, Kind});
     }
     bool operator== (const ExtensionMergeInfo& Another) const {
@@ -219,7 +186,6 @@ struct SynthesizedExtensionAnalyzer::Implementation {
   NominalTypeDecl *Target;
   Type BaseType;
   DeclContext *DC;
-  std::unique_ptr<ArchetypeSelfTransformer> pTransform;
   bool IncludeUnconditional;
   PrintOptions Options;
   MergeGroupVector AllGroups;
@@ -231,73 +197,9 @@ struct SynthesizedExtensionAnalyzer::Implementation {
     Target(Target),
     BaseType(Target->getDeclaredTypeInContext()),
     DC(Target),
-    pTransform(new ArchetypeSelfTransformer(Target)),
     IncludeUnconditional(IncludeUnconditional),
     Options(Options), AllGroups(MergeGroupVector()),
     InfoMap(collectSynthesizedExtensionInfo(AllGroups)) {}
-
-  Type checkElementType(StringRef Text) {
-    assert(Text.find('<') == StringRef::npos && "Not element type.");
-    assert(Text.find(',') == StringRef::npos && "Not element type.");
-    if (auto Result = pTransform->checkMemberTypeInternal(Text)) {
-      return Result;
-    }
-    return lookUpTypeInContext(DC, Text);
-  }
-
-  Type parseComplexTypeString(StringRef Text) {
-    Text = Text.trim();
-    auto ParamStart = Text.find_first_of('<');
-    auto ParamEnd = Text.find_last_of('>');
-    if (StringRef::npos == ParamStart) {
-      return checkElementType(Text);
-    }
-    Type GenericType = checkElementType(StringRef(Text.data(), ParamStart));
-    if (!GenericType)
-      return Type();
-    NominalTypeDecl *NTD = GenericType->getAnyNominal();
-    if (!NTD || NTD->getInnermostGenericParamTypes().empty())
-      return GenericType;
-    StringRef Param = StringRef(Text.data() + ParamStart + 1,
-                                ParamEnd - ParamStart - 1);
-    std::vector<char> Brackets;
-    std::vector<Type> Arguments;
-    unsigned CurrentStart = 0;
-    for (unsigned I = 0; I < Param.size(); ++ I) {
-      char C = Param[I];
-      if (C == '<')
-        Brackets.push_back(C);
-      else if (C == '>')
-        Brackets.pop_back();
-      else if (C == ',' && Brackets.empty()) {
-        StringRef ArgString(Param.data() + CurrentStart, I - CurrentStart);
-        Type Arg = parseComplexTypeString(ArgString);
-        if (Arg.isNull())
-          return GenericType;
-        Arguments.push_back(Arg);
-        CurrentStart = I + 1;
-      }
-    }
-
-    // Add the last argument, or the only argument.
-    StringRef ArgString(Param.data() + CurrentStart,
-                        Param.size() - CurrentStart);
-    Type Arg = parseComplexTypeString(ArgString);
-    if (Arg.isNull())
-      return GenericType;
-    Arguments.push_back(Arg);
-    auto GenericParams = NTD->getInnermostGenericParamTypes();
-    assert(Arguments.size() == GenericParams.size());
-    TypeSubstitutionMap Map;
-    for (auto It = GenericParams.begin(); It != GenericParams.end(); ++ It) {
-      auto Index = std::distance(GenericParams.begin(), It);
-      Map[(*It)->getCanonicalType()->castTo<SubstitutableType>()] =
-        Arguments[Index];
-    }
-    auto MType = NTD->getInterfaceType().subst(DC->getParentModule(), Map, None);
-    return MType->getAs<AnyMetatypeType>()->getInstanceType();
-  }
-
 
   unsigned countInherits(ExtensionDecl *ED) {
     unsigned Count = 0;
@@ -319,31 +221,32 @@ struct SynthesizedExtensionAnalyzer::Implementation {
         Result.Ext = Ext;
       return {Result, MergeInfo};
     }
-    assert(Ext->getGenericParams() && "No generic params.");
-    for (auto Req : Ext->getGenericParams()->getRequirements()) {
-      auto TupleOp = Req.getAsAnalyzedWrittenString();
-      if (!TupleOp)
-        continue;
-      StringRef FirstType = std::get<0>(TupleOp.getValue());
-      StringRef SecondType = std::get<1>(TupleOp.getValue());
-      RequirementReprKind Kind = std::get<2>(TupleOp.getValue());
-      Type First = pTransform->checkMemberTypeInternal(FirstType);
-      Type Second = lookUpTypeInContext(DC, SecondType);
-      if (!First)
-        First = parseComplexTypeString(FirstType);
-      if (!Second)
-        Second = parseComplexTypeString(SecondType);
+
+    // Get the substitutions from our base type.
+    auto subMap = BaseType->getMemberSubstitutions(Ext);
+    auto *M = DC->getParentModule();
+
+    assert(Ext->getGenericSignature() && "No generic signature.");
+    for (auto Req : Ext->getGenericSignature()->getRequirements()) {
+      Type First = Req.getFirstType().subst(M, subMap, SubstOptions());
+      Type Second = Req.getFirstType().subst(M, subMap, SubstOptions());
       if (First && Second) {
-        First = First->getDesugaredType();
-        Second = Second->getDesugaredType();
+        auto Kind = Req.getKind();
+        First = First->getCanonicalType();
+        Second = Second->getCanonicalType();
         switch (Kind) {
-          case RequirementReprKind::TypeConstraint:
+          case RequirementKind::WitnessMarker:
+            break;
+
+          case RequirementKind::Conformance:
+          case RequirementKind::Superclass:
             if (!canPossiblyConvertTo(First, Second, *DC))
               return {Result, MergeInfo};
             else if (!isConvertibleTo(First, Second, *DC))
               MergeInfo.addRequirement(First, Second, Kind);
             break;
-          case RequirementReprKind::SameType:
+
+          case RequirementKind::SameType:
             if (!canPossiblyEqual(First, Second, *DC))
               return {Result, MergeInfo};
             else if (!isEqual(First, Second, *DC))
@@ -521,8 +424,7 @@ hasMergeGroup(MergeGroupKind Kind) {
 PrintOptions PrintOptions::printTypeInterface(Type T, DeclContext *DC) {
   PrintOptions result = printInterface();
   result.PrintExtensionFromConformingProtocols = true;
-  result.TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC), T);
+  result.TransformContext = std::make_shared<TypeTransformContext>(T);
   result.printExtensionContentAsMembers = [T](const ExtensionDecl *ED) {
     return isExtensionApplied(*T->getNominalOrBoundGenericNominal()->
                               getDeclContext(), T, ED);
@@ -531,28 +433,24 @@ PrintOptions PrintOptions::printTypeInterface(Type T, DeclContext *DC) {
 }
 
 void PrintOptions::setArchetypeSelfTransform(Type T, DeclContext *DC) {
-  TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC), T);
+  TransformContext = std::make_shared<TypeTransformContext>(T);
 }
 
 void PrintOptions::setArchetypeSelfTransformForQuickHelp(Type T,
                                                          DeclContext *DC) {
-  TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC), T);
+  TransformContext = std::make_shared<TypeTransformContext>(T);
 }
 
 void PrintOptions::setArchetypeAndDynamicSelfTransform(Type T,
                                                        DeclContext *DC) {
-  TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(T, *DC), T);
+  TransformContext = std::make_shared<TypeTransformContext>(T);
   StripDynamicSelf = true;
 }
 
 void PrintOptions::
 initArchetypeTransformerForSynthesizedExtensions(NominalTypeDecl *D,
                                       SynthesizedExtensionAnalyzer *Analyzer) {
-  TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeSelfTransformer(D), D, Analyzer);
+  TransformContext = std::make_shared<TypeTransformContext>(D, Analyzer);
 }
 
 void PrintOptions::clearArchetypeTransformerForSynthesizedExtensions() {
@@ -560,33 +458,29 @@ void PrintOptions::clearArchetypeTransformerForSynthesizedExtensions() {
 }
 
 struct TypeTransformContext::Implementation {
-  std::shared_ptr<PrinterTypeTransformer> Transformer;
-
   Type BaseType;
   NominalTypeDecl *Nominal = nullptr;
   SynthesizedExtensionAnalyzer *SynAnalyzer = nullptr;
 
   SmallVector<const Decl *, 4> Decls;
 
-  Implementation(PrinterTypeTransformer *Transformer, Type T):
-    Transformer(Transformer), BaseType(T) {}
-  Implementation(PrinterTypeTransformer *Transformer, NominalTypeDecl* NTD,
+  explicit Implementation(Type T) : BaseType(T) {}
+
+  Implementation(NominalTypeDecl* NTD,
                  SynthesizedExtensionAnalyzer *SynAnalyzer):
-    Transformer(Transformer), Nominal(NTD), SynAnalyzer(SynAnalyzer) {
+    Nominal(NTD), SynAnalyzer(SynAnalyzer) {
       BaseType = NTD->getDeclaredTypeInContext(); 
     }
 };
 
 TypeTransformContext::~TypeTransformContext() { delete &Impl; }
 
-TypeTransformContext::TypeTransformContext(
-  PrinterTypeTransformer *Transformer, Type T):
-    Impl(* new Implementation(Transformer, T)){};
+TypeTransformContext::TypeTransformContext(Type T):
+    Impl(* new Implementation(T)){};
 
 TypeTransformContext::TypeTransformContext(
-  PrinterTypeTransformer *Transformer, NominalTypeDecl *NTD,
-  SynthesizedExtensionAnalyzer *SynAnalyzer) :
-    Impl(* new Implementation(Transformer, NTD, SynAnalyzer)){};
+  NominalTypeDecl *NTD, SynthesizedExtensionAnalyzer *SynAnalyzer) :
+    Impl(* new Implementation(NTD, SynAnalyzer)){};
 
 void TypeTransformContext::pushDecl(const Decl *decl) {
   Impl.Decls.push_back(decl);
@@ -608,11 +502,6 @@ NominalTypeDecl *TypeTransformContext::getNominal() {
 
 Type TypeTransformContext::getTypeBase() {
   return Impl.BaseType;
-}
-
-PrinterTypeTransformer*
-TypeTransformContext::getTransformer() {
-  return Impl.Transformer.get();
 }
 
 bool TypeTransformContext::isPrintingSynthesizedExtension() {
@@ -3301,7 +3190,6 @@ class TypePrinter : public TypeVisitor<TypePrinter> {
 
   ASTPrinter &Printer;
   const PrintOptions &Options;
-  Optional<std::vector<GenericParamList *>> UnwrappedGenericParams;
 
   /// Whether we are printing something in a function parameter position, and
   /// thus want to print @escaping if it escapes.
