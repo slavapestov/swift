@@ -1166,6 +1166,23 @@ class PrintAST : public ASTVisitor<PrintAST> {
     }
   }
 
+  void printType(Type T) {
+    if (Options.TransformContext) {
+      if (auto RT = Options.TransformContext->transform(T)) {
+        // FIXME: it's not clear exactly what we want to keep from the existing
+        // options, and what we want to discard.
+        PrintOptions FreshOptions;
+        FreshOptions.PrintAsInParamType = Options.PrintAsInParamType;
+        FreshOptions.ExcludeAttrList = Options.ExcludeAttrList;
+        FreshOptions.ExclusiveAttrList = Options.ExclusiveAttrList;
+        RT.print(Printer, FreshOptions);
+        return;
+      }
+    }
+
+    T.print(Printer, Options);
+  }
+
   void printTypeLoc(const TypeLoc &TL) {
     if (Options.TransformContext && TL.getType()) {
       if (auto RT = Options.TransformContext->transform(TL.getType())) {
@@ -1198,8 +1215,18 @@ class PrintAST : public ASTVisitor<PrintAST> {
 public:
   void printPattern(const Pattern *pattern);
 
-  void printGenericParams(GenericParamList *params, bool IncludeRequirements);
-  void printWhereClause(ArrayRef<RequirementRepr> requirements);
+  enum GenericSignatureFlags {
+    PrintParams = 1,
+    PrintRequirements = 2,
+    InnermostOnly = 4,
+  };
+
+  void printGenericSignature(const GenericSignature *genericSig,
+                             unsigned flags);
+  void printSingleDepthOfGenericSignature(
+           ArrayRef<GenericTypeParamType *> genericParams,
+           ArrayRef<Requirement> requirements,
+           unsigned flags);
 
 private:
   bool shouldPrint(const Decl *D, bool Notify = false);
@@ -1414,14 +1441,67 @@ void PrintAST::printPattern(const Pattern *pattern) {
   }
 }
 
-void PrintAST::printGenericParams(GenericParamList *Params,
-                                  bool IncludeRequirements) {
-  if (!Params)
-    return;
+/// If we can't find the depth of a type, return ErrorDepth.
+const unsigned ErrorDepth = ~0U;
+/// A helper function to return the depth of a type.
+static unsigned getDepthOfType(Type ty) {
+  if (auto paramTy = ty->getAs<GenericTypeParamType>())
+    return paramTy->getDepth();
 
-  Printer << "<";
-  bool IsFirst = true;
-  SmallVector<Type, 4> Scrach;
+  if (auto depMemTy = dyn_cast<DependentMemberType>(ty->getCanonicalType())) {
+    CanType rootTy;
+    do {
+      rootTy = depMemTy.getBase();
+    } while ((depMemTy = dyn_cast<DependentMemberType>(rootTy)));
+    if (auto rootParamTy = dyn_cast<GenericTypeParamType>(rootTy))
+      return rootParamTy->getDepth();
+    return ErrorDepth;
+  }
+
+  return ErrorDepth;
+}
+
+/// A helper function to return the depth of a requirement.
+static unsigned getDepthOfRequirement(const Requirement &req) {
+  switch (req.getKind()) {
+  case RequirementKind::Conformance:
+  case RequirementKind::Superclass:
+  case RequirementKind::WitnessMarker:
+    return getDepthOfType(req.getFirstType());
+
+  case RequirementKind::SameType: {
+    // Return the max valid depth of firstType and secondType.
+    unsigned firstDepth = getDepthOfType(req.getFirstType());
+    unsigned secondDepth = getDepthOfType(req.getSecondType());
+
+    unsigned maxDepth;
+    if (firstDepth == ErrorDepth && secondDepth != ErrorDepth)
+      maxDepth = secondDepth;
+    else if (firstDepth != ErrorDepth && secondDepth == ErrorDepth)
+      maxDepth = firstDepth;
+    else
+      maxDepth = std::max(firstDepth, secondDepth);
+
+    return maxDepth;
+  }
+  }
+  llvm_unreachable("bad RequirementKind");
+}
+
+static void getRequirementsAtDepth(const GenericSignature *genericSig,
+                                   unsigned depth,
+                                   SmallVectorImpl<Requirement> &result) {
+  for (auto reqt : genericSig->getRequirements()) {
+    unsigned currentDepth = getDepthOfRequirement(reqt);
+    assert(currentDepth != ErrorDepth);
+    if (currentDepth == depth)
+      result.push_back(reqt);
+  }
+}
+
+void PrintAST::printGenericSignature(const GenericSignature *genericSig,
+                                     unsigned flags) {
+/*
   if (Options.TransformContext &&
       Options.TransformContext->isPrintingTypeInterface()) {
     auto ArgArr = Options.TransformContext->getTypeBase()->
@@ -1438,122 +1518,112 @@ void PrintAST::printGenericParams(GenericParamList *Params,
       Printer << NM->getNameStr(); // FIXME: PrintNameContext::GenericParameter
       Printer.printStructurePost(PrintStructureKind::GenericParameter, NM);
     }
-  } else {
-    for (auto GP : Params->getParams()) {
-      if (IsFirst) {
-        IsFirst = false;
+*/
+  if (flags & InnermostOnly) {
+    auto genericParams = genericSig->getInnermostGenericParams();
+    unsigned depth = genericParams[0]->getDepth();
+    SmallVector<Requirement, 2> requirementsAtDepth;
+    getRequirementsAtDepth(genericSig, depth, requirementsAtDepth);
+
+    printSingleDepthOfGenericSignature(genericParams,
+                                       requirementsAtDepth, flags);
+    return;
+  }
+
+  auto genericParams = genericSig->getGenericParams();
+  auto requirements = genericSig->getRequirements();
+
+  if (!Options.PrintInSILBody) {
+    printSingleDepthOfGenericSignature(genericParams, requirements, flags);
+    return;
+  }
+
+  // In order to recover the nested GenericParamLists, we divide genericParams
+  // and requirements according to depth.
+  unsigned paramIdx = 0, numParam = genericParams.size();
+  while (paramIdx < numParam) {
+    unsigned depth = genericParams[paramIdx]->getDepth();
+
+    // Move index to genericParams.
+    unsigned lastParamIdx = paramIdx;
+    do {
+      lastParamIdx++;
+    } while (lastParamIdx < numParam &&
+             genericParams[lastParamIdx]->getDepth() == depth);
+
+    // Collect requirements for this level.
+    SmallVector<Requirement, 2> requirementsAtDepth;
+    getRequirementsAtDepth(genericSig, depth, requirementsAtDepth);
+
+    printSingleDepthOfGenericSignature(
+      genericParams.slice(paramIdx, lastParamIdx - paramIdx),
+      requirementsAtDepth, flags);
+
+    paramIdx = lastParamIdx;
+  }
+}
+
+void PrintAST::printSingleDepthOfGenericSignature(
+         ArrayRef<GenericTypeParamType *> genericParams,
+         ArrayRef<Requirement> requirements,
+         unsigned flags) {
+  bool printParams = (flags & PrintParams);
+  bool printRequirements = (flags & PrintRequirements);
+
+  if (printParams) {
+    // Print the generic parameters.
+    Printer << "<";
+    bool isFirstParam = true;
+    for (auto param : genericParams) {
+      if (isFirstParam)
+        isFirstParam = false;
+      else
+        Printer << ", ";
+
+      if (auto *GP = param->getDecl()) {
+        Printer.callPrintStructurePre(PrintStructureKind::GenericParameter, GP);
+        Printer.printName(GP->getName(), PrintNameContext::GenericParameter);
+        Printer.printStructurePost(PrintStructureKind::GenericParameter, GP);
+      } else {
+        printType(param);
+      }
+    }
+  }
+
+  if (printRequirements) {
+    // Print the requirements.
+    bool isFirstReq = true;
+    for (const auto &req : requirements) {
+      if (req.getKind() == RequirementKind::WitnessMarker)
+        continue;
+
+      if (isFirstReq) {
+        Printer << " " << tok::kw_where << " ";
+        isFirstReq = false;
       } else {
         Printer << ", ";
       }
-      Printer.callPrintStructurePre(PrintStructureKind::GenericParameter, GP);
-      Printer.printName(GP->getName(), PrintNameContext::GenericParameter);
-      printInherited(GP);
-      Printer.printStructurePost(PrintStructureKind::GenericParameter, GP);
-    }
-    if (IncludeRequirements) {
-      printWhereClause(Params->getRequirements());
-    }
-  }
-  Printer << ">";
-}
 
-void PrintAST::printWhereClause(ArrayRef<RequirementRepr> requirements) {
-  if (requirements.empty())
-    return;
+      printType(req.getFirstType());
+      switch (req.getKind()) {
+      case RequirementKind::Conformance:
+      case RequirementKind::Superclass:
+        Printer << " : ";
+        break;
 
-  // FIXME: Type objects do not preserve info to print requirements accurately.
-  // SIL printing cares about semantics so \c PrevPreferTypeRepr is false but
-  // we need to set it to true for printing requirements.
-  struct PrefTypeReprForSILRAII {
-    PrintOptions &Opts;
-    bool PrevPreferTypeRepr;
-    PrefTypeReprForSILRAII(PrintOptions &opts) : Opts(opts) {
-      if (Opts.PrintForSIL) {
-        PrevPreferTypeRepr = Opts.PreferTypeRepr;
-        Opts.PreferTypeRepr = true;
-      }
-    }
-    ~PrefTypeReprForSILRAII() {
-      if (Opts.PrintForSIL) {
-        Opts.PreferTypeRepr = PrevPreferTypeRepr;
-      }
-    }
-  } PrefTypeReprForSILRAII(Options);
+      case RequirementKind::SameType:
+        Printer << " == ";
+        break;
 
-  std::vector<std::tuple<StringRef, StringRef, RequirementReprKind>> Elements;
-  llvm::SmallString<64> Output;
-  bool Handled = true;
-  for (auto &req : requirements) {
-    if (req.isInvalid())
-      continue;
-    auto TupleOp = req.getAsAnalyzedWrittenString();
-    if (TupleOp.hasValue()) {
-      auto Tuple = TupleOp.getValue();
-      auto FirstType = std::get<0>(Tuple);
-      auto SecondType = std::get<1>(Tuple);
-      auto Kind = std::get<2>(Tuple);
-      if (Options.TransformContext) {
-        FirstType = Options.TransformContext->transform(FirstType);
-        SecondType = Options.TransformContext->transform(SecondType);
+      case RequirementKind::WitnessMarker:
+        llvm_unreachable("Handled above");
       }
-      if (FirstType == SecondType)
-        continue;
-      Elements.push_back(std::make_tuple(FirstType, SecondType, Kind));
-    } else {
-      Handled = false;
-      break;
+      printType(req.getSecondType());
     }
   }
 
-  if (Handled) {
-      bool First = true;
-      for (auto &E : Elements) {
-        if (First) {
-          Printer << " " << tok::kw_where << " ";
-          First = false;
-        } else {
-          Printer << ", ";
-        }
-        Printer.callPrintStructurePre(PrintStructureKind::GenericRequirement);
-        Printer << std::get<0>(E);
-        Printer << (RequirementReprKind::SameType == std::get<2>(E) ? " == " :
-                                                                      " : ");
-        Printer << std::get<1>(E);
-        Printer.printStructurePost(PrintStructureKind::GenericRequirement);
-      }
-    return;
-  }
-
-  bool isFirst = true;
-  for (auto &req : requirements) {
-    if (req.isInvalid())
-      continue;
-
-    if (isFirst) {
-      Printer << " " << tok::kw_where << " ";
-      isFirst = false;
-    } else {
-      Printer << ", ";
-    }
-
-    Printer.callPrintStructurePre(PrintStructureKind::GenericRequirement);
-    SWIFT_DEFER {
-      Printer.printStructurePost(PrintStructureKind::GenericRequirement);
-    };
-
-    switch (req.getKind()) {
-    case RequirementReprKind::TypeConstraint:
-      printTypeLoc(req.getSubjectLoc());
-      Printer << " : ";
-      printTypeLoc(req.getConstraintLoc());
-      break;
-    case RequirementReprKind::SameType:
-      printTypeLoc(req.getFirstTypeLoc());
-      Printer << " == ";
-      printTypeLoc(req.getSecondTypeLoc());
-      break;
-    }
-  }
+  if (printParams)
+    Printer << ">";
 }
 
 bool swift::shouldPrintPattern(const Pattern *P, PrintOptions &Options) {
@@ -1990,15 +2060,15 @@ void PrintAST::printMembers(ArrayRef<Decl *> members, bool needComma,
 }
 
 void PrintAST::printNominalDeclGenericParams(NominalTypeDecl *decl) {
-  if (auto GPs = decl->getGenericParams()) {
-    printGenericParams(GPs, /* IncludeRequirements */false);
-  }
+  if (decl->getGenericParams())
+    if (auto GenericSig = decl->getGenericSignature())
+      printGenericSignature(GenericSig, PrintParams | InnermostOnly);
 }
 
 void PrintAST::printNominalDeclGenericRequirements(NominalTypeDecl *decl) {
-  if (auto GPs = decl->getGenericParams()) {
-    printWhereClause(GPs->getRequirements());
-  }
+  if (decl->getGenericParams())
+    if (auto GenericSig = decl->getGenericSignature())
+      printGenericSignature(GenericSig, PrintRequirements | InnermostOnly);
 }
 
 void PrintAST::printInherited(const Decl *decl,
@@ -2222,15 +2292,9 @@ printSynthesizedExtension(NominalTypeDecl* Decl, ExtensionDecl *ExtDecl) {
     printExtendedTypeName(Decl->getDeclaredType(), Printer, Options);
     printInherited(ExtDecl);
 
-    if (auto *GPs = ExtDecl->getGenericParams()) {
-      std::vector<RequirementRepr> ReqsToPrint;
-      for (auto Req : GPs->getRequirements()) {
-        if (Options.TransformContext->shouldPrintRequirement(ExtDecl,
-                                                    Req.getAsWrittenString()))
-          ReqsToPrint.push_back(Req);
-      }
-      printWhereClause(ReqsToPrint);
-    }
+    if (ExtDecl->getGenericParams())
+      if (auto *GenericSig = ExtDecl->getGenericSignature())
+        printGenericSignature(GenericSig, PrintRequirements | InnermostOnly);
   }
   if (Options.TypeDefinitions) {
     printMembersOfDecl(ExtDecl, false,
@@ -2239,7 +2303,7 @@ printSynthesizedExtension(NominalTypeDecl* Decl, ExtensionDecl *ExtDecl) {
   }
 }
 
-void PrintAST::printExtension(ExtensionDecl* decl) {
+void PrintAST::printExtension(ExtensionDecl *decl) {
   if (Options.BracketOptions.shouldOpenExtension(decl)) {
     printDocumentationComment(decl);
     printAttributes(decl);
@@ -2256,9 +2320,10 @@ void PrintAST::printExtension(ExtensionDecl* decl) {
       printExtendedTypeName(extendedType, Printer, Options);
     });
     printInherited(decl);
-    if (auto *GPs = decl->getGenericParams()) {
-      printWhereClause(GPs->getRequirements());
-    }
+
+    if (decl->getGenericParams())
+      if (auto *genericSig = decl->getGenericSignature())
+        printGenericSignature(genericSig, PrintRequirements | InnermostOnly);
   }
   if (Options.TypeDefinitions) {
     printMembersOfDecl(decl, false,
@@ -2346,8 +2411,9 @@ void PrintAST::visitTypeAliasDecl(TypeAliasDecl *decl) {
     [&]{
       Printer.printName(decl->getName());
     }, [&]{ // Signature
-      printGenericParams(decl->getGenericParams(),
-                         /* IncludeRequirements */false);
+      if (decl->getGenericParams())
+        if (auto *genericSig = decl->getGenericSignature())
+          printGenericSignature(genericSig, PrintParams | InnermostOnly);
     });
   bool ShouldPrint = true;
   Type Ty;
@@ -2793,10 +2859,9 @@ void PrintAST::visitFuncDecl(FuncDecl *decl) {
           else
             Printer.printName(decl->getName());
         }, [&] { // Parameters
-          if (decl->isGeneric()) {
-            printGenericParams(decl->getGenericParams(),
-                               /* IncludeRequirements */false);
-          }
+          if (decl->isGeneric())
+            if (auto *genericSig = decl->getGenericSignature())
+              printGenericSignature(genericSig, PrintParams | InnermostOnly);
 
           printFunctionParameters(decl);
         });
@@ -2818,11 +2883,9 @@ void PrintAST::visitFuncDecl(FuncDecl *decl) {
         printTypeLoc(ResultTyLoc);
         Printer.printStructurePost(PrintStructureKind::FunctionReturnType);
       }
-      if (decl->isGeneric()) {
-        if (auto GPs = decl->getGenericParams()) {
-          printWhereClause(GPs->getRequirements());
-        }
-      }
+      if (decl->isGeneric())
+        if (auto *genericSig = decl->getGenericSignature())
+          printGenericSignature(genericSig, PrintRequirements | InnermostOnly);
     }
 
     if (auto BodyFunc = Options.FunctionBody) {
@@ -2959,17 +3022,15 @@ void PrintAST::visitConstructorDecl(ConstructorDecl *decl) {
       }
 
       if (decl->isGeneric())
-        printGenericParams(decl->getGenericParams(),
-                           /* IncludeRequirements */false);
+        if (auto *genericSig = decl->getGenericSignature())
+          printGenericSignature(genericSig, PrintParams | InnermostOnly);
 
       printFunctionParameters(decl);
     });
-  if (decl->isGeneric()) {
-    if (auto GPs = decl->getGenericParams()) {
-      printWhereClause(GPs->getRequirements());
-    }
-  }
 
+  if (decl->isGeneric())
+    if (auto *genericSig = decl->getGenericSignature())
+      printGenericSignature(genericSig, PrintRequirements | InnermostOnly);
 
   if (auto BodyFunc = Options.FunctionBody) {
     Printer << " {";
@@ -3468,11 +3529,6 @@ class TypePrinter : public TypeVisitor<TypePrinter> {
     }
   }
 
-  void printGenericParams(GenericParamList *Params) {
-    PrintAST(Printer, Options).printGenericParams(Params,
-                                                  /*IncludeRequirements*/true);
-  }
-
   template <typename T>
   void printModuleContext(T *Ty) {
     Module *Mod = Ty->getDecl()->getModuleContext();
@@ -3943,170 +3999,12 @@ public:
   }
 
   void visitPolymorphicFunctionType(PolymorphicFunctionType *T) {
-    Printer.callPrintStructurePre(PrintStructureKind::FunctionType);
-    SWIFT_DEFER {
-      Printer.printStructurePost(PrintStructureKind::FunctionType);
-    };
-
-    printFunctionExtInfo(T->getExtInfo());
-    printGenericParams(&T->getGenericParams());
-    Printer << " ";
-    
-    bool needsParens =
-      !isa<ParenType>(T->getInput().getPointer()) &&
-      !T->getInput()->is<TupleType>();
-      
-    if (needsParens)
-      Printer << "(";
-
-    visit(T->getInput());
-
-    if (needsParens)
-      Printer << ")";
-    
-    if (T->throws())
-      Printer << " " << tok::kw_throws;
-
-    Printer << " -> ";
-    Printer.callPrintStructurePre(PrintStructureKind::FunctionReturnType);
-    T->getResult().print(Printer, Options);
-    Printer.printStructurePost(PrintStructureKind::FunctionReturnType);
+    Printer << "I'm not a real thing that exists";
   }
 
-  /// If we can't find the depth of a type, return ErrorDepth.
-  const unsigned ErrorDepth = ~0U;
-  /// A helper function to return the depth of a type.
-  unsigned getDepthOfType(Type ty) {
-    if (auto paramTy = ty->getAs<GenericTypeParamType>())
-      return paramTy->getDepth();
-
-    if (auto depMemTy = dyn_cast<DependentMemberType>(ty->getCanonicalType())) {
-      CanType rootTy;
-      do {
-        rootTy = depMemTy.getBase();
-      } while ((depMemTy = dyn_cast<DependentMemberType>(rootTy)));
-      if (auto rootParamTy = dyn_cast<GenericTypeParamType>(rootTy))
-        return rootParamTy->getDepth();
-      return ErrorDepth;
-    }
-
-    return ErrorDepth;
-  }
-
-  /// A helper function to return the depth of a requirement.
-  unsigned getDepthOfRequirement(const Requirement &req) {
-    switch (req.getKind()) {
-    case RequirementKind::Conformance:
-    case RequirementKind::Superclass:
-    case RequirementKind::WitnessMarker:
-      return getDepthOfType(req.getFirstType());
-
-    case RequirementKind::SameType: {
-      // Return the max valid depth of firstType and secondType.
-      unsigned firstDepth = getDepthOfType(req.getFirstType());
-      unsigned secondDepth = getDepthOfType(req.getSecondType());
-
-      unsigned maxDepth;
-      if (firstDepth == ErrorDepth && secondDepth != ErrorDepth)
-        maxDepth = secondDepth;
-      else if (firstDepth != ErrorDepth && secondDepth == ErrorDepth)
-        maxDepth = firstDepth;
-      else
-        maxDepth = std::max(firstDepth, secondDepth);
-
-      return maxDepth;
-    }
-    }
-    llvm_unreachable("bad RequirementKind");
-  }
-
-  void printGenericSignature(ArrayRef<GenericTypeParamType *> genericParams,
-                             ArrayRef<Requirement> requirements) {
-    if (!Options.PrintInSILBody) {
-      printSingleDepthOfGenericSignature(genericParams, requirements);
-      return;
-    }
-
-    // In order to recover the nested GenericParamLists, we divide genericParams
-    // and requirements according to depth.
-    unsigned paramIdx = 0, numParam = genericParams.size();
-    while (paramIdx < numParam) {
-      unsigned depth = genericParams[paramIdx]->getDepth();
-
-      // Move index to genericParams.
-      unsigned lastParamIdx = paramIdx;
-      do {
-        lastParamIdx++;
-      } while (lastParamIdx < numParam &&
-               genericParams[lastParamIdx]->getDepth() == depth);
-
-      // Collect requirements for this level.
-      // Because of same-type requirements, these aren't well-ordered.
-      SmallVector<Requirement, 2> requirementsAtDepth;
-
-      for (auto reqt : requirements) {
-        unsigned currentDepth = getDepthOfRequirement(reqt);
-        // Collect requirements at the current depth.
-        if (currentDepth == depth)
-          requirementsAtDepth.push_back(reqt);
-        // If we're at the bottom-most level, collect depthless requirements.
-        if (currentDepth == ErrorDepth && lastParamIdx == numParam)
-          requirementsAtDepth.push_back(reqt);
-      }
-
-      printSingleDepthOfGenericSignature(
-        genericParams.slice(paramIdx, lastParamIdx - paramIdx),
-        requirementsAtDepth);
-
-      paramIdx = lastParamIdx;
-    }
-  }
-
-  void printSingleDepthOfGenericSignature(
-           ArrayRef<GenericTypeParamType *> genericParams,
-           ArrayRef<Requirement> requirements) {
-    // Print the generic parameters.
-    Printer << "<";
-    bool isFirstParam = true;
-    for (auto param : genericParams) {
-      if (isFirstParam)
-        isFirstParam = false;
-      else
-        Printer << ", ";
-
-      visit(param);
-    }
-
-    // Print the requirements.
-    bool isFirstReq = true;
-    for (const auto &req : requirements) {
-      if (req.getKind() == RequirementKind::WitnessMarker)
-        continue;
-
-      if (isFirstReq) {
-        Printer << " " << tok::kw_where << " ";
-        isFirstReq = false;
-      } else {
-        Printer << ", ";
-      }
-
-      visit(req.getFirstType());
-      switch (req.getKind()) {
-      case RequirementKind::Conformance:
-      case RequirementKind::Superclass:
-        Printer << " : ";
-        break;
-
-      case RequirementKind::SameType:
-        Printer << " == ";
-        break;
-
-      case RequirementKind::WitnessMarker:
-        llvm_unreachable("Handled above");
-      }
-      visit(req.getSecondType());
-    }
-    Printer << ">";
+  void printGenericSignature(const GenericSignature *genericSig,
+                             unsigned flags) {
+    PrintAST(Printer, Options).printGenericSignature(genericSig, flags);
   }
 
   void visitGenericFunctionType(GenericFunctionType *T) {
@@ -4116,7 +4014,9 @@ public:
     };
 
     printFunctionExtInfo(T->getExtInfo());
-    printGenericSignature(T->getGenericParams(), T->getRequirements());
+    printGenericSignature(T->getGenericSignature(),
+                          PrintAST::PrintParams |
+                          PrintAST::PrintRequirements);
     Printer << " ";
 
     bool needsParens =
@@ -4166,7 +4066,9 @@ public:
     printFunctionExtInfo(T->getExtInfo());
     printCalleeConvention(T->getCalleeConvention());
     if (auto sig = T->getGenericSignature()) {
-      printGenericSignature(sig->getGenericParams(), sig->getRequirements());
+      printGenericSignature(sig,
+                            PrintAST::PrintParams |
+                            PrintAST::PrintRequirements);
       Printer << " ";
     }
 
@@ -4375,8 +4277,10 @@ void Type::print(ASTPrinter &Printer, const PrintOptions &PO) const {
 
 void GenericSignature::print(raw_ostream &OS) const {
   StreamPrinter Printer(OS);
-  TypePrinter(Printer, PrintOptions())
-    .printGenericSignature(getGenericParams(), getRequirements());
+  PrintAST(Printer, PrintOptions())
+      .printGenericSignature(this,
+                             PrintAST::PrintParams |
+                             PrintAST::PrintRequirements);
 }
 void GenericSignature::dump() const {
   print(llvm::errs());
@@ -4515,8 +4419,10 @@ void ProtocolConformance::printName(llvm::raw_ostream &os,
     if (auto genericSig = getGenericSignature()) {
       StreamPrinter sPrinter(os);
       TypePrinter typePrinter(sPrinter, PO);
-      typePrinter.printGenericSignature(genericSig->getGenericParams(),
-                                        genericSig->getRequirements());
+      typePrinter
+          .printGenericSignature(genericSig,
+                                 PrintAST::PrintParams |
+                                 PrintAST::PrintRequirements);
       os << ' ';
     }
   }

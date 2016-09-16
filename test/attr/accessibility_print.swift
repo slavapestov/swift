@@ -263,63 +263,63 @@ public struct HA_PublicStruct {}
 internal struct HB_InternalStruct {}
 private struct HC_PrivateStruct {}
 
-// CHECK-LABEL: extension HA_PublicProtocol {
+// CHECK-LABEL: extension HA_PublicProtocol where Self : HA_PublicProtocol {
 extension HA_PublicProtocol {
   // CHECK: internal func unconstrained()
   func unconstrained() {}
 } // CHECK: {{^[}]}}
 
-// CHECK-LABEL: extension HA_PublicProtocol where Assoc == HA_PublicStruct {
+// CHECK-LABEL: extension HA_PublicProtocol where Self : HA_PublicProtocol, Self.Assoc == HA_PublicStruct {
 extension HA_PublicProtocol where Assoc == HA_PublicStruct {
   // CHECK: internal func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HA_PublicProtocol where Assoc == HB_InternalStruct {
+// CHECK-LABEL: extension HA_PublicProtocol where Self : HA_PublicProtocol, Self.Assoc == HB_InternalStruct {
 extension HA_PublicProtocol where Assoc == HB_InternalStruct {
   // CHECK: internal func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HA_PublicProtocol where Assoc == HC_PrivateStruct {
+// CHECK-LABEL: extension HA_PublicProtocol where Self : HA_PublicProtocol, Self.Assoc == HC_PrivateStruct {
 extension HA_PublicProtocol where Assoc == HC_PrivateStruct {
   // CHECK: private func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HB_InternalProtocol {
+// CHECK-LABEL: extension HB_InternalProtocol where Self : HB_InternalProtocol {
 extension HB_InternalProtocol {
   // CHECK: internal func unconstrained()
   func unconstrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HB_InternalProtocol where Assoc == HA_PublicStruct {
+// CHECK-LABEL: extension HB_InternalProtocol where Self : HB_InternalProtocol, Self.Assoc == HA_PublicStruct {
 extension HB_InternalProtocol where Assoc == HA_PublicStruct {
   // CHECK: internal func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HB_InternalProtocol where Assoc == HB_InternalStruct {
+// CHECK-LABEL: extension HB_InternalProtocol where Self : HB_InternalProtocol, Self.Assoc == HB_InternalStruct {
 extension HB_InternalProtocol where Assoc == HB_InternalStruct {
   // CHECK: internal func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HB_InternalProtocol where Assoc == HC_PrivateStruct {
+// CHECK-LABEL: extension HB_InternalProtocol where Self : HB_InternalProtocol, Self.Assoc == HC_PrivateStruct {
 extension HB_InternalProtocol where Assoc == HC_PrivateStruct {
   // CHECK: private func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HC_PrivateProtocol {
+// CHECK-LABEL: extension HC_PrivateProtocol where Self : HC_PrivateProtocol {
 extension HC_PrivateProtocol {
   // CHECK: internal func unconstrained()
   func unconstrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HC_PrivateProtocol where Assoc == HA_PublicStruct {
+// CHECK-LABEL: extension HC_PrivateProtocol where Self : HC_PrivateProtocol, Self.Assoc == HA_PublicStruct {
 extension HC_PrivateProtocol where Assoc == HA_PublicStruct {
   // CHECK: private func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HC_PrivateProtocol where Assoc == HB_InternalStruct {
+// CHECK-LABEL: extension HC_PrivateProtocol where Self : HC_PrivateProtocol, Self.Assoc == HB_InternalStruct {
 extension HC_PrivateProtocol where Assoc == HB_InternalStruct {
   // CHECK: private func constrained()
   func constrained() {}
 } // CHECK: {{^[}]}}
-// CHECK-LABEL: extension HC_PrivateProtocol where Assoc == HC_PrivateStruct {
+// CHECK-LABEL: extension HC_PrivateProtocol where Self : HC_PrivateProtocol, Self.Assoc == HC_PrivateStruct {
 extension HC_PrivateProtocol where Assoc == HC_PrivateStruct {
   // CHECK: private func constrained()
   func constrained() {}
