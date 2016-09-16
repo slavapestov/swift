@@ -1680,12 +1680,8 @@ bool PrintAST::shouldPrintPattern(const Pattern *P) {
 
 void PrintAST::printPatternType(const Pattern *P) {
   if (P->hasType()) {
-    Type T = P->getType();
-    if (Options.TransformContext) {
-      T = Options.TransformContext->transform(T);
-    }
     Printer << ": ";
-    T.print(Printer, Options);
+    printType(P->getType());
   }
 }
 
