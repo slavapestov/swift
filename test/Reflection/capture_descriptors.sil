@@ -191,6 +191,27 @@ sil_vtable GenericClass {}
 // CHECK-NEXT:   (reference_capture index=0))
 
 
+// Pseudogeneric caller and pseudogeneric callee -- type parameters are
+// erased at runtime.
+
+sil @pseudogeneric_callee : $@convention(thin) @pseudogeneric <T : AnyObject, U : AnyObject> (@owned T) -> () {
+bb0(%t: $T):
+  %12 = tuple ()
+  return %12 : $()
+}
+
+sil @pseudogeneric_caller : $@convention(thin) @pseudogeneric <A : AnyObject, B : AnyObject, C : AnyObject> (@owned A) -> @owned @pseudogeneric @callee_owned () -> () {
+bb0(%a: $A):
+  %f = function_ref @pseudogeneric_callee : $@convention(thin) @pseudogeneric <T : AnyObject, U : AnyObject> (@owned T) -> ()
+  %c = partial_apply %f<A, B>(%a) : $@convention(thin) @pseudogeneric <A : AnyObject, B : AnyObject> (@owned A) -> ()
+  return %c : $@pseudogeneric @callee_owned () -> ()
+}
+
+// CHECK:      - Capture types:
+// CHECK-NEXT:   (protocol Swift.AnyObject)
+// CHECK-NEXT: - Metadata sources:
+
+
 // Capturing lowered function types
 
 sil @function_callee : $@convention(thin) (@convention(thin) () -> (), @convention(c) () -> (), @convention(block) () -> (), @convention(thick) () -> (), @convention(method) () -> (), @convention(witness_method) () -> ()) -> () {
