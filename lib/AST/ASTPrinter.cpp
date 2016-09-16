@@ -254,7 +254,6 @@ struct SynthesizedExtensionAnalyzer::Implementation {
 
   struct SynthesizedExtensionInfo {
     ExtensionDecl *Ext = nullptr;
-    std::vector<StringRef> KnownSatisfiedRequirements;
     bool IsSynthesized;
     operator bool() const { return Ext; }
     SynthesizedExtensionInfo(bool IsSynthesized = true) :
@@ -484,22 +483,17 @@ struct SynthesizedExtensionAnalyzer::Implementation {
       if (First && Second) {
         First = First->getDesugaredType();
         Second = Second->getDesugaredType();
-        auto Written = Req.getAsWrittenString();
         switch (Kind) {
           case RequirementReprKind::TypeConstraint:
             if (!canPossiblyConvertTo(First, Second, *DC))
               return {Result, MergeInfo};
-            else if (isConvertibleTo(First, Second, *DC))
-              Result.KnownSatisfiedRequirements.push_back(Written);
-            else
+            else if (!isConvertibleTo(First, Second, *DC))
               MergeInfo.addRequirement(First, Second, Kind);
             break;
           case RequirementReprKind::SameType:
             if (!canPossiblyEqual(First, Second, *DC))
               return {Result, MergeInfo};
-            else if (isEqual(First, Second, *DC))
-              Result.KnownSatisfiedRequirements.push_back(Written);
-            else
+            else if (!isEqual(First, Second, *DC))
               MergeInfo.addRequirement(First, Second, Kind);
             break;
         }
@@ -660,16 +654,6 @@ forEachExtensionMergeGroup(MergeGroupKind Kind, ExtensionGroupOperation Fn) {
 }
 
 bool SynthesizedExtensionAnalyzer::
-shouldPrintRequirement(ExtensionDecl *ED, StringRef Req) {
-  auto Found = Impl.InfoMap->find(ED);
-  if (Found != Impl.InfoMap->end()) {
-    std::vector<StringRef> &KnownReqs = Found->second.KnownSatisfiedRequirements;
-    return KnownReqs.end() == std::find(KnownReqs.begin(), KnownReqs.end(), Req);
-  }
-  return true;
-}
-
-bool SynthesizedExtensionAnalyzer::
 hasMergeGroup(MergeGroupKind Kind) {
   for (auto &Group : Impl.AllGroups) {
     if (Kind == MergeGroupKind::All)
@@ -729,6 +713,8 @@ struct TypeTransformContext::Implementation {
   llvm::PointerUnion<TypeBase*, NominalTypeDecl*> TypeBaseOrNominal;
   SynthesizedExtensionAnalyzer *SynAnalyzer = nullptr;
 
+  SmallVector<const Decl *, 4> Decls;
+
   Implementation(PrinterTypeTransformer *Transformer):
     Transformer(Transformer) {}
   Implementation(PrinterTypeTransformer *Transformer, Type T):
@@ -753,12 +739,18 @@ TypeTransformContext::TypeTransformContext(
   SynthesizedExtensionAnalyzer *SynAnalyzer) :
     Impl(* new Implementation(Transformer, NTD, SynAnalyzer)){};
 
-bool TypeTransformContext::
-shouldPrintRequirement(ExtensionDecl *ED, StringRef Req) {
-  if (Impl.SynAnalyzer) {
-    return Impl.SynAnalyzer->shouldPrintRequirement(ED, Req);
-  }
-  return true;
+void TypeTransformContext::pushDecl(const Decl *decl) {
+  Impl.Decls.push_back(decl);
+}
+
+const Decl *TypeTransformContext::popDecl() {
+  auto *last = Impl.Decls.back();
+  Impl.Decls.pop_back();
+  return last;
+}
+
+const Decl *TypeTransformContext::getCurrentDecl() {
+  return Impl.Decls.back();
 }
 
 NominalTypeDecl *TypeTransformContext::getNominal() {
@@ -1290,6 +1282,17 @@ public:
     if (!shouldPrint(D, true))
       return false;
 
+    if (Options.TransformContext)
+      Options.TransformContext->pushDecl(D);
+
+    SWIFT_DEFER {
+      if (Options.TransformContext) {
+        auto *OldD = Options.TransformContext->popDecl();
+        assert(OldD == D);
+        (void) OldD;
+      }
+    };
+
     bool Synthesize =
         Options.TransformContext &&
         Options.TransformContext->isPrintingSynthesizedExtension() &&
@@ -1314,7 +1317,9 @@ public:
     }
 
     Printer.callPrintDeclPre(D, Options.BracketOptions);
+
     ASTVisitor::visit(D);
+
     if (Synthesize) {
       Printer.setSynthesizedTarget(nullptr);
       Printer.printSynthesizedExtensionPost(
@@ -1323,6 +1328,7 @@ public:
     } else {
       Printer.callPrintDeclPost(D, Options.BracketOptions);
     }
+
     return true;
   }
 
@@ -1501,24 +1507,6 @@ static void getRequirementsAtDepth(const GenericSignature *genericSig,
 
 void PrintAST::printGenericSignature(const GenericSignature *genericSig,
                                      unsigned flags) {
-/*
-  if (Options.TransformContext &&
-      Options.TransformContext->isPrintingTypeInterface()) {
-    auto ArgArr = Options.TransformContext->getTypeBase()->
-      getAllGenericArgs(Scrach);
-    for (auto Arg : ArgArr) {
-      if (IsFirst) {
-        IsFirst = false;
-      } else {
-        Printer << ", ";
-      }
-      auto NM = Arg->getAnyGeneric();
-      assert(NM && "Cannot get generic type.");
-      Printer.callPrintStructurePre(PrintStructureKind::GenericParameter, NM);
-      Printer << NM->getNameStr(); // FIXME: PrintNameContext::GenericParameter
-      Printer.printStructurePost(PrintStructureKind::GenericParameter, NM);
-    }
-*/
   if (flags & InnermostOnly) {
     auto genericParams = genericSig->getInnermostGenericParams();
     unsigned depth = genericParams[0]->getDepth();
@@ -1570,6 +1558,19 @@ void PrintAST::printSingleDepthOfGenericSignature(
   bool printParams = (flags & PrintParams);
   bool printRequirements = (flags & PrintRequirements);
 
+  TypeSubstitutionMap subMap;
+  ModuleDecl *M = nullptr;
+
+  if (Options.TransformContext &&
+      Options.TransformContext->isPrintingTypeInterface()) {
+    auto *DC = Options.TransformContext->getCurrentDecl()
+        ->getInnermostDeclContext()->getInnermostTypeContext();
+    assert(DC);
+    subMap = Options.TransformContext->getTypeBase()
+        ->getMemberSubstitutions(DC);
+    M = DC->getParentModule();
+  }
+
   if (printParams) {
     // Print the generic parameters.
     Printer << "<";
@@ -1580,7 +1581,10 @@ void PrintAST::printSingleDepthOfGenericSignature(
       else
         Printer << ", ";
 
-      if (auto *GP = param->getDecl()) {
+      if (!subMap.empty()) {
+        auto argTy = Type(param).subst(M, subMap, SubstOptions());
+        printType(argTy);
+      } else if (auto *GP = param->getDecl()) {
         Printer.callPrintStructurePre(PrintStructureKind::GenericParameter, GP);
         Printer.printName(GP->getName(), PrintNameContext::GenericParameter);
         Printer.printStructurePost(PrintStructureKind::GenericParameter, GP);

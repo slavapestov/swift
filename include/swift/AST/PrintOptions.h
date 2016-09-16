@@ -38,6 +38,11 @@ struct PrintOptions;
 /// Necessary information for archetype transformation during printing.
 struct TypeTransformContext {
   Type getTypeBase();
+
+  void pushDecl(const Decl *decl);
+  const Decl *popDecl();
+  const Decl *getCurrentDecl();
+
   NominalTypeDecl *getNominal();
   PrinterTypeTransformer *getTransformer();
   bool isPrintingSynthesizedExtension();
