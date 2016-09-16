@@ -128,8 +128,8 @@
 // RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_INSIDE_CONCRETE2_2 | %FileCheck %s -check-prefix=PROTOCOL_EXT_P4_ONLYME
 // RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_TA_1 | %FileCheck %s -check-prefix=PROTOCOL_EXT_TA
 // RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_TA_2 | %FileCheck %s -check-prefix=PROTOCOL_EXT_TA
-// RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_INIT_1 | %FileCheck %s -check-prefix=PROTOCOL_EXT_INIT
-// RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_INIT_2 | %FileCheck %s -check-prefix=PROTOCOL_EXT_INIT
+// RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_INIT_1 | %FileCheck %s -check-prefix=PROTOCOL_EXT_INIT_1
+// RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_INIT_2 | %FileCheck %s -check-prefix=PROTOCOL_EXT_INIT_2
 // RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_P4_DOT_1 | %FileCheck %s -check-prefix=PROTOCOL_EXT_P4_DOT
 // RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_P4_DOT_2 | %FileCheck %s -check-prefix=PROTOCOL_EXT_P4_DOT
 // RUN: %target-swift-ide-test -code-completion -source-filename %s -code-completion-token=PROTOCOL_EXT_P4_T_DOT_1 | %FileCheck %s -check-prefix=PROTOCOL_EXT_P4_T_DOT_1
@@ -1570,14 +1570,20 @@ func testTypealias1<S: P4 where S.T == WillConformP1>() {
 func testProtExtInit1() {
   Concrete1(#^PROTOCOL_EXT_INIT_1^#
 }
+
+// PROTOCOL_EXT_INIT_1: Begin completions
+// PROTOCOL_EXT_INIT_1: Decl[Constructor]/Super:            ['('])[#Concrete1#]{{; name=.+$}}
+// PROTOCOL_EXT_INIT_1: Decl[Constructor]/Super:            ['(']{#x: Int#})[#Concrete1#]{{; name=.+$}}
+// PROTOCOL_EXT_INIT_1: End completions
+
 func testProtExtInit2<S: P4 where S.T : P1>() {
   S(#^PROTOCOL_EXT_INIT_2^#
 }
 
-// PROTOCOL_EXT_INIT: Begin completions
-// PROTOCOL_EXT_INIT: Decl[Constructor]/Super:            ['('])[#Self#]{{; name=.+$}}
-// PROTOCOL_EXT_INIT: Decl[Constructor]/Super:            ['(']{#x: Int#})[#Self#]{{; name=.+$}}
-// PROTOCOL_EXT_INIT: End completions
+// PROTOCOL_EXT_INIT_2: Begin completions
+// PROTOCOL_EXT_INIT_2: Decl[Constructor]/Super:            ['('])[#S#]{{; name=.+$}}
+// PROTOCOL_EXT_INIT_2: Decl[Constructor]/Super:            ['(']{#x: Int#})[#S#]{{; name=.+$}}
+// PROTOCOL_EXT_INIT_2: End completions
 
 extension P4 where Self.T == OnlyMe {
   final func test1() {
@@ -1600,7 +1606,7 @@ extension P4 where Self.T == WillConformP1 {
 }
 // PROTOCOL_EXT_P4_T_DOT_1: Begin completions
 // PROTOCOL_EXT_P4_T_DOT_1-DAG: Decl[InstanceMethod]/CurrNominal:   reqP1({#self: WillConformP1#})[#() -> Void#]{{; name=.+$}}
-// PROTOCOL_EXT_P4_T_DOT_1-DAG: Decl[InstanceMethod]/Super:   extP1({#self: WillConformP1.Type#})[#() -> Void#]{{; name=.+$}}
+// PROTOCOL_EXT_P4_T_DOT_1-DAG: Decl[InstanceMethod]/Super:   extP1({#self: WillConformP1#})[#() -> Void#]{{; name=.+$}}
 // PROTOCOL_EXT_P4_T_DOT_1: End completions
 
 protocol PWithT {
@@ -1620,8 +1626,8 @@ func testUnusableProtExt(_ x: PWithT) {
   x.#^PROTOCOL_EXT_UNUSABLE_EXISTENTIAL^#
 }
 // PROTOCOL_EXT_UNUSABLE_EXISTENTIAL: Begin completions
-// PROTOCOL_EXT_UNUSABLE_EXISTENTIAL: Decl[InstanceMethod]/CurrNominal:   foo({#(x): T#})[#T#]{{; name=.+}}
-// PROTOCOL_EXT_UNUSABLE_EXISTENTIAL: Decl[InstanceMethod]/CurrNominal:   bar({#(x): T#})[#T#]{{; name=.+}}
+// PROTOCOL_EXT_UNUSABLE_EXISTENTIAL: Decl[InstanceMethod]/CurrNominal:   foo({#(x): Self.T#})[#Self.T#]{{; name=.+}}
+// PROTOCOL_EXT_UNUSABLE_EXISTENTIAL: Decl[InstanceMethod]/CurrNominal:   bar({#(x): Self.T#})[#Self.T#]{{; name=.+}}
 // PROTOCOL_EXT_UNUSABLE_EXISTENTIAL: End completions
 
 protocol dedupP {
@@ -1664,8 +1670,8 @@ func testDeDuped2(_ x: dedupP) {
 func testDeDuped3<T : dedupP where T.T == Int>(_ x: T) {
   x#^PROTOCOL_EXT_DEDUP_3^#
 // PROTOCOL_EXT_DEDUP_3: Begin completions, 3 items
-// PROTOCOL_EXT_DEDUP_3: Decl[InstanceMethod]/Super:   .foo()[#Self.T#]; name=foo()
-// PROTOCOL_EXT_DEDUP_3: Decl[InstanceVar]/Super:      .bar[#Self.T#]; name=bar
+// PROTOCOL_EXT_DEDUP_3: Decl[InstanceMethod]/Super:   .foo()[#Int#]; name=foo()
+// PROTOCOL_EXT_DEDUP_3: Decl[InstanceVar]/Super:      .bar[#Int#]; name=bar
 // PROTOCOL_EXT_DEDUP_3: Decl[Subscript]/Super:        [{#Self.T#}][#Self.T#]; name=[Self.T]
 // PROTOCOL_EXT_DEDUP_3: End completions
 }
