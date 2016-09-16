@@ -53,75 +53,9 @@
 using namespace swift;
 namespace swift {
 
-std::unique_ptr<llvm::DenseMap<StringRef, Type>>
-collectNameTypeMap(Type Ty) {
-  std::unique_ptr<llvm::DenseMap<StringRef, Type>> IdMap(
-    new llvm::DenseMap<StringRef, Type>());
-  Type BaseTy = Ty->getRValueType();
-
-  do {
-    auto D = BaseTy->getNominalOrBoundGenericNominal();
-    if (!D || !D->getGenericParams())
-      continue;
-    SmallVector<Type, 3> Scrach;
-    auto Args = BaseTy->getAllGenericArgs(Scrach);
-    const auto ParamDecls = D->getGenericParams()->getParams();
-    assert(ParamDecls.size() == Args.size());
-
-    // Map type parameter names with their instantiating arguments.
-    for (unsigned I = 0, N = ParamDecls.size(); I < N; I++) {
-      (*IdMap)[ParamDecls[I]->getName().str()] = Args[I];
-    }
-  } while ((BaseTy = BaseTy->getSuperclass(nullptr)));
-  return IdMap;
-}
-
-
 class PrinterTypeTransformer {
 public:
-  virtual Type transform(Type Ty) = 0;
-  virtual StringRef transform(StringRef TypeName) = 0;
   virtual ~PrinterTypeTransformer() {};
-};
-
-class PrinterArchetypeNameTransformer : public PrinterTypeTransformer{
-  Type BaseTy;
-  llvm::DenseMap<TypeBase *, Type> Cache;
-  std::unique_ptr<llvm::DenseMap<StringRef, Type>> IdMap;
-
-public:
-  PrinterArchetypeNameTransformer(Type Ty) :
-    BaseTy(Ty->getRValueType()), IdMap(collectNameTypeMap(Ty)){}
-
-  StringRef transform(StringRef TypeName) override {
-    return TypeName;
-  }
-
-  Type transform(Type Ty) override {
-    return Ty.transform([&](Type Ty) -> Type {
-      if (Ty->getKind() != TypeKind::Archetype)
-        return Ty;
-
-      // First, we try to find the map from cache.
-      if (Cache.count(Ty.getPointer()) > 0) {
-        return Cache[Ty.getPointer()];
-      }
-      auto Id = cast<ArchetypeType>(Ty.getPointer())->getName().str();
-      auto Result = Ty;
-
-      // Iterate the IdMap to find the argument type of the given param name.
-      for (auto It = IdMap->begin(); It != IdMap->end(); ++ It) {
-        if (Id == It->getFirst()) {
-          Result = It->getSecond();
-          break;
-        }
-      }
-
-      // Put the result into cache.
-      Cache[Ty.getPointer()] = Result;
-      return Result;
-    });
-  }
 };
 
 class ArchetypeSelfTransformer : public PrinterTypeTransformer {
@@ -129,44 +63,6 @@ protected:
   Type BaseTy;
   DeclContext &DC;
   const ASTContext &Ctx;
-  std::unique_ptr<PrinterTypeTransformer> NameTransformer;
-
-  llvm::StringMap<Type> Map;
-  std::vector<std::unique_ptr<std::string>> Buffers;
-
-  Type tryNamedArchetypeTransform(Type T) {
-    if (NameTransformer) {
-      return NameTransformer->transform(T);
-    }
-    return T;
-  }
-
-  StringRef tryNamedArchetypeTransform(StringRef T) {
-    if (NameTransformer) {
-      return NameTransformer->transform(T);
-    }
-    return T;
-  }
-
-  std::function<Type(Type)> F = [&] (Type Ty) {
-    auto Original = Ty;
-    Ty = Ty->getDesugaredType();
-    if (Ty->getKind() != TypeKind::Archetype)
-      return Original;
-    auto ATT = cast<ArchetypeType>(Ty.getPointer());
-    ArchetypeType *Self = ATT;
-    std::vector<Identifier> Names;
-    for (; Self->getParent(); Self = Self->getParent()) {
-      Names.insert(Names.begin(), Self->getName());
-    }
-    if (!Self->getSelfProtocol())
-      return tryNamedArchetypeTransform(Ty);
-    Type Result = checkMemberType(DC, BaseTy, Names);
-    if (Result)
-      return Type(Result->getDesugaredType());
-    else
-      return tryNamedArchetypeTransform(Ty);
-  };
 
 public:
   ArchetypeSelfTransformer(NominalTypeDecl *NTD):
@@ -175,15 +71,9 @@ public:
     Ctx(NTD->getASTContext()) {}
 
   ArchetypeSelfTransformer(Type BaseTy, DeclContext &DC):
-    BaseTy(BaseTy->getRValueType()), DC(DC), Ctx(DC.getASTContext()),
-    NameTransformer(new PrinterArchetypeNameTransformer(BaseTy)){}
-
-  Type transform(Type Ty) override {
-    return Ty.transform(F);
-  }
+    BaseTy(BaseTy->getRValueType()), DC(DC), Ctx(DC.getASTContext()) {}
 
   Type checkMemberTypeInternal(StringRef TypeName) {
-    ASTContext &Ctx = DC.getASTContext();
     llvm::SmallVector<StringRef, 4> Parts;
     TypeName.split(Parts, '.');
     std::vector<Identifier> Names;
@@ -193,43 +83,6 @@ public:
       Names.push_back(Ctx.getIdentifier(Parts[I]));
     }
     return checkMemberType(DC, BaseTy, Names);
-  }
-
-  StringRef transform(StringRef TypeName) override {
-    if (auto Result = checkMemberTypeInternal(TypeName)) {
-      Result = Result->getDesugaredType();
-      std::unique_ptr<std::string> pBuffer(new std::string);
-      llvm::raw_string_ostream OS(*pBuffer);
-      Result.print(OS);
-      OS.str();
-      Buffers.push_back(std::move(pBuffer));
-      return StringRef(*Buffers.back());
-    }
-    return tryNamedArchetypeTransform(TypeName);
-  }
-};
-
-class ArchetypeAndDynamicSelfTransformer : public ArchetypeSelfTransformer {
-public:
-  using ArchetypeSelfTransformer::ArchetypeSelfTransformer;
-
-  Type transform(Type Ty) override {
-    if (Ty->is<DynamicSelfType>()) {
-      return BaseTy;
-    }
-    return ArchetypeSelfTransformer::transform(Ty);
-  }
-
-  StringRef transform(StringRef TypeName) override {
-    if (TypeName == "Self") {
-      std::unique_ptr<std::string> pBuffer(new std::string);
-      llvm::raw_string_ostream OS(*pBuffer);
-      BaseTy.print(OS);
-      OS.str();
-      Buffers.push_back(std::move(pBuffer));
-      return StringRef(*Buffers.back());
-    }
-    return ArchetypeSelfTransformer::transform(TypeName);
   }
 };
 
@@ -691,7 +544,7 @@ void PrintOptions::setArchetypeSelfTransformForQuickHelp(Type T,
 void PrintOptions::setArchetypeAndDynamicSelfTransform(Type T,
                                                        DeclContext *DC) {
   TransformContext = std::make_shared<TypeTransformContext>(
-    new ArchetypeAndDynamicSelfTransformer(T, *DC));
+    new ArchetypeSelfTransformer(T, *DC));
 }
 
 void PrintOptions::
@@ -772,14 +625,6 @@ bool TypeTransformContext::isPrintingSynthesizedExtension() {
 }
 bool TypeTransformContext::isPrintingTypeInterface() {
   return Impl.Nominal == nullptr && Impl.BaseType;
-}
-
-Type TypeTransformContext::transform(Type Input) {
-  return Impl.Transformer->transform(Input);
-}
-
-StringRef TypeTransformContext::transform(StringRef Input) {
-  return Impl.Transformer->transform(Input);
 }
 
 std::string ASTPrinter::sanitizeUtf8(StringRef Text) {

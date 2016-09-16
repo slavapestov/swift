@@ -53,10 +53,6 @@ struct TypeTransformContext {
   TypeTransformContext(PrinterTypeTransformer *Transformer,
                             NominalTypeDecl *NTD,
                             SynthesizedExtensionAnalyzer *Analyzer);
-  Type transform(Type Input);
-  StringRef transform(StringRef Input);
-
-  bool shouldPrintRequirement(ExtensionDecl *ED, StringRef Req);
 
   ~TypeTransformContext();
 private:
