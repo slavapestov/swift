@@ -17,6 +17,7 @@
 #include "swift/AST/Types.h"
 #include "ForeignRepresentationInfo.h"
 #include "swift/AST/ArchetypeBuilder.h"
+#include "swift/AST/GenericEnvironment.h"
 #include "swift/AST/TypeVisitor.h"
 #include "swift/AST/TypeWalker.h"
 #include "swift/AST/Decl.h"
@@ -2998,10 +2999,6 @@ TypeSubstitutionMap TypeBase::getMemberSubstitutions(const DeclContext *dc) {
     assert(ownerNominal == baseTy->getAnyNominal());
   }
 
-  // If the base type isn't specialized, there's nothing to substitute.
-  if (!baseTy->isSpecialized())
-    return substitutions;
-
   // Gather all of the substitutions for all levels of generic arguments.
   GenericParamList *curGenericParams = dc->getGenericParamsOfContext();
   while (baseTy) {
@@ -3018,17 +3015,38 @@ TypeSubstitutionMap TypeBase::getMemberSubstitutions(const DeclContext *dc) {
       // Continue looking into the parent.
       baseTy = boundGeneric->getParent();
       curGenericParams = curGenericParams->getOuterParameters();
+      dc = dc->getParent();
+      continue;
+    }
+
+    // Continue looking into the parent.
+    if (auto protocolTy = baseTy->getAs<ProtocolType>()) {
+/*      if (auto selfTy = protocolTy->getDecl()->getSelfInterfaceType())
+        substitutions[selfTy->getCanonicalType().getPointer()]
+            = ErrorType::get(dc->getASTContext());*/
+      baseTy = protocolTy->getParent();
+      curGenericParams = curGenericParams->getOuterParameters();
+      dc = dc->getParent();
       continue;
     }
 
     // Continue looking into the parent.
     if (auto nominalTy = baseTy->getAs<NominalType>()) {
       baseTy = nominalTy->getParent();
+      dc = dc->getParent();
       continue;
     }
 
     // We're done.
     break;
+  }
+
+  if (auto *genericSig = dc->getGenericSignatureOfContext()) {
+    auto *genericEnv = dc->getGenericEnvironmentOfContext();
+    for (auto param : genericSig->getGenericParams()) {
+      substitutions[param->getCanonicalType().getPointer()] =
+          genericEnv->mapTypeIntoContext(param);
+    }
   }
 
   return substitutions;

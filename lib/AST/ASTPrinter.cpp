@@ -2697,7 +2697,7 @@ void PrintAST::visitFuncDecl(FuncDecl *decl) {
           printFunctionParameters(decl);
         });
 
-      Type ResultTy = decl->getResultType();
+      Type ResultTy = decl->getResultInterfaceType();
       if (ResultTy && !ResultTy->isVoid()) {
         TypeLoc ResultTyLoc = decl->getBodyResultTypeLoc();
         if (!ResultTyLoc.getTypeRepr())

@@ -667,6 +667,9 @@ Module::lookupConformance(Type type, ProtocolDecl *protocol,
                           LazyResolver *resolver) {
   ASTContext &ctx = getASTContext();
 
+  if (type->hasUnboundGenericType())
+    return None;
+
   // An archetype conforms to a protocol if the protocol is listed in the
   // archetype's list of conformances, or if the archetype has a superclass
   // constraint and the superclass conforms to the protocol.

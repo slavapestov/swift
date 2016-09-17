@@ -2477,6 +2477,9 @@ ObjCClassKind ClassDecl::checkObjCAncestry() const {
     if (!CD->hasSuperclass())
       break;
     CD = CD->getSuperclass()->getClassOrBoundGenericClass();
+    // Should be diagnosed elsewhere
+    if (CD == nullptr)
+      break;
   }
 
   if (!isObjC)
@@ -4469,11 +4472,11 @@ void FuncDecl::setDeserializedSignature(ArrayRef<ParameterList *> BodyParams,
   this->FnRetType = FnRetType;
 }
 
-Type FuncDecl::getResultType() const {
+Type FuncDecl::getResultInterfaceType() const {
   if (!hasType())
     return nullptr;
 
-  Type resultTy = getType();
+  Type resultTy = getInterfaceType();
   if (resultTy->is<ErrorType>())
     return resultTy;
 
@@ -4693,18 +4696,18 @@ SourceRange ConstructorDecl::getSourceRange() const {
   return { getConstructorLoc(), End };
 }
 
-Type ConstructorDecl::getArgumentType() const {
-  Type ArgTy = getType();
+Type ConstructorDecl::getArgumentInterfaceType() const {
+  Type ArgTy = getInterfaceType();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
   ArgTy = ArgTy->castTo<AnyFunctionType>()->getInput();
   return ArgTy;
 }
 
-Type ConstructorDecl::getResultType() const {
-  Type ArgTy = getType();
-  ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
-  ArgTy = ArgTy->castTo<AnyFunctionType>()->getResult();
-  return ArgTy;
+Type ConstructorDecl::getResultInterfaceType() const {
+  Type ResTy = getInterfaceType();
+  ResTy = ResTy->castTo<AnyFunctionType>()->getResult();
+  ResTy = ResTy->castTo<AnyFunctionType>()->getResult();
+  return ResTy;
 }
 
 Type ConstructorDecl::getInitializerInterfaceType() {

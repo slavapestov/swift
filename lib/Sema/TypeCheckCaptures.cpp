@@ -167,8 +167,9 @@ public:
 
     // If VD is a noescape decl, then the closure we're computing this for
     // must also be noescape.
-    if (VD->hasType() && VD->getType()->is<AnyFunctionType>() &&
-        VD->getType()->castTo<AnyFunctionType>()->isNoEscape() &&
+    if (VD->hasType() &&
+        VD->getInterfaceType()->is<AnyFunctionType>() &&
+        VD->getInterfaceType()->castTo<AnyFunctionType>()->isNoEscape() &&
         !capture.isNoEscape() &&
         // Don't repeatedly diagnose the same thing.
         Diagnosed.insert(VD).second) {
@@ -183,7 +184,7 @@ public:
       // If we're a parameter, emit a helpful fixit to add @escaping
       auto paramDecl = dyn_cast<ParamDecl>(VD);
       bool isAutoClosure =
-          VD->getType()->castTo<AnyFunctionType>()->isAutoClosure();
+          VD->getInterfaceType()->castTo<AnyFunctionType>()->isAutoClosure();
       if (paramDecl && !isAutoClosure) {
         TC.diagnose(paramDecl->getStartLoc(), diag::noescape_parameter,
                     paramDecl->getName())

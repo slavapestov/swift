@@ -3096,7 +3096,7 @@ bool TypeChecker::isRepresentableInObjC(
   }
 
   if (auto FD = dyn_cast<FuncDecl>(AFD)) {
-    Type ResultType = FD->getResultType();
+    Type ResultType = ArchetypeBuilder::mapTypeIntoContext(FD, FD->getResultInterfaceType());
     if (!ResultType->isVoid() &&
         !ResultType->isRepresentableIn(ForeignLanguage::ObjectiveC,
                                        const_cast<FuncDecl *>(FD))) {
@@ -3120,7 +3120,7 @@ bool TypeChecker::isRepresentableInObjC(
 
     const ConstructorDecl *ctor = nullptr;
     if (auto func = dyn_cast<FuncDecl>(AFD)) {
-      resultType = func->getResultType();
+      resultType = ArchetypeBuilder::mapTypeIntoContext(func, func->getResultInterfaceType());
       throwsLoc = func->getThrowsLoc();
     } else {
       ctor = cast<ConstructorDecl>(AFD);
