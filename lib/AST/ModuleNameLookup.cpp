@@ -49,7 +49,7 @@ static bool isOverloadable(const ValueDecl *VD) {
 static bool isValidOverload(CanTypeSet &overloads, const ValueDecl *VD) {
   if (!isOverloadable(VD))
     return overloads.empty();
-  if (overloads.count(VD->getInterfaceType()->getCanonicalType()))
+  if (overloads.count(VD->getType()->getCanonicalType()))
     return false;
   return true;
 }
@@ -71,7 +71,7 @@ static bool updateOverloadSet(CanTypeSet &overloads,
       return false;
     if (!result->hasType())
       continue;
-    overloads.insert(result->getInterfaceType()->getCanonicalType());
+    overloads.insert(result->getType()->getCanonicalType());
   }
   return true;
 }
@@ -88,7 +88,7 @@ static bool updateOverloadSet(NamedCanTypeSet &overloads,
     else if (!result->hasType())
       continue;
     else
-      entry.second.insert(result->getInterfaceType()->getCanonicalType());
+      entry.second.insert(result->getType()->getCanonicalType());
   }
   return true;
 }

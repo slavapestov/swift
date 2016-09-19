@@ -104,17 +104,16 @@ getSubstitutionMap(ModuleDecl *mod,
                    SubstitutionMap &result) const {
   for (auto depTy : sig->getAllDependentTypes()) {
 
+    // Map the interface type to a context type.
+    auto contextTy = depTy.subst(mod, InterfaceToArchetypeMap, SubstOptions());
+    auto *archetype = contextTy->castTo<ArchetypeType>();
+
     auto sub = subs.front();
     subs = subs.slice(1);
 
-    // Map the interface type to a context type.
-    auto contextTy = depTy.subst(mod, InterfaceToArchetypeMap, SubstOptions());
-
-    // If it's an archetype, record the replacement type and its conformances.
-    if (auto *archetype = contextTy->getAs<ArchetypeType>()) {
-      result.addSubstitution(CanType(archetype), sub.getReplacement());
-      result.addConformances(CanType(archetype), sub.getConformances());
-    }
+    // Record the replacement type and its conformances.
+    result.addSubstitution(CanType(archetype), sub.getReplacement());
+    result.addConformances(CanType(archetype), sub.getConformances());
   }
 
   for (auto reqt : sig->getRequirements()) {

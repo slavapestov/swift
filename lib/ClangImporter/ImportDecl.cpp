@@ -6469,7 +6469,7 @@ void ClangImporter::Implementation::importAttributes(
   // Map __attribute__((warn_unused_result)).
   if (!ClangDecl->hasAttr<clang::WarnUnusedResultAttr>()) {
     if (auto MD = dyn_cast<FuncDecl>(MappedDecl)) {
-      if (!MD->getResultInterfaceType()->isVoid()) {
+      if (!MD->getResultType()->isVoid()) {
         MD->getAttrs().add(new (C) DiscardableResultAttr(/*implicit*/true));
       }
     }

@@ -935,14 +935,14 @@ static CodeCompletionResult::ExpectedTypeRelation calculateTypeRelationForDecl (
   if (!VD)
     return CodeCompletionResult::ExpectedTypeRelation::Unrelated;
   if (auto FD = dyn_cast<FuncDecl>(VD)) {
-    return std::max(calculateTypeRelation(FD->getInterfaceType(), ExpectedType, DC),
-                    calculateTypeRelation(FD->getResultInterfaceType(), ExpectedType, DC));
+    return std::max(calculateTypeRelation(FD->getType(), ExpectedType, DC),
+                    calculateTypeRelation(FD->getResultType(), ExpectedType, DC));
   }
   if (auto NTD = dyn_cast<NominalTypeDecl>(VD)) {
-    return std::max(calculateTypeRelation(NTD->getInterfaceType(), ExpectedType, DC),
-                    calculateTypeRelation(NTD->getDeclaredInterfaceType(), ExpectedType, DC));
+    return std::max(calculateTypeRelation(NTD->getType(), ExpectedType, DC),
+                    calculateTypeRelation(NTD->getDeclaredType(), ExpectedType, DC));
   }
-  return calculateTypeRelation(VD->getInterfaceType(), ExpectedType, DC);
+  return calculateTypeRelation(VD->getType(), ExpectedType, DC);
 }
 
 static CodeCompletionResult::ExpectedTypeRelation calculateMaxTypeRelationForDecl (
@@ -2789,8 +2789,7 @@ public:
           if (auto AT = MT->getInstanceType()) {
             if (!CD->getType()->is<ErrorType>() &&
                 AT->getKind() == TypeKind::NameAlias &&
-                AT->getDesugaredType() ==
-                    ArchetypeBuilder::mapTypeIntoContext(CD, CD->getResultInterfaceType()).getPointer())
+                AT->getDesugaredType() == CD->getResultType().getPointer())
               Result = AT;
           }
           addConstructorCall(CD, Reason, None, Result);

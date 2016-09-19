@@ -469,7 +469,7 @@ SILGenFunction::emitClosureValue(SILLocation loc, SILDeclRef constant,
 void SILGenFunction::emitFunction(FuncDecl *fd) {
   MagicFunctionName = SILGenModule::getMagicFunctionName(fd);
 
-  Type resultTy = ArchetypeBuilder::mapTypeIntoContext(fd, fd->getResultInterfaceType());
+  Type resultTy = fd->getResultType();
   emitProlog(fd, fd->getParameterLists(), resultTy);
   prepareEpilog(resultTy, fd->hasThrows(), CleanupLocation(fd));
 

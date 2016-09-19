@@ -462,7 +462,7 @@ static void diagSyntacticUseRestrictions(TypeChecker &TC, const Expr *E,
     /// its uses are ok.
     void checkNoEscapeParameterUse(DeclRefExpr *DRE, Expr *ParentExpr=nullptr) {
       // This only cares about declarations of noescape function type.
-      auto AFT = DRE->getDecl()->getInterfaceType()->getAs<AnyFunctionType>();
+      auto AFT = DRE->getDecl()->getType()->getAs<AnyFunctionType>();
       if (!AFT || !AFT->isNoEscape())
         return;
 
@@ -1293,7 +1293,7 @@ bool swift::fixItOverrideDeclarationTypes(TypeChecker &TC,
     if (auto *method = dyn_cast<FuncDecl>(decl)) {
       auto *baseMethod = cast<FuncDecl>(base);
       fixedAny |= checkType(method->getBodyResultType(),
-                            ArchetypeBuilder::mapTypeIntoContext(baseMethod, baseMethod->getResultInterfaceType()),
+                            baseMethod->getResultType(),
                             method->getBodyResultTypeLoc().getSourceRange());
     }
     return fixedAny;
@@ -3990,7 +3990,7 @@ Optional<DeclName> TypeChecker::omitNeedlessWords(AbstractFunctionDecl *afd) {
   bool returnsSelf = false;
 
   if (auto func = dyn_cast<FuncDecl>(afd)) {
-    resultType = ArchetypeBuilder::mapTypeIntoContext(func, func->getResultInterfaceType()),
+    resultType = func->getResultType();
     returnsSelf = func->hasDynamicSelf();
   } else if (isa<ConstructorDecl>(afd)) {
     resultType = contextType;

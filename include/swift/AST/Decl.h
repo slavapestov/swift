@@ -2021,8 +2021,6 @@ public:
   bool hasType() const { return !TypeAndAccess.getPointer().isNull(); }
   Type getType() const {
     assert(hasType() && "declaration has no type set yet");
-    assert(!isa<AbstractFunctionDecl>(this) &&
-           "use getInterfaceType() for functions");
     return TypeAndAccess.getPointer();
   }
 
@@ -5019,7 +5017,7 @@ public:
   /// Retrieve the result type of this function.
   ///
   /// \sa getBodyResultType
-  Type getResultInterfaceType() const;
+  Type getResultType() const;
 
   /// Retrieve the result type of this function for use within the function
   /// definition.
@@ -5430,11 +5428,11 @@ public:
   SourceLoc getStartLoc() const { return getConstructorLoc(); }
   SourceRange getSourceRange() const;
 
-  /// getArgumentInterfaceType - get the type of the argument tuple
-  Type getArgumentInterfaceType() const;
+  /// getArgumentType - get the type of the argument tuple
+  Type getArgumentType() const;
 
   /// \brief Get the type of the constructed object.
-  Type getResultInterfaceType() const;
+  Type getResultType() const;
 
   /// Get the interface type of the initializing constructor.
   Type getInitializerInterfaceType();

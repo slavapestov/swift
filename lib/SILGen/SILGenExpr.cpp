@@ -2313,8 +2313,8 @@ static bool mayLieAboutNonOptionalReturn(SILModule &M,
   // Functions that return non-optional reference type and were imported from
   // Objective-C.
   if (auto func = dyn_cast<FuncDecl>(decl)) {
-    assert((isVerbatimNullableTypeInC(M, ArchetypeBuilder::mapTypeIntoContext(func, func->getResultInterfaceType()))
-            || ArchetypeBuilder::mapTypeIntoContext(func, func->getResultInterfaceType())->hasArchetype())
+    assert((isVerbatimNullableTypeInC(M, func->getResultType())
+            || func->getResultType()->hasArchetype())
            && "func's result type is not nullable?!");
     return func->hasClangNode();
   }
