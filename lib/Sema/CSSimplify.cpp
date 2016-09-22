@@ -2851,7 +2851,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclName memberName,
       if (favoredType && result.FavoredChoice == ~0U) {
         // Only try and favor monomorphic initializers.
         if (auto fnTypeWithSelf =
-            ctor->getInterfaceType()->getAs<FunctionType>()) {
+            ctor->getType()->getAs<FunctionType>()) {
           
           if (auto fnType =
                   fnTypeWithSelf->getResult()->getAs<FunctionType>()) {
@@ -2862,8 +2862,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclName memberName,
                 dyn_cast<ParenType>(argType.getPointer())) {
               argType = parenType->getUnderlyingType();
             }
-
-            argType = ArchetypeBuilder::mapTypeIntoContext(ctor->getInnermostDeclContext(), argType);
+            
             if (argType->isEqual(favoredType))
               result.FavoredChoice = result.ViableCandidates.size();
           }
@@ -3025,7 +3024,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclName memberName,
     }
     
     // If the result's type contains delayed members, we need to force them now.
-    if (auto NT = dyn_cast<NominalType>(cand->getInterfaceType().getPointer())) {
+    if (auto NT = dyn_cast<NominalType>(cand->getType().getPointer())) {
       if (auto *NTD = dyn_cast<NominalTypeDecl>(NT->getDecl())) {
         TC.forceExternalDeclMembers(NTD);
       }

@@ -4878,6 +4878,9 @@ public:
     if (FD->isInvalid())
       return;
 
+    // This type check should have created a non-dependent type.
+    assert(!FD->getType()->hasTypeParameter());
+
     validateAttributes(TC, FD);
 
     // Member functions need some special validation logic.
