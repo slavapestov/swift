@@ -796,8 +796,8 @@ static void revertDependentTypeLoc(TypeLoc &tl) {
   tl.setType(Type(), /*validated=*/false);
 }
 
-/// Finalize the given generic parameter list, assigning archetypes to
-/// the generic parameters.
+/// Set generic parameter accessibility, and associate context archetypes
+/// with the DeclContext for debugging.
 void
 TypeChecker::finalizeGenericParamList(GenericParamList *genericParams,
                                       GenericSignature *genericSig,
@@ -813,13 +813,11 @@ TypeChecker::finalizeGenericParamList(GenericParamList *genericParams,
   access = std::max(access, Accessibility::Internal);
 
   for (auto GP : *genericParams) {
-    checkInheritanceClause(GP);
     if (!GP->hasAccessibility())
       GP->setAccessibility(access);
   }
 
 #ifndef NDEBUG
-  // Record archetype contexts.
   for (auto *paramTy : genericSig->getInnermostGenericParams()) {
     auto contextTy = genericEnv->mapTypeIntoContext(paramTy);
     if (auto *archetype = contextTy->getAs<ArchetypeType>())
