@@ -827,6 +827,46 @@ TypeChecker::finalizeGenericParamList(GenericParamList *genericParams,
         Context.ArchetypeContexts[archetype] = dc;
   }
 #endif
+
+  // Replace the generic parameters with their archetypes throughout the
+  // types in the requirements.
+  // FIXME: This should not be necessary at this level; it is a transitional
+  // step.
+  for (auto &Req : genericParams->getRequirements()) {
+    if (Req.isInvalid())
+      continue;
+
+    switch (Req.getKind()) {
+    case RequirementReprKind::TypeConstraint: {
+      revertDependentTypeLoc(Req.getSubjectLoc());
+      if (validateType(Req.getSubjectLoc(), dc)) {
+        Req.setInvalid();
+        continue;
+      }
+
+      revertDependentTypeLoc(Req.getConstraintLoc());
+      if (validateType(Req.getConstraintLoc(), dc)) {
+        Req.setInvalid();
+        continue;
+      }
+      break;
+    }
+
+    case RequirementReprKind::SameType:
+      revertDependentTypeLoc(Req.getFirstTypeLoc());
+      if (validateType(Req.getFirstTypeLoc(), dc)) {
+        Req.setInvalid();
+        continue;
+      }
+
+      revertDependentTypeLoc(Req.getSecondTypeLoc());
+      if (validateType(Req.getSecondTypeLoc(), dc)) {
+        Req.setInvalid();
+        continue;
+      }
+      break;
+    }
+  }
 }
 
 /// Revert the dependent types within the given generic parameter list.
