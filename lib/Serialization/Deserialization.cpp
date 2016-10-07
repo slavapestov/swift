@@ -889,7 +889,8 @@ GenericEnvironment *ModuleFile::readGenericEnvironment(
   if (interfaceToArchetypeMap.empty())
     return nullptr;
 
-  return GenericEnvironment::get(getContext(), interfaceToArchetypeMap);
+  return GenericEnvironment::get(getContext(), paramTypes,
+                                 interfaceToArchetypeMap);
 }
 
 std::pair<GenericSignature *, GenericEnvironment *>
