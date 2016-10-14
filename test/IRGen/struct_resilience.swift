@@ -176,3 +176,15 @@ public struct StructWithIndirectResilientEnum {
 // CHECK: call void @swift_initStructMetadata_UniversalStrategy([[INT]] 4, i8*** [[FIELDS_ADDR]], [[INT]]* {{.*}}, i8** [[VWT]])
 // CHECK: store atomic %swift.type* {{.*}} @_TMfV17struct_resilience26StructWithResilientStorage{{.*}}, %swift.type** @_TMLV17struct_resilience26StructWithResilientStorage release,
 // CHECK: ret void
+
+public struct ResilientStructWithMethod {
+  public func method() {}
+}
+
+public func partialApplyOfResilientMethod(r: ResilientStructWithMethod) {
+  _ = r.method
+}
+
+public func partialApplyOfResilientMethod(s: Size) {
+  _ = s.method
+}

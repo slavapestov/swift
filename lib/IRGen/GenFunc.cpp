@@ -923,7 +923,7 @@ static llvm::Function *emitPartialApplicationForwarder(IRGenModule &IGM,
 
   // If there's a data pointer required, grab it and load out the
   // extra, previously-curried parameters.
-  } else if (!layout->isKnownEmpty()) {
+  } else { //if (!layout->isKnownEmpty()) {
     unsigned origParamI = outType->getParameters().size();
     assert(layout->getElements().size() == conventions.size()
            && "conventions don't match context layout");
@@ -1355,9 +1355,9 @@ void irgen::emitFunctionPartialApplication(IRGenFunction &IGF,
                                                        layout);
 
   llvm::Value *data;
-  if (layout.isKnownEmpty()) {
+  /*if (layout.isKnownEmpty()) {
     data = IGF.IGM.RefCountedNull;
-  } else {
+  } else*/ {
     // Allocate a new object.
     HeapNonFixedOffsets offsets(IGF, layout);
 
