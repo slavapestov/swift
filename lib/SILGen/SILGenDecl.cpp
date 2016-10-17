@@ -1740,18 +1740,19 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
   RequirementSource source(RequirementSource::Explicit, SourceLoc());
 
   for (auto &reqt : reqtTy->getRequirements()) {
-    if (isSelfDerived(selfTy, reqt.getFirstType()))
-      continue;
-
     switch (reqt.getKind()) {
     case RequirementKind::Conformance:
     case RequirementKind::Superclass:
     case RequirementKind::WitnessMarker:
+      if (isSelfDerived(selfTy, reqt.getFirstType()))
+        continue;
+
       builder.addRequirement(reqt, source);
       break;
 
     case RequirementKind::SameType: {
-      if (isSelfDerived(selfTy, reqt.getSecondType()))
+      if (isSelfDerived(selfTy, reqt.getFirstType()) &&
+          isSelfDerived(selfTy, reqt.getSecondType()))
         continue;
 
       // Substitute the constrained types.
