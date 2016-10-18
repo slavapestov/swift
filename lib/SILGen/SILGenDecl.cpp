@@ -1689,13 +1689,11 @@ static bool isSelfDerived(Type selfTy, Type t) {
 /// requirement's type to get the type of the witness.
 static CanAnyFunctionType
 substSelfTypeIntoProtocolRequirementType(SILModule &M,
+                                         GenericEnvironment *reqtEnv,
                                          CanGenericFunctionType reqtTy,
-                                         ProtocolConformance *conformance) {
-  if (conformance == nullptr) {
-    // Default witness thunks just get the requirement type without
-    // substituting Self.
-    return reqtTy;
-  }
+                                         ProtocolConformance *conformance,
+                                         GenericEnvironment *&genericEnv,
+                                         SubstitutionMap &thunkSubs) {
 
   auto &C = M.getASTContext();
 
@@ -1775,6 +1773,8 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
   auto input = reqtTy->getInput().subst(subs)->getCanonicalType();
   auto result = reqtTy->getResult().subst(subs)->getCanonicalType();
 
+  CanAnyFunctionType reqtSubstTy;
+
   // The result might be fully concrete, if the witness had no generic
   // signature, and the requirement had no additional generic parameters
   // beyond `Self`.
@@ -1782,60 +1782,42 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
     builder.finalize(SourceLoc());
 
     auto *sig = builder.getGenericSignature();
+    genericEnv = builder.getGenericEnvironment();
 
-    return cast<GenericFunctionType>(
+    // Outer generic parameters come from the generic context of
+    // the conformance (which might not be the same as the generic
+    // context of the witness, if the witness is defined in a
+    // superclass, concrete extension or protocol extension).
+    if (auto *outerEnv = conformance->getGenericEnvironment()) {
+      for (auto pair : outerEnv->getArchetypeToInterfaceMap()) {
+        auto archetypeTy = pair.first->getCanonicalType();
+        auto substTy = pair.second;
+        auto contextTy = ArchetypeBuilder::mapTypeIntoContext(
+            M.getSwiftModule(), genericEnv, substTy);
+        thunkSubs.addSubstitution(archetypeTy, contextTy);
+      }
+    }
+
+    reqtSubstTy = cast<GenericFunctionType>(
       GenericFunctionType::get(sig, input, result, reqtTy->getExtInfo())
         ->getCanonicalType());
+  } else {
+    genericEnv = nullptr;
+
+    reqtSubstTy = CanFunctionType::get(input, result, reqtTy->getExtInfo());
   }
-
-  return CanFunctionType::get(input, result, reqtTy->getExtInfo());
-}
-
-static GenericEnvironment *
-getSubstitutedGenericEnvironment(SILModule &M,
-                                 GenericEnvironment *reqtEnv,
-                                 CanGenericSignature witnessSig,
-                                 ProtocolConformance *conformance) {
-  if (conformance == nullptr) {
-    // Default witness thunks just use the context archetypes of the requirement.
-    return reqtEnv;
-  }
-
-  SmallVector<GenericTypeParamType *, 4> genericParamTypes;
-  TypeSubstitutionMap witnessContextParams;
-
-  auto selfTy = conformance->getProtocol()->getSelfInterfaceType()
-      ->getCanonicalType();
-
-  // Outer generic parameters come from the generic context of
-  // the conformance (which might not be the same as the generic
-  // context of the witness, if the witness is defined in a
-  // superclass, concrete extension or protocol extension).
-  if (auto *outerEnv = conformance->getGenericEnvironment()) {
-    witnessContextParams = outerEnv->getInterfaceToArchetypeMap();
-    for (auto *paramTy : outerEnv->getGenericParams())
-      genericParamTypes.push_back(paramTy);
-  }
-
-  for (auto *paramTy : reqtEnv->getGenericParams().slice(1))
-    genericParamTypes.push_back(paramTy);
 
   // Inner generic parameters come from the requirement and
   // also map to the archetypes of the requirement.
-  for (auto pair : reqtEnv->getInterfaceToArchetypeMap()) {
-    // Skip the 'Self' parameter and friends.
-    if (isSelfDerived(selfTy, pair.first))
-      continue;
-
-    auto result = witnessContextParams.insert(pair);
-    assert(result.second);
+  for (auto pair : reqtEnv->getArchetypeToInterfaceMap()) {
+    auto archetypeTy = pair.first->getCanonicalType();
+    auto substTy = pair.second.subst(subs);
+    auto contextTy = ArchetypeBuilder::mapTypeIntoContext(
+        M.getSwiftModule(), genericEnv, substTy);
+    thunkSubs.addSubstitution(archetypeTy, contextTy);
   }
 
-  if (!witnessContextParams.empty())
-    return GenericEnvironment::get(M.getASTContext(), genericParamTypes,
-                                   witnessContextParams);
-
-  return nullptr;
+  return reqtSubstTy;
 }
 
 SILFunction *
@@ -1846,7 +1828,6 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
                                   IsFreeFunctionWitness_t isFree,
                                   ArrayRef<Substitution> witnessSubs) {
   auto requirementInfo = Types.getConstantInfo(requirement);
-  auto witnessInfo = Types.getConstantInfo(witness);
   unsigned witnessUncurryLevel = witness.uncurryLevel;
 
   // If the witness is a free function, consider the self argument
@@ -1860,11 +1841,37 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
   assert(requirement.uncurryLevel == witnessUncurryLevel &&
          "uncurry level of requirement and witness do not match");
 
+  GenericEnvironment *genericEnv = nullptr;
+
   // Work out the lowered function type of the SIL witness thunk.
   auto reqtOrigTy
     = cast<GenericFunctionType>(requirementInfo.LoweredInterfaceType);
-  auto reqtSubstTy
-    = substSelfTypeIntoProtocolRequirementType(M, reqtOrigTy, conformance);
+  CanAnyFunctionType reqtSubstTy;
+  if (conformance == nullptr) {
+    reqtSubstTy = reqtOrigTy;
+    genericEnv = requirementInfo.GenericEnv;
+  } else {
+    SubstitutionMap thunkSubs;
+    reqtSubstTy
+      = substSelfTypeIntoProtocolRequirementType(M, requirementInfo.GenericEnv,
+                                                 reqtOrigTy, conformance,
+                                                 genericEnv, thunkSubs);
+
+    // Remap witness substitutions to use the correct archetypes.
+    // Sema produces witness substitutions using a mix of archetypes
+    // from the requirement and the witness. To solve downstream
+    // issues in the SIL optimizer, we build all-new archetypes
+    // using the correct generic signature here.
+    //
+    // FIXME: Once Sema records witness substitutions in terms of
+    // interface types, this code as well as the code that builds
+    // thunkSubs in substSelfTypeIntoProtocolRequirementType() can
+    // be removed.
+    auto newWitnessSubs = getASTContext().AllocateCopy(witnessSubs);
+    for (unsigned i = 0, e = witnessSubs.size(); i < e; i++)
+      newWitnessSubs[i] = witnessSubs[i].subst(M.getSwiftModule(), thunkSubs);
+    witnessSubs = newWitnessSubs;
+  }
 
   // Lower the witness thunk type with the requirement's abstraction level.
   auto witnessSILFnType = getNativeSILFunctionType(M,
@@ -1900,16 +1907,6 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
     nameBuffer = mangler.finalize();
   }
 
-  CanGenericSignature witnessSig;
-  if (auto gft = dyn_cast<GenericFunctionType>(
-          witnessInfo.LoweredInterfaceType))
-    witnessSig = gft.getGenericSignature();
-
-  // Collect the generic environment for the witness.
-  GenericEnvironment *requirementEnv = requirementInfo.GenericEnv;
-  GenericEnvironment *witnessEnv = getSubstitutedGenericEnvironment(
-      M, requirementEnv, witnessSig, conformance);
-
   // If the thunked-to function is set to be always inlined, do the
   // same with the witness, on the theory that the user wants all
   // calls removed if possible, e.g. when we're able to devirtualize
@@ -1928,7 +1925,7 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
 
   auto *f = M.createFunction(
       linkage, nameBuffer, witnessSILFnType,
-      witnessEnv, SILLocation(witness.getDecl()),
+      genericEnv, SILLocation(witness.getDecl()),
       IsNotBare, IsTransparent, isFragile, IsThunk,
       SILFunction::NotRelevant, InlineStrategy);
 
@@ -1942,16 +1939,15 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
 
   // If the witness is a free function, there is no Self type.
   if (!isFree) {
-    // If we are emitting a witness thunk for a concrete conformance, Self is
-    // just the conforming type.
     if (conformance) {
-      selfType = conformance->getType();
-
-    // For default implementations, Self is the protocol archetype.
+      selfType = conformance->getInterfaceType();
     } else {
       auto *proto = cast<ProtocolDecl>(requirement.getDecl()->getDeclContext());
-      selfType = proto->getSelfTypeInContext();
+      selfType = proto->getSelfInterfaceType();
     }
+
+    selfType = ArchetypeBuilder::mapTypeIntoContext(
+        M.getSwiftModule(), genericEnv, selfType);
   }
 
   SILGenFunction gen(*this, *f);
