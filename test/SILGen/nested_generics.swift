@@ -202,6 +202,26 @@ func calls() {
 
 }
 
+protocol ProtocolWithGenericRequirement {
+  associatedtype T
+  associatedtype U
+  func method<V>(t: T, u: U, v: V) -> (T, U, V)
+}
+
+class OuterRing<T> {
+  class InnerRing<U> : ProtocolWithGenericRequirement {
+    func method<V>(t: T, u: U, v: V) -> (T, U, V) {
+      return (t, u, v)
+    }
+  }
+}
+
+class SubclassOfInner<T, U> : OuterRing<T>.InnerRing<U> {
+  override func method<V>(t: T, u: U, v: V) -> (T, U, V) {
+    return super.method(t: t, u: u, v: v)
+  }
+}
+
 // CHECK-LABEL: // reabstraction thunk helper from @callee_owned (@owned nested_generics.Pizzas<nested_generics.Pepper>.NewYork) -> (@unowned nested_generics.HotDogs.American) to @callee_owned (@owned nested_generics.Pizzas<nested_generics.Pepper>.NewYork) -> (@out nested_generics.HotDogs.American)
 // CHECK-LABEL: sil shared [transparent] [reabstraction_thunk] @_TTRXFo_oGCV15nested_generics6Pizzas7NewYorkVS_6Pepper___dVCS_7HotDogs8American_XFo_oGS1_S2____iS4__ : $@convention(thin) (@owned Pizzas<Pepper>.NewYork, @owned @callee_owned (@owned Pizzas<Pepper>.NewYork) -> HotDogs.American) -> @out HotDogs.American
 

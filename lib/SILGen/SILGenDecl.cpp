@@ -1725,18 +1725,39 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
 
   SmallVector<GenericTypeParamType*, 4> allParams;
 
+  unsigned depth = 0;
+
   // Add the outer generic signature of the witness.
   if (auto *outerSig = conformance->getGenericSignature()) {
     allParams.append(outerSig->getGenericParams().begin(),
                      outerSig->getGenericParams().end());
     builder.addGenericSignature(outerSig, nullptr);
+    depth = allParams.back()->getDepth() + 1;
   }
 
   // Now we look at the generic signature of the requirement.
   // We are going to drop `Self`, and requirements rooted in `Self`.
-  for (auto *param : reqtEnv->getGenericParams().slice(1)) {
-    allParams.push_back(param);
-    builder.addGenericParameter(param);
+  for (auto *paramTy : reqtEnv->getGenericParams().slice(1)) {
+    allParams.push_back(paramTy);
+#if 0
+    auto substParamTy =
+        GenericTypeParamType::get(depth, paramTy->getIndex(), C);
+#endif
+    auto substParamTy = paramTy;
+    builder.addGenericParameter(substParamTy);
+#if 0
+    subs.addSubstitution(paramTy->getCanonicalType(), substParamTy);
+#endif
+
+    auto archetypeTy = reqtEnv->mapTypeIntoContext(paramTy)
+        ->castTo<ArchetypeType>();
+    SmallVector<ProtocolConformanceRef, 1> conformances;
+    for (auto proto : archetypeTy->getConformsTo())
+      conformances.push_back(ProtocolConformanceRef(proto));
+#if 0
+    subs.addConformances(paramTy->getCanonicalType(),
+                         C.AllocateCopy(conformances));
+#endif
   }
 
   RequirementSource source(RequirementSource::Explicit, SourceLoc());
@@ -1745,12 +1766,22 @@ substSelfTypeIntoProtocolRequirementType(SILModule &M,
     switch (reqt.getKind()) {
     case RequirementKind::Conformance:
     case RequirementKind::Superclass:
-    case RequirementKind::WitnessMarker:
+    case RequirementKind::WitnessMarker: {
       if (isSelfDerived(selfTy, reqt.getFirstType()))
         continue;
 
-      builder.addRequirement(reqt, source);
+#if 0
+      auto first = reqt.getFirstType().subst(subs)->getCanonicalType();
+#endif
+      auto first = reqt.getFirstType();
+      auto second = reqt.getSecondType();
+      if (!first->isTypeParameter())
+        continue;
+
+      builder.addRequirement(Requirement(reqt.getKind(),
+                                         first, second), source);
       break;
+    }
 
     case RequirementKind::SameType: {
       if (isSelfDerived(selfTy, reqt.getFirstType()) &&
