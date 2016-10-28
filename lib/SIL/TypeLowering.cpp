@@ -612,9 +612,7 @@ namespace {
       if (Children.data() == nullptr) {
         SmallVector<Child, 4> children;
         lowerChildren(M, children);
-        auto isDependent = IsDependent_t(getLoweredType().hasTypeParameter());
-        auto buf = operator new(sizeof(Child) * children.size(), M.Types,
-                                isDependent);
+        auto buf = operator new(sizeof(Child) * children.size(), M.Types);
         memcpy(buf, children.data(), sizeof(Child) * children.size());
         Children = {reinterpret_cast<Child*>(buf), children.size()};
       }
@@ -942,38 +940,36 @@ namespace {
     : public TypeClassifierBase<LowerType, const TypeLowering *>
   {
     TypeConverter &TC;
-    IsDependent_t Dependent;
   public:
     LowerType(TypeConverter &TC, CanGenericSignature Sig,
-              ResilienceExpansion Expansion, IsDependent_t Dependent)
-      : TypeClassifierBase(TC.M, Sig, Expansion),
-        TC(TC), Dependent(Dependent) {}
+              ResilienceExpansion Expansion)
+      : TypeClassifierBase(TC.M, Sig, Expansion), TC(TC) {}
 
     const TypeLowering *handleTrivial(CanType type) {
       auto silType = SILType::getPrimitiveObjectType(type);
-      return new (TC, Dependent) TrivialTypeLowering(silType);
+      return new (TC) TrivialTypeLowering(silType);
     }
   
     const TypeLowering *handleReference(CanType type) {
       auto silType = SILType::getPrimitiveObjectType(type);
-      return new (TC, Dependent) ReferenceTypeLowering(silType);
+      return new (TC) ReferenceTypeLowering(silType);
     }
 
     const TypeLowering *handleAddressOnly(CanType type) {
       auto silType = SILType::getPrimitiveAddressType(type);
-      return new (TC, Dependent) AddressOnlyTypeLowering(silType);
+      return new (TC) AddressOnlyTypeLowering(silType);
     }
 
     const TypeLowering *
     visitLoadableUnownedStorageType(CanUnownedStorageType type) {
-      return new (TC, Dependent) LoadableUnownedTypeLowering(
+      return new (TC) LoadableUnownedTypeLowering(
                                   SILType::getPrimitiveObjectType(type));
     }
 
     const TypeLowering *
     visitBuiltinUnsafeValueBufferType(CanBuiltinUnsafeValueBufferType type) {
       auto silType = SILType::getPrimitiveAddressType(type);
-      return new (TC, Dependent) UnsafeValueBufferTypeLowering(silType);
+      return new (TC) UnsafeValueBufferTypeLowering(silType);
     }
 
     const TypeLowering *visitTupleType(CanTupleType tupleType) {
@@ -989,7 +985,7 @@ namespace {
       if (hasOnlyTrivialChildren)
         return handleTrivial(tupleType);
 
-      return new (TC, Dependent) LoadableTupleTypeLowering(tupleType);
+      return new (TC) LoadableTupleTypeLowering(tupleType);
     }
 
     const TypeLowering *visitAnyStructType(CanType structType, StructDecl *D) {
@@ -1019,7 +1015,7 @@ namespace {
 
       if (trivial)
         return handleTrivial(structType);
-      return new (TC, Dependent) LoadableStructTypeLowering(structType);
+      return new (TC) LoadableStructTypeLowering(structType);
     }
         
     const TypeLowering *visitAnyEnumType(CanType enumType, EnumDecl *D) {
@@ -1034,7 +1030,7 @@ namespace {
       // is still address only, because we don't know how many bits
       // are used for the discriminator.
       if (D->isIndirect()) {
-        return new (TC, Dependent) LoadableEnumTypeLowering(enumType);
+        return new (TC) LoadableEnumTypeLowering(enumType);
       }
 
       // If any of the enum elements have address-only data, the enum is
@@ -1072,7 +1068,7 @@ namespace {
       }
       if (trivial)
         return handleTrivial(enumType);
-      return new (TC, Dependent) LoadableEnumTypeLowering(enumType);
+      return new (TC) LoadableEnumTypeLowering(enumType);
     }
   };
 }
@@ -1094,20 +1090,16 @@ TypeConverter::~TypeConverter() {
   }
 }
 
-void *TypeLowering::operator new(size_t size, TypeConverter &tc,
-                                 IsDependent_t dependent) {
-  return dependent
-    ? tc.DependentBPA.Allocate(size, alignof(TypeLowering))
-    : tc.IndependentBPA.Allocate(size, alignof(TypeLowering));
+void *TypeLowering::operator new(size_t size, TypeConverter &tc) {
+  return tc.IndependentBPA.Allocate(size, alignof(TypeLowering));
 }
 
 const TypeLowering *TypeConverter::find(TypeKey k) {
   if (!k.isCacheable()) return nullptr;
 
-  auto &Types = k.isDependent() ? DependentTypes : IndependentTypes;
   auto ck = k.getCachingKey();
-  auto found = Types.find(ck);
-  if (found == Types.end())
+  auto found = IndependentTypes.find(ck);
+  if (found == IndependentTypes.end())
     return nullptr;
 
   assert(found->second && "type recursion not caught in Sema");
@@ -1117,9 +1109,7 @@ const TypeLowering *TypeConverter::find(TypeKey k) {
 void TypeConverter::insert(TypeKey k, const TypeLowering *tl) {
   if (!k.isCacheable()) return;
 
-  auto &Types = k.isDependent() ? DependentTypes : IndependentTypes;
-
-  Types[k.getCachingKey()] = tl;
+  IndependentTypes[k.getCachingKey()] = tl;
 }
 
 #ifndef NDEBUG
@@ -1247,7 +1237,7 @@ TypeConverter::getTypeLowering(AbstractionPattern origType,
   CanType substType = origSubstType->getCanonicalType();
   auto key = getTypeKey(origType, genericSig, substType, uncurryLevel);
   
-  assert((!key.isDependent() || genericSig)
+  assert((!substType->hasTypeParameter() || genericSig)
          && "dependent type outside of generic context?!");
   
   if (auto existing = find(key))
@@ -1263,8 +1253,7 @@ TypeConverter::getTypeLowering(AbstractionPattern origType,
     SILType loweredType = getLoweredType(origObjectType, substObjectType,
                                          uncurryLevel).getAddressType();
 
-    auto *theInfo = new (*this, key.isDependent())
-      TrivialTypeLowering(loweredType);
+    auto *theInfo = new (*this) TrivialTypeLowering(loweredType);
     insert(key, theInfo);
     return *theInfo;
   }
@@ -1444,8 +1433,8 @@ TypeConverter::getTypeLoweringForUncachedLoweredType(TypeKey key) {
   // FIXME: Get expansion from SILFunction
   auto *theInfo = LowerType(*this,
                             key.SubstSig,
-                            ResilienceExpansion::Minimal,
-                            key.isDependent()).visit(key.SubstType);
+                            ResilienceExpansion::Minimal)
+      .visit(key.SubstType);
 
   if (key.OrigType.isForeign()) {
     assert(theInfo->isLoadable() && "Cannot lower address-only type with "

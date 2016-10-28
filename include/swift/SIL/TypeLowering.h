@@ -84,13 +84,6 @@ inline CanSILFunctionType adjustFunctionType(CanSILFunctionType t,
 }
   
 
-/// Flag used to place context-dependent TypeLowerings in their own arena which
-/// can be disposed when a generic context is exited.
-enum IsDependent_t : unsigned {
-  IsNotDependent = false,
-  IsDependent = true
-};
-  
 /// Extended type information used by SIL.
 class TypeLowering {
 public:
@@ -322,10 +315,8 @@ public:
   }
 
   /// Allocate a new TypeLowering using the TypeConverter's allocator.
-  void *operator new(size_t size, TypeConverter &tc,
-                     IsDependent_t dependent);
-  void *operator new[](size_t size, TypeConverter &tc,
-                       IsDependent_t dependent);
+  void *operator new(size_t size, TypeConverter &tc);
+  void *operator new[](size_t size, TypeConverter &tc);
 
   // Forbid 'new FooTypeLowering' and try to forbid 'delete tl'.
   // The latter is made challenging because the existence of the
@@ -386,9 +377,6 @@ class TypeConverter {
   friend class TypeLowering;
 
   llvm::BumpPtrAllocator IndependentBPA;
-  /// BumpPtrAllocator for types dependent on contextual generic parameters,
-  /// which is reset when the generic context is popped.
-  llvm::BumpPtrAllocator DependentBPA;
 
   enum : unsigned {
     /// There is a unique entry with this uncurry level in the
@@ -447,12 +435,6 @@ class TypeConverter {
     bool isCacheable() const {
       return OrigType.hasCachingKey();
     }
-    
-    IsDependent_t isDependent() const {
-      if (SubstType->hasTypeParameter())
-        return IsDependent;
-      return IsNotDependent;
-    }
   };
 
   friend struct llvm::DenseMapInfo<CachingTypeKey>;
@@ -487,12 +469,7 @@ class TypeConverter {
   /// Insert a mapping into the cache.
   void insert(TypeKey k, const TypeLowering *tl);
   
-  /// Mapping for types independent on contextual generic parameters, which is
-  /// cleared when the generic context is popped.
   llvm::DenseMap<CachingTypeKey, const TypeLowering *> IndependentTypes;
-  /// Mapping for types dependent on contextual generic parameters, which is
-  /// cleared when the generic context is popped.
-  llvm::DenseMap<CachingTypeKey, const TypeLowering *> DependentTypes;
   
   llvm::DenseMap<SILDeclRef, SILConstantInfo> ConstantTypes;
   
