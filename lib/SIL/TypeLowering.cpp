@@ -428,34 +428,21 @@ namespace {
       }
 
       // Consult the type lowering.
-      type = getSubstitutedTypeForTypeLowering(type);
-      auto &lowering = M.Types.getTypeLowering(type);
+      auto &lowering = M.Types.getTypeLowering(
+          AbstractionPattern(Sig, type), type,
+          /*uncurryLevel=*/0, Sig);
       return handleClassificationFromLowering(type, lowering);
     }
 
     LoweredTypeKind visitAnyStructType(CanType type, StructDecl *D) {
       // Consult the type lowering.
-      type = getSubstitutedTypeForTypeLowering(type);
-      auto &lowering = M.Types.getTypeLowering(type);
+      auto &lowering = M.Types.getTypeLowering(
+          AbstractionPattern(Sig, type), type,
+          /*uncurryLevel=*/0, Sig);
       return handleClassificationFromLowering(type, lowering);
     }
 
   private:
-    CanType getSubstitutedTypeForTypeLowering(CanType type) {
-      // If we're using a generic signature different from
-      // M.Types.getCurGenericContext(), we have to map the
-      // type into context before asking for a type lowering
-      // because the rest of type lowering doesn't have a generic
-      // signature plumbed through.
-      if (Sig && type->hasTypeParameter()) {
-        auto builder = M.getASTContext().getOrCreateArchetypeBuilder(
-            Sig, M.getSwiftModule());
-        type = builder->substDependentType(type)->getCanonicalType();
-      }
-
-      return type;
-    }
-
     LoweredTypeKind handleClassificationFromLowering(CanType type,
                                            const TypeLowering &lowering) {
       if (lowering.isAddressOnly())
@@ -1252,11 +1239,15 @@ TypeConverter::getSILFunctionType(AbstractionPattern origType,
 const TypeLowering &
 TypeConverter::getTypeLowering(AbstractionPattern origType,
                                Type origSubstType,
-                               unsigned uncurryLevel) {
+                               unsigned uncurryLevel,
+                               CanGenericSignature genericSig) {
+  if (!genericSig)
+    genericSig = getCurGenericContext();
+
   CanType substType = origSubstType->getCanonicalType();
-  auto key = getTypeKey(origType, substType, uncurryLevel);
+  auto key = getTypeKey(origType, genericSig, substType, uncurryLevel);
   
-  assert((!key.isDependent() || CurGenericContext)
+  assert((!key.isDependent() || genericSig)
          && "dependent type outside of generic context?!");
   
   if (auto existing = find(key))
@@ -1294,7 +1285,8 @@ TypeConverter::getTypeLowering(AbstractionPattern origType,
   // that same result at this key if possible.
   AbstractionPattern origTypeForCaching =
     AbstractionPattern(CurGenericContext, loweredSubstType);
-  auto loweredKey = getTypeKey(origTypeForCaching, loweredSubstType, 0);
+  auto loweredKey = getTypeKey(origTypeForCaching, genericSig,
+                               loweredSubstType, 0);
 
   auto &lowering = getTypeLoweringForLoweredType(loweredKey);
   insert(key, &lowering);
@@ -1417,7 +1409,7 @@ CanType TypeConverter::getLoweredRValueType(AbstractionPattern origType,
 const TypeLowering &TypeConverter::getTypeLowering(SILType type) {
   auto loweredType = type.getSwiftRValueType();
   auto key = getTypeKey(AbstractionPattern(getCurGenericContext(), loweredType),
-                        loweredType, 0);
+                        getCurGenericContext(), loweredType, 0);
 
   return getTypeLoweringForLoweredType(key);
 }
@@ -1451,7 +1443,7 @@ TypeConverter::getTypeLoweringForUncachedLoweredType(TypeKey key) {
 
   // FIXME: Get expansion from SILFunction
   auto *theInfo = LowerType(*this,
-                            CanGenericSignature(),
+                            key.SubstSig,
                             ResilienceExpansion::Minimal,
                             key.isDependent()).visit(key.SubstType);
 
@@ -1842,7 +1834,6 @@ void TypeConverter::pushGenericContext(CanGenericSignature sig) {
     return;
   
   // GenericFunctionTypes shouldn't nest.
-  assert(DependentTypes.empty() && "already in generic context?!");
   assert(!CurGenericContext && "already in generic context!");
 
   CurGenericContext = sig;
@@ -1854,21 +1845,6 @@ void TypeConverter::popGenericContext(CanGenericSignature sig) {
     return;
 
   assert(CurGenericContext == sig && "unpaired push/pop");
-  
-  // Erase our cached TypeLowering objects and associated mappings for dependent
-  // types.
-  // Resetting the DependentBPA will deallocate but not run the destructor of
-  // the dependent TypeLowerings.
-  for (auto &ti : DependentTypes) {
-    // Destroy only the unique entries.
-    CanType srcType = ti.first.OrigType;
-    if (!srcType) continue;
-    CanType mappedType = ti.second->getLoweredType().getSwiftRValueType();
-    if (srcType == mappedType || isa<LValueType>(srcType))
-      ti.second->~TypeLowering();
-  }
-  DependentTypes.clear();
-  DependentBPA.Reset();
   CurGenericContext = nullptr;
 }
 

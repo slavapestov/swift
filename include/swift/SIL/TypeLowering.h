@@ -398,15 +398,17 @@ class TypeConverter {
   };
 
   struct CachingTypeKey {
-    GenericSignature *Sig;
+    GenericSignature *OrigSig;
     AbstractionPattern::CachingKey OrigType;
+    GenericSignature *SubstSig;
     CanType SubstType;
     unsigned UncurryLevel;
 
     friend bool operator==(const CachingTypeKey &lhs,
                            const CachingTypeKey &rhs) {
-      return lhs.Sig == rhs.Sig
+      return lhs.OrigSig == rhs.OrigSig
           && lhs.OrigType == rhs.OrigType
+          && lhs.SubstSig == rhs.SubstSig
           && lhs.SubstType == rhs.SubstType
           && lhs.UncurryLevel == rhs.UncurryLevel;
     }
@@ -419,6 +421,10 @@ class TypeConverter {
   struct TypeKey {
     /// An unsubstituted version of a type, dictating its abstraction patterns.
     AbstractionPattern OrigType;
+
+    /// The generic signature describing dependent types in the substituted
+    /// type.
+    CanGenericSignature SubstSig;
 
     /// The substituted version of the type, dictating the types that
     /// should be used in the lowered type.
@@ -433,6 +439,7 @@ class TypeConverter {
                    ? OrigType.getGenericSignature()
                    : nullptr),
                OrigType.getCachingKey(),
+               SubstSig,
                SubstType,
                UncurryLevel };
     }
@@ -450,9 +457,11 @@ class TypeConverter {
 
   friend struct llvm::DenseMapInfo<CachingTypeKey>;
   
-  TypeKey getTypeKey(AbstractionPattern origTy, CanType substTy,
+  TypeKey getTypeKey(AbstractionPattern origTy,
+                     CanGenericSignature substSig,
+                     CanType substTy,
                      unsigned uncurryLevel) {
-    return {origTy, substTy, uncurryLevel};
+    return {origTy, substSig, substTy, uncurryLevel};
   }
   
   struct OverrideKey {
@@ -573,7 +582,9 @@ public:
   /// patterns of the given original type.
   const TypeLowering &getTypeLowering(AbstractionPattern origType,
                                       Type substType,
-                                      unsigned uncurryLevel = 0);
+                                      unsigned uncurryLevel = 0,
+                                      CanGenericSignature genericSig
+                                          = CanGenericSignature());
 
   /// Returns the SIL TypeLowering for an already lowered SILType. If the
   /// SILType is an address, returns the TypeLowering for the pointed-to
@@ -587,8 +598,11 @@ public:
 
   // Returns the lowered SIL type for a Swift type.
   SILType getLoweredType(AbstractionPattern origType, Type substType,
-                         unsigned uncurryLevel = 0) {
-    return getTypeLowering(origType, substType, uncurryLevel).getLoweredType();
+                         unsigned uncurryLevel = 0,
+                         CanGenericSignature genericSig
+                            = CanGenericSignature()) {
+    return getTypeLowering(origType, substType, uncurryLevel, genericSig)
+        .getLoweredType();
   }
 
   SILType getLoweredLoadableType(Type t, unsigned uncurryLevel = 0) {
@@ -846,19 +860,22 @@ namespace llvm {
 
     // Use the second field because the first field can validly be null.
     static CachingTypeKey getEmptyKey() {
-      return {nullptr, APCachingKey(), CanTypeInfo::getEmptyKey(), 0};
+      return {nullptr, APCachingKey(), nullptr, CanTypeInfo::getEmptyKey(), 0};
     }
     static CachingTypeKey getTombstoneKey() {
-      return {nullptr, APCachingKey(), CanTypeInfo::getTombstoneKey(), 0};
+      return {nullptr, APCachingKey(), nullptr, CanTypeInfo::getTombstoneKey(), 0};
     }
     static unsigned getHashValue(CachingTypeKey val) {
-      auto hashSig =
-        DenseMapInfo<swift::GenericSignature *>::getHashValue(val.Sig);
+      auto hashOrigSig =
+        DenseMapInfo<swift::GenericSignature *>::getHashValue(val.OrigSig);
       auto hashOrig =
         CachingKeyInfo::getHashValue(val.OrigType);
       auto hashSubst =
         DenseMapInfo<swift::CanType>::getHashValue(val.SubstType);
-      return hash_combine(hashSig, hashOrig, hashSubst, val.UncurryLevel);
+      auto hashSubstSig =
+        DenseMapInfo<swift::GenericSignature *>::getHashValue(val.SubstSig);
+      return hash_combine(hashOrigSig, hashOrig, hashSubstSig, hashSubst,
+                          val.UncurryLevel);
     }
     static bool isEqual(CachingTypeKey LHS, CachingTypeKey RHS) {
       return LHS == RHS;
