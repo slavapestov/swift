@@ -2243,7 +2243,8 @@ CanSILFunctionType SILType::substFuncType(SILModule &silModule,
                                           const TypeSubstitutionMap &subs,
                                           CanSILFunctionType SrcTy,
                                           bool dropGenerics) {
-  SILTypeSubstituter STST(silModule, astModule, subs, CanGenericSignature());
+  SILTypeSubstituter STST(silModule, astModule, subs,
+                          silModule.Types.getCurGenericContext());
   return STST.visitSILFunctionType(SrcTy, dropGenerics);
 }
 
