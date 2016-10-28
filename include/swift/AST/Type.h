@@ -56,14 +56,8 @@ enum class SubstFlags {
   /// If a type cannot be produced because some member type is
   /// missing, place an 'error' type into the position of the base.
   UseErrorType = 0x01,
-  /// Allow substitutions to recurse into SILFunctionTypes.
-  /// Normally, SILType::subst() should be used for lowered
-  /// types, however in special cases where the substitution
-  /// is just changing between contextual and interface type
-  /// representations, using Type::subst() is allowed.
-  AllowLoweredTypes = 0x02,
   /// Map member types to their desugared witness type.
-  DesugarMemberTypes = 0x04,
+  DesugarMemberTypes = 0x02,
 };
 
 /// Options for performing substitutions into a type.

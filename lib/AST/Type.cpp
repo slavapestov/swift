@@ -2862,8 +2862,7 @@ static Type substType(
     const TypeSubstitutionMap &substitutions,
     SubstOptions options) {
   return derivedType.transform([&](Type type) -> Type {
-    assert((options.contains(SubstFlags::AllowLoweredTypes) ||
-            !isa<SILFunctionType>(type.getPointer())) &&
+    assert(!isa<SILFunctionType>(type.getPointer()) &&
            "should not be doing AST type-substitution on a lowered SIL type;"
            "use SILType::subst");
 
