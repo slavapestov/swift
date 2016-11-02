@@ -268,3 +268,10 @@ func useNested(_ ii: Int, hni: HasNested<Int>,
   xis = xfs
 }
 
+// Extension of nested generic type
+extension OuterGeneric.MidNonGeneric {
+
+  // Make sure 'D' can be found with unqualified lookup
+  func takesD(d: D) {}
+
+}

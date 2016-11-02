@@ -2798,20 +2798,26 @@ Type TypeResolver::buildProtocolType(
 Type TypeChecker::substMemberTypeWithBase(Module *module,
                                           const TypeDecl *member,
                                           Type baseTy) {
-  Type memberType = member->getDeclaredInterfaceType();
-
   // The declared interface type for a generic type will have the type
   // arguments; strip them off.
-  if (auto nominalTypeDecl = dyn_cast<NominalTypeDecl>(member)) {
-    if (auto boundGenericTy = memberType->getAs<BoundGenericType>()) {
-      memberType = UnboundGenericType::get(
-                     const_cast<NominalTypeDecl *>(nominalTypeDecl),
-                     boundGenericTy->getParent(),
-                     Context);
+  if (isa<NominalTypeDecl>(member)) {
+    auto memberType = member->getDeclaredType();
+    if (baseTy->is<ModuleType>())
+      baseTy = Type();
+    if (auto *unboundGenericType = memberType->getAs<UnboundGenericType>()) {
+      return UnboundGenericType::get(
+          unboundGenericType->getDecl(), baseTy,
+          unboundGenericType->getASTContext());
+    } else if (auto *nominalType = memberType->getAs<NominalType>()) {
+      return NominalType::get(
+          nominalType->getDecl(), baseTy,
+          nominalType->getASTContext());
     }
+    llvm_unreachable("Not a nominal type?");
+  } else {
+    auto memberType = member->getDeclaredInterfaceType();
+    return baseTy->getTypeOfMember(module, member, this, memberType);
   }
-
-  return baseTy->getTypeOfMember(module, member, this, memberType);
 }
 
 Type TypeChecker::getSuperClassOf(Type type) {
