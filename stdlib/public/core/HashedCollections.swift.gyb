@@ -445,8 +445,23 @@ public struct Set<Element : Hashable> :
   internal typealias _VariantStorage = _VariantSetStorage<Element>
   internal typealias _NativeStorage = _NativeSetStorage<Element>
 
-  /// The index type for subscripting the set.
-  public typealias Index = SetIndex<Element>
+  /// Used to access the members in an instance of `Set<Element>`.
+  public struct Index : Comparable {
+    // Index for native storage is efficient.  Index for bridged NSSet is
+    // not, because neither NSEnumerator nor fast enumeration support moving
+    // backwards.  Even if they did, there is another issue: NSEnumerator does
+    // not support NSCopying, and fast enumeration does not document that it is
+    // safe to copy the state.  So, we cannot implement Index that is a value
+    // type for bridged NSSet in terms of Cocoa enumeration facilities.
+
+    internal typealias _NativeIndex = _NativeSetIndex<Element>
+    internal typealias _CocoaIndex = _CocoaSetIndex
+
+    internal typealias Key = Element
+    internal typealias Value = Element
+
+    internal var _value: SetIndexRepresentation<Element>
+  }
 
   internal var _variantStorage: _VariantStorage
 
@@ -1649,8 +1664,31 @@ public struct Dictionary<Key : Hashable, Value> :
   /// key-value pair.
   public typealias Element = (key: Key, value: Value)
 
-  /// The index type of a dictionary.
-  public typealias Index = DictionaryIndex<Key, Value>
+  /// Used to access the key-value pairs in an instance of
+  /// `Dictionary<Key, Value>`.
+  ///
+  /// Dictionary has two subscripting interfaces:
+  ///
+  /// 1. Subscripting with a key, yielding an optional value:
+  ///
+  ///        v = d[k]!
+  ///
+  /// 2. Subscripting with an index, yielding a key-value pair:
+  ///
+  ///        (k, v) = d[i]"""
+  public struct Index : Comparable {
+    // Index for native storage is efficient.  Index for bridged NSDictionary is
+    // not, because neither NSEnumerator nor fast enumeration support moving
+    // backwards.  Even if they did, there is another issue: NSEnumerator does
+    // not support NSCopying, and fast enumeration does not document that it is
+    // safe to copy the state.  So, we cannot implement Index that is a value
+    // type for bridged NSDictionary in terms of Cocoa enumeration facilities.
+
+    internal typealias _NativeIndex = _NativeDictionaryIndex<Key, Value>
+    internal typealias _CocoaIndex = _CocoaDictionaryIndex
+
+    internal var _value: DictionaryIndexRepresentation<Key, Value>
+  }
 
   internal var _variantStorage: _VariantStorage
 
@@ -4579,50 +4617,9 @@ internal enum ${Self}IndexRepresentation<${TypeParametersDecl}> {
   case _cocoa(_CocoaIndex)
 }
 
-%{
-if Self == 'Set':
-  SubscriptingWithIndexDoc = """\
-/// Used to access the members in an instance of `Set<Element>`."""
-elif Self == 'Dictionary':
-  SubscriptingWithIndexDoc = """\
-/// Used to access the key-value pairs in an instance of
-/// `Dictionary<Key, Value>`.
-///
-/// Dictionary has two subscripting interfaces:
-///
-/// 1. Subscripting with a key, yielding an optional value:
-///
-///        v = d[k]!
-///
-/// 2. Subscripting with an index, yielding a key-value pair:
-///
-///        (k, v) = d[i]"""
-}%
+public typealias ${Self}Index<${TypeParametersDecl}> = ${Self}<${TypeParameters}>.Index
 
-${SubscriptingWithIndexDoc}
-public struct ${Self}Index<${TypeParametersDecl}> :
-  Comparable {
-  // FIXME(ABI)#34 (Nesting types in generics): `DictionaryIndex` and `SetIndex` should
-  // be nested types.
-  // rdar://problem/17002096
-
-  // Index for native storage is efficient.  Index for bridged NS${Self} is
-  // not, because neither NSEnumerator nor fast enumeration support moving
-  // backwards.  Even if they did, there is another issue: NSEnumerator does
-  // not support NSCopying, and fast enumeration does not document that it is
-  // safe to copy the state.  So, we cannot implement Index that is a value
-  // type for bridged NS${Self} in terms of Cocoa enumeration facilities.
-
-  internal typealias _NativeIndex = _Native${Self}Index<${TypeParameters}>
-  internal typealias _CocoaIndex = _Cocoa${Self}Index
-
-%if Self == 'Set':
-  internal typealias Key = ${TypeParameters}
-  internal typealias Value = ${TypeParameters}
-%end
-
-  internal var _value: ${Self}IndexRepresentation<${TypeParameters}>
-
+extension ${Self}.Index {
   @_versioned
   internal static func _native(_ index: _NativeIndex) -> ${Self}Index {
     return ${Self}Index(_value: ._native(index))
@@ -4681,9 +4678,7 @@ public struct ${Self}Index<${TypeParametersDecl}> :
 #endif
     }
   }
-}
 
-extension ${Self}Index {
   public static func == (
     lhs: ${Self}Index<${TypeParameters}>,
     rhs: ${Self}Index<${TypeParameters}>
