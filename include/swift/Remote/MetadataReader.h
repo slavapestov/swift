@@ -564,17 +564,26 @@ public:
   /// instance size and alignment.
   std::tuple<bool, unsigned, unsigned>
   readInstanceSizeAndAlignmentFromClassMetadata(StoredPointer MetadataAddress) {
-    auto superMeta = readMetadata(MetadataAddress);
-    if (!superMeta || superMeta->getKind() != MetadataKind::Class)
+    auto meta = readMetadata(MetadataAddress);
+    if (!meta || meta->getKind() != MetadataKind::Class)
       return std::make_tuple(false, 0, 0);
 
-    auto super = cast<TargetClassMetadata<Runtime>>(superMeta);
+    auto classMeta = cast<TargetClassMetadata<Runtime>>(meta);
 
     // See swift_initClassMetadata_UniversalStrategy()
     uint32_t size, align;
-    if (super->isTypeMetadata()) {
-      size = super->getInstanceSize();
-      align = super->getInstanceAlignMask() + 1;
+
+    if (classMeta->isTypeMetadata()) {
+      auto super =
+          this->readSuperClassFromClassMetadata(MetadataAddress);
+      if (super) {
+        size = super->getInstanceSize();
+        align = 1;
+      } else {
+        // 12 on 32-bit, 16 on 64-bit
+        size = sizeof(uintptr_t) + sizeof(uint64_t);
+        align = 1;
+      }
     } else {
       // The following algorithm only works on the non-fragile Apple runtime.
 
@@ -583,9 +592,9 @@ public:
       if (!roDataPtr)
         return std::make_tuple(false, 0, 0);
 
-      auto address = roDataPtr + sizeof(uint32_t) * 2;
+      auto address = roDataPtr + sizeof(uint32_t) * 1;
 
-      align = 16; // malloc alignment guarantee
+      align = 1;
 
       if (!Reader->readInteger(RemoteAddress(address), &size))
         return std::make_tuple(false, 0, 0);

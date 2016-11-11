@@ -1272,7 +1272,7 @@ const TypeInfo *TypeConverter::getClassInstanceTypeInfo(const TypeRef *TR,
 
     // Now, align the size as necessary as we can begin laying out our
     // fields.
-    builder.addField(0, align, /*numExtraInhabitants=*/0);
+    //builder.addField(0, align, /*numExtraInhabitants=*/0);
 
     for (auto Field : getBuilder().getFieldTypeRefs(TR, FD))
       builder.addField(Field.Name, Field.TR);
