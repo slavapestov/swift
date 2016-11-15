@@ -561,17 +561,17 @@ public:
   }
 
   /// Given a remote pointer to class metadata, attempt to discover its class
-  /// instance size and alignment.
-  std::tuple<bool, unsigned, unsigned>
+  /// instance size and whether fields should use the resilient layout strategy.
+  std::tuple<bool, unsigned, bool>
   readInstanceSizeAndAlignmentFromClassMetadata(StoredPointer MetadataAddress) {
     auto meta = readMetadata(MetadataAddress);
     if (!meta || meta->getKind() != MetadataKind::Class)
-      return std::make_tuple(false, 0, 0);
+      return std::make_tuple(false, 0, false);
 
     auto classMeta = cast<TargetClassMetadata<Runtime>>(meta);
 
     // See swift_initClassMetadata_UniversalStrategy()
-    uint32_t size, align;
+    uint32_t size;
 
     // If this class is defined in Objective-C, return the value of the
     // InstanceStart field from the ROData.
@@ -581,18 +581,16 @@ public:
       // Grab the RO-data pointer.  This part is not ABI.
       StoredPointer roDataPtr = readObjCRODataPtr(MetadataAddress);
       if (!roDataPtr)
-        return std::make_tuple(false, 0, 0);
+        return std::make_tuple(false, 0, false);
 
       // Get the address of the InstanceStart field.
       auto address = roDataPtr + sizeof(uint32_t) * 1;
 
-      align = 16;
-
       if (!Reader->readInteger(RemoteAddress(address), &size))
-        return std::make_tuple(false, 0, 0);
+        return std::make_tuple(false, 0, false);
 
-      assert((size & (align - 1)) == 0);
-      return std::make_tuple(true, size, align);
+      // Fields are laid out with the resilient strategy.
+      return std::make_tuple(true, size, true);
     }
 
     // Otherwise, it is a Swift class. Get the superclass.
@@ -600,7 +598,7 @@ public:
     if (superAddr) {
       auto superMeta = readMetadata(superAddr);
       if (!superMeta || superMeta->getKind() != MetadataKind::Class)
-        return std::make_tuple(false, 0, 0);
+        return std::make_tuple(false, 0, false);
 
       auto superclassMeta = cast<TargetClassMetadata<Runtime>>(superMeta);
 
@@ -611,34 +609,29 @@ public:
         // Superclass is a Swift class. Get the size of an instance,
         // and start layout from that.
         size = superclassMeta->getInstanceSize();
-        align = 1;
 
-        return std::make_tuple(true, size, align);
+        // Fields are laid out with the fragile strategy.
+        return std::make_tuple(true, size, false);
       }
 
       std::string superName;
       if (!readObjCClassName(superAddr, superName))
-        return std::make_tuple(false, 0, 0);
+        return std::make_tuple(false, 0, false);
 
       if (superName != "SwiftObject") {
         // Grab the RO-data pointer.  This part is not ABI.
         StoredPointer roDataPtr = readObjCRODataPtr(superAddr);
         if (!roDataPtr)
-          return std::make_tuple(false, 0, 0);
+          return std::make_tuple(false, 0, false);
 
         // Get the address of the InstanceSize field.
         auto address = roDataPtr + sizeof(uint32_t) * 2;
 
-        // malloc alignment boundary.
-        align = 16;
-
         if (!Reader->readInteger(RemoteAddress(address), &size))
-          return std::make_tuple(false, 0, 0);
+          return std::make_tuple(false, 0, false);
 
-        // Round up to the alignment boundary.
-        size = (size + (align - 1)) & ~(align - 1);
-
-        return std::make_tuple(true, size, align);
+        // Fields are laid out with the resilient strategy.
+        return std::make_tuple(true, size, true);
       }
 
       // Fall through.
@@ -646,9 +639,9 @@ public:
 
     // No superclass, just an object header. 12 bytes on 32-bit, 16 on 64-bit
     size = Reader->getPointerSize() + sizeof(uint64_t);
-    align = 1;
 
-    return std::make_tuple(true, size, align);
+    // Fields are laid out with the fragile strategy.
+    return std::make_tuple(true, size, false);
   }
 
   /// Given a remote pointer to metadata, attempt to turn it into a type.

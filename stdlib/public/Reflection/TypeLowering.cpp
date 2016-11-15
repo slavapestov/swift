@@ -1252,7 +1252,7 @@ const TypeInfo *TypeConverter::getTypeInfo(const TypeRef *TR) {
 
 const TypeInfo *TypeConverter::getClassInstanceTypeInfo(const TypeRef *TR,
                                                         unsigned start,
-                                                        unsigned align) {
+                                                        bool resilient) {
   const FieldDescriptor *FD = getBuilder().getFieldTypeInfo(TR);
   if (FD == nullptr) {
     DEBUG(std::cerr << "No field descriptor: "; TR->dump());
@@ -1265,6 +1265,18 @@ const TypeInfo *TypeConverter::getClassInstanceTypeInfo(const TypeRef *TR,
     // Lower the class's fields using substitutions from the
     // TypeRef to make field types concrete.
     RecordTypeInfoBuilder builder(*this, RecordKind::ClassInstance);
+
+    if (resilient) {
+      // Calculate alignment
+      unsigned alignment = 1;
+      for (auto Field : getBuilder().getFieldTypeRefs(TR, FD)) {
+        auto *TI = getTypeInfo(TR);
+        if (TI != nullptr)
+          alignment = std::max(alignment, TI->getAlignment());
+      }
+
+      start = ((start + alignment - 1) & ~(alignment - 1));
+    }
 
     // Start layout from the given instance start offset. This should
     // be the superclass instance size.
