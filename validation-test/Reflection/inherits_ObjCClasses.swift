@@ -12,6 +12,22 @@ import Foundation
 import ObjCClasses
 import SwiftReflectionTest
 
+class SecondClassAG : NSObject {
+  var xx: Int
+
+  init(t: Int) { self.xx = t }
+}
+
+let ggg = SecondClassAG(t: 123)
+
+func g() -> Int {
+  return ggg.xx
+}
+
+g()
+
+// CHECK: aaa
+
 //// FirstClass -- base class, has one word-sized ivar
 
 // Variant A: 16 byte alignment
