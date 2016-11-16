@@ -39,8 +39,18 @@ static bool requiresHeapHeader(LayoutKind kind) {
 }
 
 /// Return the size of the standard heap header.
-Size irgen::getHeapHeaderSize(IRGenModule &IGM) {
-  return IGM.getPointerSize() + Size(8);
+Size irgen::getHeapHeaderSize(IRGenModule &IGM, ReferenceCounting refcount) {
+  switch (refcount) {
+  case ReferenceCounting::Native:
+    return IGM.getPointerSize() + Size(8);
+  case ReferenceCounting::ObjC:
+    return IGM.getPointerSize();
+  case ReferenceCounting::Unknown:
+  case ReferenceCounting::Block:
+  case ReferenceCounting::Bridge:
+  case ReferenceCounting::Error:
+    llvm_unreachable("Bad reference counting");
+  }
 }
 
 /// Perform structure layout on the given types.
@@ -62,7 +72,7 @@ StructLayout::StructLayout(IRGenModule &IGM, CanType astTy,
 
   // Add the heap header if necessary.
   if (requiresHeapHeader(layoutKind)) {
-    builder.addHeapHeader();
+    builder.addHeapHeader(ReferenceCounting::Native);
   }
 
   bool nonEmpty = builder.addFields(Elements, strategy);
@@ -182,11 +192,23 @@ Address ElementLayout::project(IRGenFunction &IGF, Address baseAddr,
   llvm_unreachable("bad element layout kind");
 }
 
-void StructLayoutBuilder::addHeapHeader() {
+void StructLayoutBuilder::addHeapHeader(ReferenceCounting refcount) {
   assert(StructFields.empty() && "adding heap header at a non-zero offset");
-  CurSize = getHeapHeaderSize(IGM);
+  CurSize = getHeapHeaderSize(IGM, refcount);
   CurAlignment = IGM.getPointerAlignment();
-  StructFields.push_back(IGM.RefCountedStructTy);
+  switch (refcount) {
+  case ReferenceCounting::Native:
+    StructFields.push_back(IGM.RefCountedStructTy);
+    break;
+  case ReferenceCounting::ObjC:
+    StructFields.push_back(IGM.ObjCObjectTy);
+    break;
+  case ReferenceCounting::Unknown:
+  case ReferenceCounting::Block:
+  case ReferenceCounting::Bridge:
+  case ReferenceCounting::Error:
+    llvm_unreachable("Bad reference counting");
+  }
 }
 
 bool StructLayoutBuilder::addFields(llvm::MutableArrayRef<ElementLayout> elts,

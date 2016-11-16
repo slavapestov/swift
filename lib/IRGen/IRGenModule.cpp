@@ -309,8 +309,12 @@ IRGenModule::IRGenModule(IRGenerator &irgen,
   for (unsigned i = 0; i != MaxNumValueWitnesses; ++i)
     ValueWitnessTys[i] = nullptr;
 
-  ObjCPtrTy = llvm::StructType::create(getLLVMContext(), "objc_object")
-                ->getPointerTo(DefaultAS);
+  ObjCObjectTy = llvm::StructType::create(getLLVMContext(), "objc_object");
+
+  llvm::Type *objCObjectElts[] = { TypeMetadataPtrTy };
+  ObjCObjectTy->setBody(objCObjectElts);
+
+  ObjCPtrTy = ObjCObjectTy->getPointerTo(DefaultAS);
   BridgeObjectPtrTy = llvm::StructType::create(getLLVMContext(), "swift.bridge")
                 ->getPointerTo(DefaultAS);
 

@@ -234,7 +234,7 @@ public:
 
   /// Add a swift heap header to the layout.  This must be the first
   /// call to the layout.
-  void addHeapHeader();
+  void addHeapHeader(ReferenceCounting refcounting);
 
   /// Add a number of fields to the layout.  The field layouts need
   /// only have the TypeInfo set; the rest will be filled out.
@@ -385,7 +385,7 @@ public:
                      const llvm::Twine &name = "") const;
 };
 
-Size getHeapHeaderSize(IRGenModule &IGM);
+Size getHeapHeaderSize(IRGenModule &IGM, ReferenceCounting refcount);
 
 /// Different policies for accessing a physical field.
 enum class FieldAccess : uint8_t {

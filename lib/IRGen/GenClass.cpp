@@ -181,10 +181,11 @@ namespace {
       : StructLayoutBuilder(IGM)
     {
       // Start by adding a heap header.
-      addHeapHeader();
+      auto theClass = classType.getClassOrBoundGenericClass();
+      ReferenceCounting refcount = getReferenceCountingForClass(IGM, theClass);
+      addHeapHeader(refcount);
 
       // Next, add the fields for the given class.
-      auto theClass = classType.getClassOrBoundGenericClass();
       assert(theClass);
       addFieldsForClass(theClass, classType);
       

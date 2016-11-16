@@ -433,6 +433,7 @@ public:
   llvm::StructType *ProtocolDescriptorStructTy; /// %swift.protocol = type { ... }
   llvm::PointerType *ProtocolDescriptorPtrTy; /// %swift.protocol*
   union {
+    llvm::StructType *ObjCObjectTy;         /// %objc_object = type { ... }
     llvm::PointerType *ObjCPtrTy;        /// %objc_object*
     llvm::PointerType *UnknownRefCountedPtrTy;
   };
