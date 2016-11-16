@@ -311,15 +311,16 @@ IRGenModule::IRGenModule(IRGenerator &irgen,
 
   ObjCObjectTy = llvm::StructType::create(getLLVMContext(), "objc_object");
 
-  llvm::Type *objCObjectElts[] = { TypeMetadataPtrTy };
-  ObjCObjectTy->setBody(objCObjectElts);
-
   ObjCPtrTy = ObjCObjectTy->getPointerTo(DefaultAS);
   BridgeObjectPtrTy = llvm::StructType::create(getLLVMContext(), "swift.bridge")
                 ->getPointerTo(DefaultAS);
 
   ObjCClassStructTy = llvm::StructType::create(LLVMContext, "objc_class");
   ObjCClassPtrTy = ObjCClassStructTy->getPointerTo(DefaultAS);
+
+  llvm::Type *objCObjectElts[] = { ObjCClassPtrTy };
+  ObjCObjectTy->setBody(objCObjectElts);
+
   llvm::Type *objcClassElts[] = {
     ObjCClassPtrTy,
     ObjCClassPtrTy,
