@@ -32,11 +32,13 @@ g()
 
 // Variant A: 16 byte alignment
 class FirstClassA : FirstClass {
+  var xy: Int = 0
   var xx: int4 = [1,2,3,4]
 }
 
 let firstClassA = FirstClassA()
-reflect(object: firstClassA)
+print(firstClassA.xx)
+//reflect(object: firstClassA)
 
 // CHECK-64: Type reference:
 // CHECK-64: (class inherits_ObjCClasses.FirstClassA)
@@ -52,7 +54,7 @@ class FirstClassB : FirstClass {
 }
 
 let firstClassB = FirstClassB()
-reflect(object: firstClassB)
+//reflect(object: firstClassB)
 
 // CHECK-64: Type reference:
 // CHECK-64: (class inherits_ObjCClasses.FirstClassB)
@@ -68,11 +70,13 @@ reflect(object: firstClassB)
 
 // Variant A: 16 byte alignment
 class SecondClassA : SecondClass {
+  var xy: Int = 0
   var xx: int4 = [1,2,3,4]
 }
 
 let secondClassA = SecondClassA()
-reflect(object: secondClassA)
+//reflect(object: secondClassA)
+print(secondClassA.xx)
 
 // CHECK-64: Type reference:
 // CHECK-64: (class inherits_ObjCClasses.SecondClassA)
@@ -88,7 +92,7 @@ class SecondClassB : SecondClass {
 }
 
 let secondClassB = SecondClassB()
-reflect(object: secondClassB)
+//reflect(object: secondClassB)
 
 // CHECK-64: Type reference:
 // CHECK-64: (class inherits_ObjCClasses.SecondClassB)
@@ -104,11 +108,13 @@ reflect(object: secondClassB)
 
 // Variant A: 16 byte alignment
 class ThirdClassA : ThirdClass {
+  var xy: Int = 0
   var xx: int4 = [1,2,3,4]
 }
 
 let thirdClassA = ThirdClassA()
-reflect(object: thirdClassA)
+//reflect(object: thirdClassA)
+print(thirdClassA.xx)
 
 // CHECK-64: Type reference:
 // CHECK-64: (class inherits_ObjCClasses.ThirdClassA)
@@ -124,7 +130,7 @@ class ThirdClassB : ThirdClass {
 }
 
 let thirdClassB = ThirdClassB()
-reflect(object: thirdClassB)
+//reflect(object: thirdClassB)
 
 // CHECK-64: Type reference:
 // CHECK-64: (class inherits_ObjCClasses.ThirdClassB)
@@ -136,4 +142,4 @@ reflect(object: thirdClassB)
 // CHECK-64:       (field name=_value offset=0
 // CHECK-64:         (builtin size=8 alignment=8 stride=8 num_extra_inhabitants=0)))))
 
-doneReflecting()
+//doneReflecting()
