@@ -1801,7 +1801,7 @@ suggestPotentialOverloads(SourceLoc loc, bool isResult) {
     Type type;
 
     if (auto *SD = dyn_cast_or_null<SubscriptDecl>(cand.getDecl())) {
-      type = isResult ? SD->getElementType() : SD->getIndicesType();
+      type = isResult ? SD->getElementType() : SD->getIndicesInterfaceType();
     } else {
       type = isResult ? cand.getResultType() : cand.getArgumentType();
     }

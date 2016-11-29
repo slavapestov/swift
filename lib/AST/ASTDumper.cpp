@@ -515,7 +515,8 @@ namespace {
         printGenericParameters(OS, GTD->getGenericParams());
 
       if (!isa<AbstractFunctionDecl>(VD) &&
-          !isa<EnumElementDecl>(VD)) {
+          !isa<EnumElementDecl>(VD) &&
+          !isa<SubscriptDecl>(VD)) {
         OS << " type='";
         if (VD->hasType())
           VD->getType().print(OS);

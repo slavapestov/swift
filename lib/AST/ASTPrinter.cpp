@@ -2769,7 +2769,7 @@ void PrintAST::visitSubscriptDecl(SubscriptDecl *decl) {
   recordDeclLoc(decl, [&]{
     Printer << "subscript";
   }, [&] { // Parameters
-    printParameterList(decl->getIndices(), decl->getIndicesType(),
+    printParameterList(decl->getIndices(), decl->getIndicesInterfaceType(),
                        /*Curried=*/false,
                        /*isAPINameByDefault*/[]()->bool{return false;});
   });

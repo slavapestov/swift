@@ -944,7 +944,8 @@ static void checkRedeclaration(TypeChecker &tc, ValueDecl *current) {
     const auto markInvalid = [&current, &tc]() {
       current->setInvalid();
       if (!isa<AbstractFunctionDecl>(current) &&
-          !isa<EnumElementDecl>(current))
+          !isa<EnumElementDecl>(current) &&
+          !isa<SubscriptDecl>(current))
         if (current->hasType())
           current->overwriteType(ErrorType::get(tc.Context));
       if (current->hasInterfaceType())
@@ -3743,7 +3744,7 @@ public:
       return;
     }
 
-    if (SD->hasType())
+    if (SD->hasInterfaceType())
       return;
 
     assert(SD->getDeclContext()->isTypeContext() &&
@@ -3758,18 +3759,16 @@ public:
                                            TypeResolutionOptions());
 
     if (isInvalid) {
-      SD->overwriteType(ErrorType::get(TC.Context));
       SD->setInterfaceType(ErrorType::get(TC.Context));
       SD->setInvalid();
     } else {
       // Hack to deal with types already getting set during type validation
       // above.
-      if (SD->hasType())
+      if (SD->hasInterfaceType())
         return;
 
       // Relabel the indices according to the subscript name.
       auto indicesTy = SD->getIndices()->getType(TC.Context);
-      SD->setType(FunctionType::get(indicesTy, SD->getElementType()));
 
       // If we're in a generic context, set the interface type.
       auto indicesIfaceTy = ArchetypeBuilder::mapTypeOutOfContext(

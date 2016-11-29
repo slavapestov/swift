@@ -3086,7 +3086,7 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
   case decls_block::SUBSCRIPT_DECL: {
     DeclContextID contextID;
     bool isImplicit, isObjC;
-    TypeID declTypeID, elemTypeID, interfaceTypeID;
+    TypeID elemTypeID, interfaceTypeID;
     DeclID getterID, setterID, materializeForSetID;
     DeclID addressorID, mutableAddressorID, willSetID, didSetID;
     DeclID overriddenID;
@@ -3096,7 +3096,7 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
 
     decls_block::SubscriptLayout::readRecord(scratch, contextID,
                                              isImplicit, isObjC, rawStorageKind,
-                                             declTypeID, elemTypeID,
+                                             elemTypeID,
                                              interfaceTypeID,
                                              getterID, setterID,
                                              materializeForSetID,
@@ -3142,9 +3142,9 @@ Decl *ModuleFile::getDecl(DeclID DID, Optional<DeclContext *> ForcedContext) {
       }
     }
 
-    subscript->setType(getType(declTypeID));
-    if (auto interfaceType = getType(interfaceTypeID))
-      subscript->setInterfaceType(interfaceType);
+    auto interfaceType = getType(interfaceTypeID);
+    subscript->setInterfaceType(interfaceType);
+
     if (isImplicit)
       subscript->setImplicit();
     if (auto overridden = cast_or_null<SubscriptDecl>(getDecl(overriddenID))) {

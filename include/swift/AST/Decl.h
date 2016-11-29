@@ -2006,6 +2006,7 @@ public:
   bool hasType() const {
     assert(!isa<AbstractFunctionDecl>(this) &&
            !isa<EnumElementDecl>(this) &&
+           !isa<SubscriptDecl>(this) &&
            "functions and enum case constructors only have an interface type");
     return !TypeAndAccess.getPointer().isNull();
   }
@@ -2013,6 +2014,7 @@ public:
   Type getType() const {
     assert(!isa<AbstractFunctionDecl>(this) &&
            !isa<EnumElementDecl>(this) &&
+           !isa<SubscriptDecl>(this) &&
            "functions and enum case constructors only have an interface type");
     assert(hasType() && "declaration has no type set yet");
     return TypeAndAccess.getPointer();
@@ -4425,9 +4427,6 @@ public:
   ParameterList *getIndices() { return Indices; }
   const ParameterList *getIndices() const { return Indices; }
   void setIndices(ParameterList *p);
-
-  /// Retrieve the type of the indices.
-  Type getIndicesType() const;
 
   /// Retrieve the interface type of the indices.
   Type getIndicesInterfaceType() const;
