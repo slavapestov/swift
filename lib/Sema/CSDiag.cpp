@@ -842,17 +842,17 @@ namespace {
     UncurriedCandidate(ValueDecl *decl, unsigned level)
       : declOrExpr(decl), level(level) {
 
-      if (isa<AbstractFunctionDecl>(decl) || isa<EnumElementDecl>(decl)) {
-        entityType = decl->getInterfaceType();
-        if (auto *GFT = entityType->getAs<GenericFunctionType>()) {
-          auto *DC = decl->getInnermostDeclContext();
-          auto *M = DC->getParentModule();
-          auto subs = DC->getGenericEnvironmentOfContext()
-              ->getForwardingSubstitutions(M);
-          entityType = stripSubstitutedTypes(GFT->substGenericArgs(subs));
-        }
+      entityType = decl->getInterfaceType();
+      auto *DC = decl->getInnermostDeclContext();
+      if (auto *GFT = entityType->getAs<GenericFunctionType>()) {
+        auto *M = DC->getParentModule();
+        auto subs = DC->getGenericEnvironmentOfContext()
+            ->getForwardingSubstitutions(M);
+        entityType = stripSubstitutedTypes(GFT->substGenericArgs(subs));
       } else {
-        entityType = decl->getType();
+        entityType = ArchetypeBuilder::mapTypeIntoContext(
+          DC, entityType);
+        entityType = stripSubstitutedTypes(entityType);
       }
 
       // For some reason, subscripts and properties don't include their self
