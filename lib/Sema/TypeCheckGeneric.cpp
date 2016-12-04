@@ -364,7 +364,6 @@ static bool checkGenericFuncSignature(TypeChecker &tc,
                                       AbstractFunctionDecl *func,
                                       GenericTypeResolver &resolver) {
   bool badType = false;
-  func->setIsBeingTypeChecked();
 
   // Check the generic parameter list.
   auto genericParams = func->getGenericParams();
@@ -406,7 +405,6 @@ static bool checkGenericFuncSignature(TypeChecker &tc,
     }
   }
 
-  func->setIsBeingTypeChecked(false);
   return badType;
 }
 
@@ -464,11 +462,6 @@ TypeChecker::validateGenericFuncSignature(AbstractFunctionDecl *func) {
   DependentGenericTypeResolver dependentResolver(builder);
   if (checkGenericFuncSignature(*this, &builder, func, dependentResolver))
     invalid = true;
-
-  // If this triggered a recursive validation, back out: we're done.
-  // FIXME: This is an awful hack.
-  if (func->hasInterfaceType())
-    return nullptr;
 
   // Finalize the generic requirements.
   (void)builder.finalize(func->getLoc());
@@ -820,13 +813,6 @@ void TypeChecker::revertGenericParamList(GenericParamList *genericParams) {
 }
 
 void TypeChecker::validateGenericTypeSignature(GenericTypeDecl *typeDecl) {
-  if (typeDecl->isValidatingGenericSignature())
-    return;
-
-  typeDecl->setIsValidatingGenericSignature();
-
-  SWIFT_DEFER { typeDecl->setIsValidatingGenericSignature(false); };
-
   auto *gp = typeDecl->getGenericParams();
   auto *dc = typeDecl->getDeclContext();
 

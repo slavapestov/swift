@@ -28,7 +28,7 @@ public protocol P {
 
 public struct S<A: P> where A.T == S<A> {
 // expected-note@-1 {{type declared here}}
-// expected-error@-2 {{type 'S' references itself}}
+// expected-error@-2 {{generic struct 'S' references itself}}
   func f(a: A.T) {
     g(a: id(t: a))
     // expected-error@-1 {{cannot convert value of type 'A.T' to expected argument type 'S<_>'}}
@@ -58,7 +58,7 @@ protocol PI {
 
 struct SI<A: PI> : I where A : I, A.T == SI<A> {
 // expected-note@-1 {{type declared here}}
-// expected-error@-2 {{type 'SI' references itself}}
+// expected-error@-2 {{generic struct 'SI' references itself}}
   func ggg<T : I>(t: T.Type) -> T {
     return T()
   }

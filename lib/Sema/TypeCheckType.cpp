@@ -532,9 +532,9 @@ Type TypeChecker::applyGenericArguments(Type type, TypeDecl *decl,
   }
 
   // FIXME: More principled handling of circularity.
-  if (!genericDecl->getGenericSignature()) {
+  if (!genericDecl->hasValidSignature()) {
     diagnose(loc, diag::recursive_type_reference,
-             genericDecl->getName());
+             genericDecl->getDescriptiveKind(), genericDecl->getName());
     diagnose(genericDecl, diag::type_declared_here);
     return ErrorType::get(Context);
   }
@@ -707,10 +707,11 @@ static Type resolveTypeDecl(TypeChecker &TC, TypeDecl *typeDecl, SourceLoc loc,
     TC.validateDecl(typeDecl);
   }
 
-  // FIXME: More principled handling of circularity.
+  // If we didn't bail out with an unsatisfiedDependency,
+  // and were not able to validate recursively, bail out.
   if (!typeDecl->hasInterfaceType()) {
     TC.diagnose(loc, diag::recursive_type_reference,
-                typeDecl->getName());
+                typeDecl->getDescriptiveKind(), typeDecl->getName());
     TC.diagnose(typeDecl->getLoc(), diag::type_declared_here);
     return ErrorType::get(TC.Context);
   }

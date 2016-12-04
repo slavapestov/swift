@@ -359,16 +359,10 @@ void TypeChecker::checkInheritanceClause(Decl *decl,
   for (unsigned i = 0, n = inheritedClause.size(); i != n; ++i) {
     auto &inherited = inheritedClause[i];
 
-    {
-      bool iBTC = decl->isBeingTypeChecked();
-      decl->setIsBeingTypeChecked();
-      SWIFT_DEFER { decl->setIsBeingTypeChecked(iBTC); };
-
-      // Validate the type.
-      if (validateType(inherited, DC, options, resolver)) {
-        inherited.setInvalidType(Context);
-        continue;
-      }
+    // Validate the type.
+    if (validateType(inherited, DC, options, resolver)) {
+      inherited.setInvalidType(Context);
+      continue;
     }
 
     auto inheritedTy = inherited.getType();
@@ -1005,14 +999,14 @@ static void validatePatternBindingDecl(TypeChecker &tc,
                                        unsigned entryNumber) {
   // If the pattern already has a type, we're done.
   if (binding->getPattern(entryNumber)->hasType() ||
-      binding->isBeingTypeChecked())
+      binding->isBeingValidated())
     return;
-  
-  binding->setIsBeingTypeChecked();
+
+  binding->setIsBeingValidated();
 
   // On any path out of this function, make sure to mark the binding as done
   // being type checked.
-  SWIFT_DEFER { binding->setIsBeingTypeChecked(false); };
+  SWIFT_DEFER { binding->setIsBeingValidated(false); };
 
   // Resolve the pattern.
   auto *pattern = tc.resolvePattern(binding->getPattern(entryNumber),
@@ -3340,10 +3334,10 @@ void TypeChecker::validateDecl(PrecedenceGroupDecl *PGD) {
   checkDeclAttributesEarly(PGD);
   checkDeclAttributes(PGD);
 
-  if (PGD->isInvalid() || PGD->isBeingTypeChecked())
+  if (PGD->isInvalid() || PGD->isBeingValidated())
     return;
-  PGD->setIsBeingTypeChecked(true);
-  SWIFT_DEFER { PGD->setIsBeingTypeChecked(false); };
+  PGD->setIsBeingValidated();
+  SWIFT_DEFER { PGD->setIsBeingValidated(false); };
 
   bool isInvalid = false;
 
@@ -3523,14 +3517,14 @@ public:
   }
 
   void visitBoundVariable(VarDecl *VD) {
+    TC.validateDecl(VD);
+    
     if (!VD->getType()->isMaterializable()) {
       TC.diagnose(VD->getStartLoc(), diag::var_type_not_materializable,
                   VD->getType());
       VD->markInvalid();
     }
 
-    TC.validateDecl(VD);
-    
     // Check the behavior.
     checkVarBehavior(VD, TC);
 
@@ -3638,7 +3632,7 @@ public:
     for (unsigned i = 0, e = PBD->getNumPatternEntries(); i != e; ++i)
       validatePatternBindingDecl(TC, PBD, i);
 
-    if (PBD->isBeingTypeChecked())
+    if (PBD->isBeingValidated())
       return;
 
     // If the initializers in the PBD aren't checked yet, do so now.
@@ -3778,11 +3772,6 @@ public:
       SD->setInterfaceType(ErrorType::get(TC.Context));
       SD->setInvalid();
     } else {
-      // Hack to deal with types already getting set during type validation
-      // above.
-      if (SD->hasInterfaceType())
-        return;
-
       auto indicesIfaceTy = SD->getIndices()->getInterfaceType(TC.Context);
 
       auto elementTy = SD->getElementTypeLoc().getType();
@@ -3860,12 +3849,19 @@ public:
     if (!IsSecondPass) {
       if (!TAD->getAliasType())
         TC.validateDecl(TAD);
-      
+
+      if (TAD->isBeingValidated())
+        return;
+
+      TAD->setIsBeingValidated();
+      SWIFT_DEFER { TAD->setIsBeingValidated(false); };
+
       TypeResolutionOptions options;
       if (TAD->getFormalAccess() <= Accessibility::FilePrivate)
         options |= TR_KnownNonCascadingDependency;
 
-      if (TAD->getDeclContext()->isModuleScopeContext()) {
+      if (TAD->getDeclContext()->isModuleScopeContext() &&
+          TAD->getGenericParams() == nullptr) {
         IterativeTypeChecker ITC(TC);
         ITC.satisfy(requestResolveTypeDecl(TAD));
       } else {
@@ -3914,16 +3910,11 @@ public:
   }
   
   void visitAssociatedTypeDecl(AssociatedTypeDecl *assocType) {
-    if (assocType->isBeingTypeChecked()) {
-
-      if (!assocType->isInvalid()) {
-        assocType->setInvalid();
-        TC.diagnose(assocType->getLoc(), diag::circular_type_alias, assocType->getName());
-      }
+    if (assocType->isBeingValidated())
       return;
-    }
 
-    assocType->setIsBeingTypeChecked();
+    assocType->setIsBeingValidated();
+    SWIFT_DEFER { assocType->setIsBeingValidated(false); };
 
     TC.checkDeclAttributesEarly(assocType);
     TC.validateAccessibility(assocType);
@@ -3936,8 +3927,6 @@ public:
       defaultDefinition.setInvalidType(TC.Context);
     }
     TC.checkDeclAttributes(assocType);
-
-    assocType->setIsBeingTypeChecked(false);
   }
 
   bool checkUnsupportedNestedGeneric(NominalTypeDecl *NTD) {
@@ -4177,6 +4166,8 @@ public:
       checkUnsupportedNestedGeneric(CD);
 
       TC.validateDecl(CD);
+      if (!CD->hasValidSignature())
+        return;
 
       TC.ValidatedTypes.remove(CD);
 
@@ -4297,9 +4288,9 @@ public:
       return;
     }
 
-    PD->setIsBeingTypeChecked();
-    
     TC.validateDecl(PD);
+    if (!PD->hasValidSignature())
+      return;
 
     {
       // Check for circular inheritance within the protocol.
@@ -4325,7 +4316,6 @@ public:
         }
       }
     }
-    PD->setIsBeingTypeChecked(false);
 
     // Check the members.
     for (auto Member : PD->getMembers())
@@ -4354,8 +4344,6 @@ public:
   bool semaFuncDecl(FuncDecl *FD, GenericTypeResolver &resolver) {
     TC.checkForForbiddenPrefix(FD);
 
-    FD->setIsBeingTypeChecked();
-
     bool badType = false;
     if (!FD->getBodyResultTypeLoc().isNull()) {
       TypeResolutionOptions options;
@@ -4370,8 +4358,6 @@ public:
     if (!badType) {
       badType = semaFuncParamPatterns(FD, resolver);
     }
-
-    FD->setIsBeingTypeChecked(false);
 
     if (badType) {
       FD->setInterfaceType(ErrorType::get(TC.Context));
@@ -4701,8 +4687,10 @@ public:
     TC.checkDeclAttributesEarly(FD);
     TC.computeAccessibility(FD);
 
-    if (FD->hasInterfaceType())
+    if (FD->hasInterfaceType() || FD->isBeingValidated())
       return;
+
+    FD->setIsBeingValidated();
 
     // Bind operator functions to the corresponding operator declaration.
     if (FD->isOperator())
@@ -4789,16 +4777,10 @@ public:
       FD->setGenericEnvironment(env);
     } else if (FD->getDeclContext()->getGenericSignatureOfContext()) {
       (void)TC.validateGenericFuncSignature(FD);
-      if (FD->getGenericEnvironment() == nullptr) {
-        // Revert all of the types within the signature of the function.
-        TC.revertGenericFuncSignature(FD);
-        FD->setGenericEnvironment(
-            FD->getDeclContext()->getGenericEnvironmentOfContext());
-      } else {
-        // Recursively satisfied.
-        // FIXME: This is an awful hack.
-        return;
-      }
+      // Revert all of the types within the signature of the function.
+      TC.revertGenericFuncSignature(FD);
+      FD->setGenericEnvironment(
+          FD->getDeclContext()->getGenericEnvironmentOfContext());
     }
 
     // Set the context type of 'self'.
@@ -4807,11 +4789,17 @@ public:
 
     // Type check the parameters and return type again, now with archetypes.
     GenericTypeToArchetypeResolver resolver(FD);
-    if (semaFuncDecl(FD, resolver))
+    if (semaFuncDecl(FD, resolver)) {
+      FD->setIsBeingValidated(false);
       return;
+    }
 
     if (!FD->getGenericSignatureOfContext())
       TC.configureInterfaceType(FD, FD->getGenericSignature());
+
+    // We want the function to be available for name lookup as soon
+    // as it has a valid interface type.
+    FD->setIsBeingValidated(false);
 
     if (FD->isInvalid())
       return;
@@ -6158,20 +6146,11 @@ public:
       checkAccessibility(TC, EED);
       return;
     }
-    if (EED->hasInterfaceType())
+    if (EED->hasInterfaceType() || EED->isBeingValidated())
       return;
     
-    if (EED->isBeingTypeChecked()) {
-      TC.diagnose(EED->getLoc(), diag::circular_reference);
-      EED->setInterfaceType(ErrorType::get(TC.Context));
-      EED->setInvalid();
-      return;
-    }
-    
-
     TC.checkDeclAttributesEarly(EED);
     TC.validateAccessibility(EED);
-    EED->setIsBeingTypeChecked();
 
     // Only attempt to validate the argument type or raw value if the element
     // is not currently being validated.
@@ -6216,14 +6195,10 @@ public:
       EED->setRecursiveness(ElementRecursiveness::NotRecursive);
     }
 
-    {
-      SWIFT_DEFER { EED->setIsBeingTypeChecked(false); };
-
-      // Now that we have an argument type we can set the element's declared
-      // type.
-      if (!EED->hasInterfaceType() && !EED->computeType())
-        return;
-    }
+    // Now that we have an argument type we can set the element's declared
+    // type.
+    if (!EED->hasInterfaceType() && !EED->computeType())
+      return;
 
     // Require the carried type to be materializable.
     if (EED->getArgumentType() &&
@@ -6335,8 +6310,10 @@ public:
       checkAccessibility(TC, CD);
       return;
     }
-    if (CD->hasInterfaceType())
+    if (CD->hasInterfaceType() || CD->isBeingValidated())
       return;
+
+    CD->setIsBeingValidated();
 
     TC.checkDeclAttributesEarly(CD);
     TC.computeAccessibility(CD);
@@ -6423,20 +6400,19 @@ public:
     // Set the context type of 'self'.
     recordSelfContextType(CD);
 
-    {
-      CD->setIsBeingTypeChecked(true);
-      SWIFT_DEFER { CD->setIsBeingTypeChecked(false); };
-
-      // Type check the constructor parameters.
-      GenericTypeToArchetypeResolver resolver(CD);
-      if (CD->isInvalid() || semaFuncParamPatterns(CD, resolver)) {
-        CD->setInterfaceType(ErrorType::get(TC.Context));
-        CD->setInvalid();
-      } else {
-        if (!CD->getGenericSignatureOfContext())
-          TC.configureInterfaceType(CD, CD->getGenericSignature());
-      }
+    // Type check the constructor parameters.
+    GenericTypeToArchetypeResolver resolver(CD);
+    if (CD->isInvalid() || semaFuncParamPatterns(CD, resolver)) {
+      CD->setInterfaceType(ErrorType::get(TC.Context));
+      CD->setInvalid();
+    } else {
+      if (!CD->getGenericSignatureOfContext())
+        TC.configureInterfaceType(CD, CD->getGenericSignature());
     }
+
+    // We want the constructor to be available for name lookup as soon
+    // as it has a valid interface type.
+    CD->setIsBeingValidated(false);
 
     validateAttributes(TC, CD);
 
@@ -6553,9 +6529,13 @@ public:
         TC.definedFunctions.push_back(DD);
     }
 
-    if (IsSecondPass || DD->hasInterfaceType()) {
+    if (IsSecondPass ||
+        DD->hasInterfaceType() ||
+        DD->isBeingValidated()) {
       return;
     }
+
+    DD->setIsBeingValidated();
 
     assert(DD->getDeclContext()->isTypeContext()
            && "Decl parsing must prevent destructors outside of types!");
@@ -6585,6 +6565,8 @@ public:
 
     if (!DD->getGenericSignatureOfContext())
       TC.configureInterfaceType(DD, DD->getGenericSignature());
+
+    DD->setIsBeingValidated(false);
 
     // Do this before markAsObjC() to diagnose @nonobjc better
     validateAttributes(TC, DD);
@@ -6834,27 +6816,32 @@ void TypeChecker::checkDeclCircularity(NominalTypeDecl *decl) {
   }
 }
 
-void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
+void TypeChecker::validateDecl(ValueDecl *D) {
+  // Generic parameters are validated as part of their context.
+  if (isa<GenericTypeParamDecl>(D))
+    return;
+
+  // Handling validation failure due to re-entrancy is left
+  // up to the caller, who must call hasValidSignature() to
+  // check that validateDecl() returned a fully-formed decl.
+  if (D->isBeingValidated())
+    return;
+
   if (hasEnabledForbiddenTypecheckPrefix())
     checkForForbiddenPrefix(D);
 
   validateAccessibility(D);
 
-  // Validate the context. We don't do this for generic parameters,
-  // because those are validated as part of their context.
-  if (D->getKind() != DeclKind::GenericTypeParam) {
-    auto dc = D->getDeclContext();
-    if (auto nominal = dyn_cast<NominalTypeDecl>(dc)) {
-      if (nominal->isBeingTypeChecked())
-        return;
-
-      validateDecl(nominal, false);
-    } else if (auto ext = dyn_cast<ExtensionDecl>(dc)) {
-      if (ext->isBeingTypeChecked())
-        return;
-
-      validateExtension(ext);
-    }
+  // Validate the context.
+  auto dc = D->getDeclContext();
+  if (auto nominal = dyn_cast<NominalTypeDecl>(dc)) {
+    validateDecl(nominal);
+    if (!nominal->hasValidSignature())
+      return;
+  } else if (auto ext = dyn_cast<ExtensionDecl>(dc)) {
+    validateExtension(ext);
+    if (!ext->hasValidSignature())
+      return;
   }
 
   SWIFT_FUNC_STAT;
@@ -6876,89 +6863,34 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
     return;
       
   case DeclKind::GenericTypeParam:
-  case DeclKind::AssociatedType: {
-    auto typeParam = cast<AbstractTypeParamDecl>(D);
-    auto assocType = dyn_cast<AssociatedTypeDecl>(typeParam);
-    DeclContext *DC = typeParam->getDeclContext();
+    llvm_unreachable("handled above");
 
-    if (assocType && !assocType->hasInterfaceType())
+  case DeclKind::AssociatedType: {
+    auto assocType = cast<AssociatedTypeDecl>(D);
+    if (!assocType->hasInterfaceType())
         assocType->computeType();
 
-    if (!resolveTypeParams || DC->isValidGenericContext()) {
-      if (assocType) {
-        DeclChecker(*this, false, false).visitAssociatedTypeDecl(assocType);
-      }
-
-      break;
-    }
-    
-    // FIXME: Avoid full check in these cases?
-    switch (DC->getContextKind()) {
-    case DeclContextKind::SerializedLocal:
-    case DeclContextKind::Module:
-    case DeclContextKind::FileUnit:
-    case DeclContextKind::TopLevelCodeDecl:
-    case DeclContextKind::Initializer:
-    case DeclContextKind::SubscriptDecl:
-      llvm_unreachable("cannot have type params");
-
-    case DeclContextKind::GenericTypeDecl: {
-      auto nominal = cast<GenericTypeDecl>(DC);
-      validateDecl(nominal);
-      if (!typeParam->hasAccessibility())
-        typeParam->setAccessibility(std::max(nominal->getFormalAccess(),
-                                             Accessibility::Internal));
-      break;
-    }
-
-    case DeclContextKind::ExtensionDecl:
-      llvm_unreachable("not yet implemented");
-    
-    case DeclContextKind::AbstractClosureExpr:
-      llvm_unreachable("cannot have type params");
-
-    case DeclContextKind::AbstractFunctionDecl: {
-      if (auto nominal = dyn_cast<NominalTypeDecl>(DC->getParent()))
-        typeCheckDecl(nominal, true);
-      else if (auto extension = dyn_cast<ExtensionDecl>(DC->getParent()))
-        typeCheckDecl(extension, true);
-      auto fn = cast<AbstractFunctionDecl>(DC);
-      typeCheckDecl(fn, true);
-      assert(!assocType && "Associated type inside function?");
-      if (!typeParam->hasAccessibility())
-        typeParam->setAccessibility(std::max(fn->getFormalAccess(),
-                                             Accessibility::Internal));
-      break;
-    }
-    }
+    DeclChecker(*this, false, false).visitAssociatedTypeDecl(assocType);
     break;
   }
-  
 
   case DeclKind::TypeAlias: {
     // Type aliases may not have an underlying type yet.
     auto typeAlias = cast<TypeAliasDecl>(D);
     
     // Compute the declared type.
-    if (typeAlias->getAliasType()) {
-      
-      // If we have are recursing into validation and already have a type set...
-      // but also don't have the underlying type computed, then we are
-      // recursing into interface validation while checking the body of the
-      // type.  Reject this with a circularity diagnostic.
-      if (!typeAlias->hasUnderlyingType()) {
-        diagnose(typeAlias->getLoc(), diag::circular_type_alias,
-                 typeAlias->getName());
-        typeAlias->getUnderlyingTypeLoc().setInvalidType(Context);
-        typeAlias->setInvalid();
-        typeAlias->setInterfaceType(ErrorType::get(Context));
-      }
+    if (typeAlias->getAliasType())
       return;
-    }
+
     typeAlias->computeType();
 
     // Check generic parameters, if needed.
-    validateGenericTypeSignature(typeAlias);
+    {
+      typeAlias->setIsBeingValidated();
+      SWIFT_DEFER { typeAlias->setIsBeingValidated(false); };
+
+      validateGenericTypeSignature(typeAlias);
+    }
     
     // Otherwise, perform the heavy lifting now.
     typeCheckDecl(typeAlias, true);
@@ -6972,11 +6904,14 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
     if (nominal->hasInterfaceType())
       return;
     nominal->computeType();
+    nominal->setIsBeingValidated();
 
     // Check generic parameters, if needed.
     validateGenericTypeSignature(nominal);
+    nominal->setIsBeingValidated(false);
 
     checkInheritanceClause(D);
+
     validateAttributes(*this, D);
 
     // Mark a class as @objc. This must happen before checking its members.
@@ -7008,10 +6943,7 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
     if (proto->hasInterfaceType())
       return;
     proto->computeType();
-
-    auto iBTC = proto->isBeingTypeChecked();
-    proto->setIsBeingTypeChecked();
-    SWIFT_DEFER { proto->setIsBeingTypeChecked(iBTC); };
+    proto->setIsBeingValidated();
 
     // Resolve the inheritance clauses for each of the associated
     // types.
@@ -7026,6 +6958,7 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
     (void) gp;
 
     validateGenericTypeSignature(proto);
+    proto->setIsBeingValidated(false);
 
     // Record inherited protocols.
     resolveInheritedProtocols(proto);
@@ -7075,7 +7008,7 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
         }
         recordSelfContextType(cast<AbstractFunctionDecl>(VD->getDeclContext()));
       } else if (PatternBindingDecl *PBD = VD->getParentPatternBinding()) {
-        if (PBD->isBeingTypeChecked()) {
+        if (PBD->isBeingValidated()) {
           diagnose(VD, diag::pattern_used_in_type, VD->getName());
 
         } else {
@@ -7230,7 +7163,7 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
   }
   }
 
-  assert(D->hasInterfaceType());
+  assert(D->hasValidSignature());
 }
 
 
@@ -7261,7 +7194,7 @@ void TypeChecker::validateAccessibility(ValueDecl *D) {
     break;
 
   case DeclKind::GenericTypeParam:
-    // Ultimately handled in validateDecl() with resolveTypeParams=true.
+    // Ultimately handled in generic signature validation.
     return;
 
   case DeclKind::AssociatedType: {
@@ -7387,9 +7320,6 @@ checkExtensionGenericParams(TypeChecker &tc, ExtensionDecl *ext, Type type,
     builder.inferRequirements(TypeLoc::withoutLoc(extInterfaceType), outermostList);
   };
 
-  ext->setIsBeingTypeChecked(true);
-  SWIFT_DEFER { ext->setIsBeingTypeChecked(false); };
-
   // Validate the generic type signature.
   auto *env = tc.checkGenericEnvironment(genericParams,
                                          ext->getDeclContext(), nullptr,
@@ -7426,6 +7356,9 @@ void TypeChecker::validateExtension(ExtensionDecl *ext) {
     return;
 
   ext->setValidated();
+
+  ext->setIsBeingValidated();
+  SWIFT_DEFER { ext->setIsBeingValidated(false); };
 
   // If the extension is already known to be invalid, we're done.
   if (ext->isInvalid())
