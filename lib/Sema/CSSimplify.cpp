@@ -1709,7 +1709,8 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
     if (tuple1 && !tuplesWithMismatchedNames) {
       // A single-element tuple can be a trivial subtype of a scalar.
       if (tuple1->getNumElements() == 1 &&
-          !tuple1->getElement(0).isVararg()) {
+          !tuple1->getElement(0).isVararg() &&
+          kind >= ConstraintKind::Conversion) {
         conversionsOrFixes.push_back(
           ConversionRestrictionKind::TupleToScalar);
       }

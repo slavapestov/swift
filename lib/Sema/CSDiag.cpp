@@ -3062,19 +3062,22 @@ bool FailureDiagnosis::diagnoseGeneralConversionFailure(Constraint *constraint){
   // contain a member var 'boolValue', now does not convert to Bool. This block
   // tries to add a specific diagnosis/fixit to explicitly invoke 'boolValue'.
   if (toType->isBool()) {
-    auto LookupResult = CS->TC.lookupMember(CS->DC, fromType,
-      DeclName(CS->TC.Context.getIdentifier("boolValue")));
-    if (!LookupResult.empty()) {
-      if (isa<VarDecl>(LookupResult.begin()->Decl)) {
-        if (anchor->canAppendCallParentheses())
-          diagnose(anchor->getLoc(), diag::types_not_convertible_use_bool_value,
-                   fromType, toType).fixItInsertAfter(anchor->getEndLoc(),
-                                                      ".boolValue");
-        else
-          diagnose(anchor->getLoc(), diag::types_not_convertible_use_bool_value,
-            fromType, toType).fixItInsert(anchor->getStartLoc(), "(").
-              fixItInsertAfter(anchor->getEndLoc(), ").boolValue");
-        return true;
+    if (fromType->isExistentialType() ||
+        fromType->getAnyNominal()) {
+      auto LookupResult = CS->TC.lookupMember(CS->DC, fromType,
+        DeclName(CS->TC.Context.getIdentifier("boolValue")));
+      if (!LookupResult.empty()) {
+        if (isa<VarDecl>(LookupResult.begin()->Decl)) {
+          if (anchor->canAppendCallParentheses())
+            diagnose(anchor->getLoc(), diag::types_not_convertible_use_bool_value,
+                     fromType, toType).fixItInsertAfter(anchor->getEndLoc(),
+                                                        ".boolValue");
+          else
+            diagnose(anchor->getLoc(), diag::types_not_convertible_use_bool_value,
+              fromType, toType).fixItInsert(anchor->getStartLoc(), "(").
+                fixItInsertAfter(anchor->getEndLoc(), ").boolValue");
+          return true;
+        }
       }
     }
   }

@@ -2456,7 +2456,7 @@ namespace {
         return Type();
 
       // Condition must convert to Bool.
-      CS.addConstraint(ConstraintKind::Conversion,
+      CS.addConstraint(ConstraintKind::Subtype,
                        CS.getType(expr->getCondExpr()),
                        boolDecl->getDeclaredType(),
                        CS.getConstraintLocator(expr->getCondExpr()));

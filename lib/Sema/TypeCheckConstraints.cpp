@@ -2169,7 +2169,7 @@ bool TypeChecker::typeCheckCondition(Expr *&expr, DeclContext *dc) {
         return true;
       
       // Condition must convert to Bool.
-      cs.addConstraint(ConstraintKind::Conversion, expr->getType(),
+      cs.addConstraint(ConstraintKind::Subtype, expr->getType(),
                        boolDecl->getDeclaredType(),
                        cs.getConstraintLocator(expr));
       return false;
