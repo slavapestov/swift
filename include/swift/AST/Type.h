@@ -217,6 +217,9 @@ public:
              TypeSubstitutionFn substitutions,
              SubstOptions options = None) const;
 
+  /// Replace references to substitutable types with error types.
+  Type substDependentTypesWithErrorTypes(ModuleDecl *module) const;
+
   bool isPrivateStdlibType(bool whitelistProtocols=true) const;
 
   void dump() const;

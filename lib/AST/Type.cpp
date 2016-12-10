@@ -2929,15 +2929,22 @@ static Type substType(
     if (auto known = substitutions(substOrig))
       return known;
 
-    // For archetypes, we can substitute the parent (if present).
-    auto archetype = substOrig->getAs<ArchetypeType>();
-    if (!archetype) return type;
-
-    // If we don't have a substitution for this type and it doesn't have a
-    // parent, then we're not substituting it.
-    auto parent = archetype->getParent();
-    if (!parent)
+    // If we failed to substitute a generic type parameter, give up.
+    if (substOrig->is<GenericTypeParamType>()) {
+      if (options.contains(SubstFlags::UseErrorType))
+        return ErrorType::get(type);
       return type;
+    }
+
+    auto archetype = substOrig->castTo<ArchetypeType>();
+
+    // For archetypes, we can substitute the parent (if present).
+    auto parent = archetype->getParent();
+    if (!parent) {
+      if (options.contains(SubstFlags::UseErrorType))
+        return ErrorType::get(type);
+      return type;
+    }
 
     // Substitute into the parent type.
     Type substParent = substType(parent, conformances, substitutions, options);
@@ -2971,6 +2978,12 @@ Type Type::subst(ModuleDecl *module,
                  TypeSubstitutionFn substitutions,
                  SubstOptions options) const {
   return substType(*this, module, substitutions, options);
+}
+
+Type Type::substDependentTypesWithErrorTypes(ModuleDecl *module) const {
+  return substType(*this, module,
+                   [](SubstitutableType *t) -> Type { return Type(); },
+                   SubstFlags::UseErrorType);
 }
 
 Type TypeBase::getSuperclassForDecl(const ClassDecl *baseClass,
@@ -3073,12 +3086,9 @@ Type TypeBase::getTypeOfMember(Module *module, const ValueDecl *member,
   if (!memberType)
     memberType = member->getInterfaceType();
 
-  return getTypeOfMember(module, memberType, member->getDeclContext());
-}
-
-Type TypeBase::getTypeOfMember(Module *module, Type memberType,
-                               const DeclContext *memberDC) {
   assert(memberType);
+
+  auto *memberDC = member->getDeclContext();
 
   // If the member is not part of a type, there's nothing to substitute.
   if (!memberDC->isTypeContext())

@@ -1985,16 +1985,39 @@ public:
             MaybeNominalType->getAnyOptionalObjectType())
           MaybeNominalType = MaybeNominalType->getAnyOptionalObjectType();
 
-        // For dynamic lookup don't substitute in the base type
+        // For dynamic lookup don't substitute in the base type.
         if (MaybeNominalType->isAnyObject())
           return T;
 
         // For everything else, substitute in the base type.
         //
-        // Pass in DesugarMemberTypes so that we see the actual
-        // concrete type witnesses instead of type alias types.
         auto Subs = MaybeNominalType->getMemberSubstitutions(
             VD->getDeclContext());
+
+        // Keep the generic parameters if the declaration itself
+        // is generic.
+        if (auto *AFD = dyn_cast<AbstractFunctionDecl>(VD)) {
+          if (AFD->getGenericParams()) {
+            for (auto param : GenericSig->getInnermostGenericParams()) {
+              auto *genericParam = param->getCanonicalType()
+                  ->castTo<GenericTypeParamType>();
+              Subs[genericParam] = param;
+            }
+          }
+        }
+
+        if (auto *GTD = dyn_cast<GenericTypeDecl>(VD)) {
+          if (GTD->getGenericParams()) {
+            for (auto param : GenericSig->getInnermostGenericParams()) {
+              auto *genericParam = param->getCanonicalType()
+                  ->castTo<GenericTypeParamType>();
+              Subs[genericParam] = param;
+            }
+          }
+        }
+
+        // Pass in DesugarMemberTypes so that we see the actual
+        // concrete type witnesses instead of type alias types.
         T = T.subst(M, Subs, (SubstFlags::DesugarMemberTypes |
                               SubstFlags::UseErrorType));
       }

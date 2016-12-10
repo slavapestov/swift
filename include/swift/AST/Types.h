@@ -873,12 +873,6 @@ public:
   Type getTypeOfMember(ModuleDecl *module, const ValueDecl *member,
                        LazyResolver *resolver, Type memberType = Type());
 
-  /// Given the type of a member from a particular declaration context,
-  /// substitute in the types from the given base type (this) to produce
-  /// the resulting member type.
-  Type getTypeOfMember(ModuleDecl *module, Type memberType,
-                       const DeclContext *memberDC);
-
   /// Get the type of a superclass member as seen from the subclass,
   /// substituting generic parameters, dynamic Self return, and the
   /// 'self' argument type as appropriate.

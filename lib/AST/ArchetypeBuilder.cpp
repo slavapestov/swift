@@ -1968,7 +1968,8 @@ Type ArchetypeBuilder::mapTypeIntoContext(ModuleDecl *M,
   if (!canType->hasTypeParameter())
     return type;
 
-  assert(env && "dependent type in non-generic context");
+  if (!env)
+    return type.substDependentTypesWithErrorTypes(M);
 
   return env->mapTypeIntoContext(M, type);
 }
@@ -1989,7 +1990,8 @@ ArchetypeBuilder::mapTypeOutOfContext(ModuleDecl *M,
   if (!canType->hasArchetype())
     return type;
 
-  assert(env && "dependent type in non-generic context");
+  if (!env)
+    return type.substDependentTypesWithErrorTypes(M);
 
   return env->mapTypeOutOfContext(M, type);
 }
