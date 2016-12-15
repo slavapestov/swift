@@ -3086,8 +3086,25 @@ Type TypeBase::getTypeOfMember(Module *module, Type memberType,
 
   // Compute the set of member substitutions to apply.
   auto substitutions = getMemberSubstitutions(memberDC);
+
   if (substitutions.empty())
     return memberType;
+
+  // If the member itself is generic, preserve its generic parameters.
+  // We need this since code completion and diagnostics want to be able
+  // to call getTypeOfMember() with functions and nested types.
+  if (isa<AbstractFunctionDecl>(member) ||
+      isa<GenericTypeDecl>(member)) {
+    auto *innerDC = member->getInnermostDeclContext();
+    if (innerDC->isInnermostContextGeneric()) {
+      auto *sig = innerDC->getGenericSignatureOfContext();
+      for (auto param : sig->getInnermostGenericParams()) {
+        auto *genericParam = param->getCanonicalType()
+            ->castTo<GenericTypeParamType>();
+        substitutions[genericParam] = param;
+      }
+    }
+  }
 
   // Perform the substitutions.
   return memberType.subst(module, substitutions, SubstFlags::UseErrorType);
