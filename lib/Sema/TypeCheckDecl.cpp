@@ -3877,15 +3877,23 @@ public:
           invalid = true;
         }
 
-        // We create TypeAliasTypes with invalid underlying types, so we
+        // We create NameAliasTypes with invalid underlying types, so we
         // need to propagate recursive properties now.
+        //
+        // FIXME: The NameAliasType of a generic typealias desugars to
+        // an UnboundGenericType, not the underlying type.
         TAD->getAliasType()->setRecursiveProperties(
-                         TAD->getUnderlyingType()->getRecursiveProperties());
+                         TAD->getAliasType()->getDesugaredType()
+                            ->getRecursiveProperties());
 
         if (!invalid) {
           // Map the alias type out of context; if it is not dependent,
           // we'll keep the sugar.
-          Type interfaceTy = TAD->getAliasType();
+          Type interfaceTy;
+          if (TAD->getGenericParams() == nullptr)
+            interfaceTy = TAD->getAliasType();
+          else
+            interfaceTy = TAD->getUnderlyingType();
 
           // lldb creates global typealiases containing archetypes
           // sometimes...

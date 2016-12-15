@@ -618,6 +618,17 @@ Type TypeChecker::applyUnboundGenericArguments(
       type = ArchetypeBuilder::mapTypeOutOfContext(TAD, TAD->getUnderlyingType());
     }
 
+    // When resolving a generic typealias with a base type, we have a partially
+    // substituted type by now. Put the archetypes in the substitution map so that
+    // the subst() call leaves them alone.
+    //
+    // FIXME: Combine base type substitution step with applying generic arguments
+    // to avoid this gross hack.
+    type.visit([&](Type t) {
+      if (auto *archetype = t->getAs<ArchetypeType>())
+        subs[archetype] = archetype;
+    });
+
     return type.subst(dc->getParentModule(), subs, SubstFlags::UseErrorType);
   }
   
