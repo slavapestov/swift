@@ -94,7 +94,7 @@ DebugTypeInfo::DebugTypeInfo(VarDecl *Decl, swift::Type Ty,
     : DeclCtx(Decl->getDeclContext()) {
   // Prefer the original, potentially sugared version of the type if
   // the type hasn't been mucked with by an optimization pass.
-  CanType DeclType = Decl->getType()->getCanonicalType();
+  CanType DeclType = Decl->getInterfaceType()->getCanonicalType();
   CanType RealType = Ty.getCanonicalTypeOrNull();
   if (Unwrap) {
     DeclType = DeclType.getLValueOrInOutObjectType();
@@ -102,15 +102,15 @@ DebugTypeInfo::DebugTypeInfo(VarDecl *Decl, swift::Type Ty,
   }
 
   // Desugar for comparison.
-  DeclType = DeclType->getDesugaredType()->getCanonicalType();
+  DeclType = DeclType->getCanonicalType();
   // DynamicSelfType is also sugar as far as debug info is concerned.
   if (auto DynSelfTy = dyn_cast<DynamicSelfType>(DeclType))
     DeclType = DynSelfTy->getSelfType()->getCanonicalType();
   RealType = RealType->getDesugaredType()->getCanonicalType();
 
   if ((DeclType == RealType) || isa<AnyFunctionType>(DeclType))
-    Type = Unwrap ? Decl->getType()->getLValueOrInOutObjectType().getPointer()
-                  : Decl->getType().getPointer();
+    Type = Unwrap ? Decl->getInterfaceType()->getLValueOrInOutObjectType().getPointer()
+                  : Decl->getInterfaceType().getPointer();
   else
     Type = RealType.getPointer();
 
@@ -123,8 +123,8 @@ DebugTypeInfo::DebugTypeInfo(VarDecl *Decl, swift::Type Ty,
       align(align) {
   // Prefer the original, potentially sugared version of the type if
   // the type hasn't been mucked with by an optimization pass.
-  if (Decl->getType().getCanonicalTypeOrNull() == Ty.getCanonicalTypeOrNull())
-    Type = Decl->getType().getPointer();
+  if (Decl->getInterfaceType().getCanonicalTypeOrNull() == Ty.getCanonicalTypeOrNull())
+    Type = Decl->getInterfaceType().getPointer();
   else
     Type = Ty.getPointer();
 }

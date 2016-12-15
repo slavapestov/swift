@@ -1626,7 +1626,7 @@ classImplementsProtocol(const clang::ObjCInterfaceDecl *constInterface,
 static void
 applyPropertyOwnership(VarDecl *prop,
                        clang::ObjCPropertyDecl::PropertyAttributeKind attrs) {
-  Type ty = prop->getType();
+  Type ty = prop->getInterfaceType();
   if (auto innerTy = ty->getAnyOptionalObjectType())
     ty = innerTy;
   if (!ty->is<GenericTypeParamType>() && !ty->isAnyClassReferenceType())
@@ -1640,12 +1640,16 @@ applyPropertyOwnership(VarDecl *prop,
   if (attrs & clang::ObjCPropertyDecl::OBJC_PR_weak) {
     prop->getAttrs().add(new (ctx) OwnershipAttr(Ownership::Weak));
     prop->setType(WeakStorageType::get(prop->getType(), ctx));
+    prop->setInterfaceType(WeakStorageType::get(
+        prop->getInterfaceType(), ctx));
     return;
   }
   if ((attrs & clang::ObjCPropertyDecl::OBJC_PR_assign) ||
       (attrs & clang::ObjCPropertyDecl::OBJC_PR_unsafe_unretained)) {
     prop->getAttrs().add(new (ctx) OwnershipAttr(Ownership::Unmanaged));
     prop->setType(UnmanagedStorageType::get(prop->getType(), ctx));
+    prop->setInterfaceType(UnmanagedStorageType::get(
+        prop->getInterfaceType(), ctx));
     return;
   }
 }

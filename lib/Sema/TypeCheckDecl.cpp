@@ -7059,7 +7059,7 @@ void TypeChecker::validateDecl(ValueDecl *D, bool resolveTypeParams) {
   case DeclKind::Var:
   case DeclKind::Param: {
     auto VD = cast<VarDecl>(D);
-    if (!VD->hasType()) {
+    if (!VD->hasInterfaceType()) {
       if (VD->isSelfParameter()) {
         if (!VD->hasInterfaceType()) {
           VD->setInterfaceType(ErrorType::get(Context));

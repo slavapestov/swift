@@ -3344,6 +3344,7 @@ ManagedValue SILGenFunction::emitLValueToPointer(SILLocation loc,
 
     LValueTypeData unownedTypeData(
       AbstractionPattern(
+        typeData.OrigFormalType.getGenericSignature(),
         CanUnmanagedStorageType::get(typeData.OrigFormalType.getType())),
       CanUnmanagedStorageType::get(typeData.SubstFormalType),
       rvalueType);

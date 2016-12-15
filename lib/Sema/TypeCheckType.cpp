@@ -3489,7 +3489,7 @@ bool TypeChecker::isRepresentableInObjC(const VarDecl *VD, ObjCReason Reason) {
   if (VD->isInvalid())
     return false;
 
-  Type T = VD->getType();
+  Type T = VD->getDeclContext()->mapTypeIntoContext(VD->getInterfaceType());
   if (auto *RST = T->getAs<ReferenceStorageType>()) {
     // In-memory layout of @weak and @unowned does not correspond to anything
     // in Objective-C, but this does not really matter here, since Objective-C
@@ -3514,7 +3514,8 @@ bool TypeChecker::isRepresentableInObjC(const VarDecl *VD, ObjCReason Reason) {
   diagnose(VD->getLoc(), diag::objc_invalid_on_var,
            getObjCDiagnosticAttrKind(Reason))
       .highlight(TypeRange);
-  diagnoseTypeNotRepresentableInObjC(VD->getDeclContext(), VD->getType(),
+  diagnoseTypeNotRepresentableInObjC(VD->getDeclContext(),
+                                     VD->getInterfaceType(),
                                      TypeRange);
   describeObjCReason(*this, VD, Reason);
 
