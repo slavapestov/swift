@@ -27,11 +27,6 @@ Type DependentGenericTypeResolver::resolveGenericTypeParamType(
   auto gpDecl = gp->getDecl();
   assert(gpDecl && "Missing generic parameter declaration");
 
-  // Hack: See parseGenericParameters(). When the issue there is fixed,
-  // we won't need the isInvalid() check anymore.
-  if (gpDecl->isInvalid())
-    return ErrorType::get(gpDecl->getASTContext());
-
   // Don't resolve generic parameters.
   return gp;
 }
@@ -76,10 +71,8 @@ Type GenericTypeToArchetypeResolver::resolveGenericTypeParamType(
   auto gpDecl = gp->getDecl();
   assert(gpDecl && "Missing generic parameter declaration");
 
-  // Hack: See parseGenericParameters(). When the issue there is fixed,
-  // we won't need the isInvalid() check anymore.
-  if (gpDecl->isInvalid() || !GenericEnv)
-    return ErrorType::get(gpDecl->getASTContext());
+  if (!GenericEnv)
+    return ErrorType::get(gp);
 
   return GenericEnv->mapTypeIntoContext(gp);
 }
@@ -138,11 +131,6 @@ Type CompleteGenericTypeResolver::resolveGenericTypeParamType(
                                               GenericTypeParamType *gp) {
   auto gpDecl = gp->getDecl();
   assert(gpDecl && "Missing generic parameter declaration");
-
-  // Hack: See parseGenericParameters(). When the issue there is fixed,
-  // we won't need the isInvalid() check anymore.
-  if (gpDecl->isInvalid())
-    return ErrorType::get(gpDecl->getASTContext());
 
   // Retrieve the potential archetype corresponding to this generic type
   // parameter.
