@@ -243,13 +243,9 @@ class ClassWithGetter : PropertyWithGetter {
 // ClassWithGetter.
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWC9protocols15ClassWithGetterS_18PropertyWithGetterS_FS1_g1aSi : $@convention(witness_method) (@in_guaranteed ClassWithGetter) -> Int {
 // CHECK: bb0([[C:%.*]] : $*ClassWithGetter):
-// CHECK-NEXT: [[CCOPY:%.*]] = alloc_stack $ClassWithGetter
-// CHECK-NEXT: copy_addr [[C]] to [initialization] [[CCOPY]]
-// CHECK-NEXT: [[CCOPY_LOADED:%.*]] = load [take] [[CCOPY]]
-// CHECK-NEXT: [[FUN:%.*]] = class_method [[CCOPY_LOADED]] : $ClassWithGetter, #ClassWithGetter.a!getter.1 : (ClassWithGetter) -> () -> Int , $@convention(method) (@guaranteed ClassWithGetter) -> Int
-// CHECK-NEXT: apply [[FUN]]([[CCOPY_LOADED]])
-// CHECK-NEXT: destroy_value [[CCOPY_LOADED]]
-// CHECK-NEXT: dealloc_stack [[CCOPY]]
+// CHECK-NEXT: [[C_LOADED:%.*]] = load [take] [[C]]
+// CHECK-NEXT: [[FUN:%.*]] = class_method [[C_LOADED]] : $ClassWithGetter, #ClassWithGetter.a!getter.1 : (ClassWithGetter) -> () -> Int , $@convention(method) (@guaranteed ClassWithGetter) -> Int
+// CHECK-NEXT: apply [[FUN]]([[C_LOADED]])
 // CHECK-NEXT: return
 
 class ClassWithGetterSetter : PropertyWithGetterSetter, PropertyWithGetter {
@@ -269,13 +265,9 @@ class ClassWithGetterSetter : PropertyWithGetterSetter, PropertyWithGetter {
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWC9protocols21ClassWithGetterSetterS_24PropertyWithGetterSetterS_FS1_g1bSi : $@convention(witness_method) (@in_guaranteed ClassWithGetterSetter) -> Int {
 // CHECK: bb0([[C:%.*]] : $*ClassWithGetterSetter):
-// CHECK-NEXT: [[CCOPY:%.*]] = alloc_stack $ClassWithGetterSetter
-// CHECK-NEXT: copy_addr [[C]] to [initialization] [[CCOPY]]
-// CHECK-NEXT: [[CCOPY_LOADED:%.*]] = load [take] [[CCOPY]]
-// CHECK-NEXT: [[FUN:%.*]] = class_method [[CCOPY_LOADED]] : $ClassWithGetterSetter, #ClassWithGetterSetter.b!getter.1 : (ClassWithGetterSetter) -> () -> Int , $@convention(method) (@guaranteed ClassWithGetterSetter) -> Int
-// CHECK-NEXT: apply [[FUN]]([[CCOPY_LOADED]])
-// CHECK-NEXT: destroy_value [[CCOPY_LOADED]]
-// CHECK-NEXT: dealloc_stack [[CCOPY]]
+// CHECK-NEXT: [[C_LOADED:%.*]] = load [take] [[C]]
+// CHECK-NEXT: [[FUN:%.*]] = class_method [[C_LOADED]] : $ClassWithGetterSetter, #ClassWithGetterSetter.b!getter.1 : (ClassWithGetterSetter) -> () -> Int , $@convention(method) (@guaranteed ClassWithGetterSetter) -> Int
+// CHECK-NEXT: apply [[FUN]]([[C_LOADED]])
 // CHECK-NEXT: return
 
 // Stored variables fulfilling property requirements
@@ -323,13 +315,10 @@ struct StructWithStoredProperty : PropertyWithGetter {
 //
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV9protocols24StructWithStoredPropertyS_18PropertyWithGetterS_FS1_g1aSi : $@convention(witness_method) (@in_guaranteed StructWithStoredProperty) -> Int {
 // CHECK: bb0([[C:%.*]] : $*StructWithStoredProperty):
-// CHECK-NEXT: [[CCOPY:%.*]] = alloc_stack $StructWithStoredProperty
-// CHECK-NEXT: copy_addr [[C]] to [initialization] [[CCOPY]]
-// CHECK-NEXT: [[CCOPY_LOADED:%.*]] = load [trivial] [[CCOPY]]
+// CHECK-NEXT: [[C_LOADED:%.*]] = load [trivial] [[C]]
 // CHECK-NEXT: function_ref
 // CHECK-NEXT: [[FUN:%.*]] = function_ref @_TFV9protocols24StructWithStoredPropertyg1aSi : $@convention(method) (StructWithStoredProperty) -> Int
-// CHECK-NEXT: apply [[FUN]]([[CCOPY_LOADED]])
-// CHECK-NEXT: dealloc_stack [[CCOPY]]
+// CHECK-NEXT: apply [[FUN]]([[C_LOADED]])
 // CHECK-NEXT: return
 
 class C {}
@@ -353,14 +342,10 @@ struct StructWithStoredClassProperty : PropertyWithGetter {
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV9protocols29StructWithStoredClassPropertyS_18PropertyWithGetterS_FS1_g1aSi : $@convention(witness_method) (@in_guaranteed StructWithStoredClassProperty) -> Int {
 // CHECK: bb0([[C:%.*]] : $*StructWithStoredClassProperty):
-// CHECK-NEXT: [[CCOPY:%.*]] = alloc_stack $StructWithStoredClassProperty
-// CHECK-NEXT: copy_addr [[C]] to [initialization] [[CCOPY]]
-// CHECK-NEXT: [[CCOPY_LOADED:%.*]] = load [take] [[CCOPY]]
+// CHECK-NEXT: [[C_LOADED:%.*]] = load [take] [[C]]
 // CHECK-NEXT: function_ref
 // CHECK-NEXT: [[FUN:%.*]] = function_ref @_TFV9protocols29StructWithStoredClassPropertyg1aSi : $@convention(method) (@guaranteed StructWithStoredClassProperty) -> Int
-// CHECK-NEXT: apply [[FUN]]([[CCOPY_LOADED]])
-// CHECK-NEXT: destroy_value [[CCOPY_LOADED]]
-// CHECK-NEXT: dealloc_stack [[CCOPY]]
+// CHECK-NEXT: apply [[FUN]]([[C_LOADED]])
 // CHECK-NEXT: return
 
 // rdar://22676810

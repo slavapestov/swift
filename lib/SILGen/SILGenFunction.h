@@ -1508,8 +1508,7 @@ public:
   /// Used for emitting SILArguments of bare functions, such as thunks and
   /// open-coded materializeForSet.
   void collectThunkParams(SILLocation loc,
-                          SmallVectorImpl<ManagedValue> &params,
-                          bool allowPlusZero);
+                          SmallVectorImpl<ManagedValue> &params);
 
   /// Build the type of a function transformation thunk.
   CanSILFunctionType buildThunkType(ManagedValue fn,

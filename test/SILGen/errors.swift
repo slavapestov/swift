@@ -211,65 +211,48 @@ protocol Doomed {
 }
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV6errors12DoomedStructS_6DoomedS_FS1_5check{{.*}} : $@convention(witness_method) (@in_guaranteed DoomedStruct) -> @error Error
-// CHECK:      [[TEMP:%.*]] = alloc_stack $DoomedStruct
-// CHECK:      copy_addr %0 to [initialization] [[TEMP]]
-// CHECK:      [[SELF:%.*]] = load [trivial] [[TEMP]] : $*DoomedStruct
+// CHECK:      [[SELF:%.*]] = load [trivial] %0 : $*DoomedStruct
 // CHECK:      [[T0:%.*]] = function_ref @_TFV6errors12DoomedStruct5check{{.*}} : $@convention(method) (DoomedStruct) -> @error Error
 // CHECK-NEXT: try_apply [[T0]]([[SELF]])
 // CHECK:    bb1([[T0:%.*]] : $()):
 // CHECK:      [[T0:%.*]] = tuple ()
-// CHECK:      dealloc_stack [[TEMP]]
 // CHECK:      return [[T0]] : $()
 // CHECK:    bb2([[T0:%.*]] : $Error):
 // CHECK:      builtin "willThrow"([[T0]] : $Error)
-// CHECK:      dealloc_stack [[TEMP]]
 // CHECK:      throw [[T0]] : $Error
 struct DoomedStruct : Doomed {
   func check() throws {}
 }
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWC6errors11DoomedClassS_6DoomedS_FS1_5check{{.*}} : $@convention(witness_method) (@in_guaranteed DoomedClass) -> @error Error {
-// CHECK:      [[TEMP:%.*]] = alloc_stack $DoomedClass
-// CHECK:      copy_addr %0 to [initialization] [[TEMP]]
-// CHECK:      [[SELF:%.*]] = load [take] [[TEMP]] : $*DoomedClass
+// CHECK:      [[SELF:%.*]] = load [take] %0 : $*DoomedClass
 // CHECK:      [[T0:%.*]] = class_method [[SELF]] : $DoomedClass, #DoomedClass.check!1 : (DoomedClass) -> () throws -> () , $@convention(method) (@guaranteed DoomedClass) -> @error Error
 // CHECK-NEXT: try_apply [[T0]]([[SELF]])
 // CHECK:    bb1([[T0:%.*]] : $()):
 // CHECK:      [[T0:%.*]] = tuple ()
-// CHECK:      destroy_value [[SELF]] : $DoomedClass
-// CHECK:      dealloc_stack [[TEMP]]
 // CHECK:      return [[T0]] : $()
 // CHECK:    bb2([[T0:%.*]] : $Error):
 // CHECK:      builtin "willThrow"([[T0]] : $Error)
-// CHECK:      destroy_value [[SELF]] : $DoomedClass
-// CHECK:      dealloc_stack [[TEMP]]
 // CHECK:      throw [[T0]] : $Error
 class DoomedClass : Doomed {
   func check() throws {}
 }
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV6errors11HappyStructS_6DoomedS_FS1_5check{{.*}} : $@convention(witness_method) (@in_guaranteed HappyStruct) -> @error Error
-// CHECK:      [[TEMP:%.*]] = alloc_stack $HappyStruct
-// CHECK:      copy_addr %0 to [initialization] [[TEMP]]
-// CHECK:      [[SELF:%.*]] = load [trivial] [[TEMP]] : $*HappyStruct
+// CHECK:      [[SELF:%.*]] = load [trivial] %0 : $*HappyStruct
 // CHECK:      [[T0:%.*]] = function_ref @_TFV6errors11HappyStruct5check{{.*}} : $@convention(method) (HappyStruct) -> ()
 // CHECK:      [[T1:%.*]] = apply [[T0]]([[SELF]])
 // CHECK:      [[T1:%.*]] = tuple ()
-// CHECK:      dealloc_stack [[TEMP]]
 // CHECK:      return [[T1]] : $()
 struct HappyStruct : Doomed {
   func check() {}
 }
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWC6errors10HappyClassS_6DoomedS_FS1_5check{{.*}} : $@convention(witness_method) (@in_guaranteed HappyClass) -> @error Error
-// CHECK:      [[TEMP:%.*]] = alloc_stack $HappyClass
-// CHECK:      copy_addr %0 to [initialization] [[TEMP]]
-// CHECK:      [[SELF:%.*]] = load [take] [[TEMP]] : $*HappyClass
+// CHECK:      [[SELF:%.*]] = load [take] %0 : $*HappyClass
 // CHECK:      [[T0:%.*]] = class_method [[SELF]] : $HappyClass, #HappyClass.check!1 : (HappyClass) -> () -> () , $@convention(method) (@guaranteed HappyClass) -> ()
 // CHECK:      [[T1:%.*]] = apply [[T0]]([[SELF]])
 // CHECK:      [[T1:%.*]] = tuple ()
-// CHECK:      destroy_value [[SELF]] : $HappyClass
-// CHECK:      dealloc_stack [[TEMP]]
 // CHECK:      return [[T1]] : $()
 class HappyClass : Doomed {
   func check() {}

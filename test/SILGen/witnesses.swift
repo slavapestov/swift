@@ -185,11 +185,9 @@ func <~>(_ x: ConformingClass, y: ConformingClass) -> ConformingClass { return x
 extension ConformingClass : ClassBounded { }
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWC9witnesses15ConformingClassS_12ClassBoundedS_FS1_9selfTypes{{.*}} : $@convention(witness_method) (@owned ConformingClass, @guaranteed ConformingClass) -> @owned ConformingClass {
 // CHECK:  bb0([[C0:%.*]] : $ConformingClass, [[C1:%.*]] : $ConformingClass):
-// CHECK-NEXT:    [[C1_COPY:%.*]] = copy_value [[C1]]
 // CHECK-NEXT:    function_ref
 // CHECK-NEXT:    [[FUN:%.*]] = function_ref @_TFC9witnesses15ConformingClass9selfTypes
-// CHECK-NEXT:    [[RESULT:%.*]] = apply [[FUN]]([[C0]], [[C1_COPY]]) : $@convention(method) (@owned ConformingClass, @guaranteed ConformingClass) -> @owned ConformingClass
-// CHECK-NEXT:    destroy_value [[C1_COPY]]
+// CHECK-NEXT:    [[RESULT:%.*]] = apply [[FUN]]([[C0]], [[C1]]) : $@convention(method) (@owned ConformingClass, @guaranteed ConformingClass) -> @owned ConformingClass
 // CHECK-NEXT:    return [[RESULT]] : $ConformingClass
 // CHECK-NEXT:  }
 
@@ -488,15 +486,11 @@ class CrashableBase {
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWurGC9witnesses16GenericCrashablex_S_9CrashableS_FS1_5crashfT_T_ : $@convention(witness_method) <τ_0_0> (@in_guaranteed GenericCrashable<τ_0_0>) -> ()
 // CHECK:       bb0(%0 : $*GenericCrashable<τ_0_0>):
-// CHECK-NEXT: [[BOX:%.*]] = alloc_stack $GenericCrashable<τ_0_0>
-// CHECK-NEXT: copy_addr %0 to [initialization] [[BOX]] : $*GenericCrashable<τ_0_0>
-// CHECK-NEXT: [[SELF:%.*]] = load [take] [[BOX]] : $*GenericCrashable<τ_0_0>
+// CHECK-NEXT: [[SELF:%.*]] = load [take] %0 : $*GenericCrashable<τ_0_0>
 // CHECK-NEXT: [[BASE:%.*]] = upcast [[SELF]] : $GenericCrashable<τ_0_0> to $CrashableBase
 // CHECK-NEXT: [[FN:%.*]] = class_method [[BASE]] : $CrashableBase, #CrashableBase.crash!1 : (CrashableBase) -> () -> () , $@convention(method) (@guaranteed CrashableBase) -> ()
 // CHECK-NEXT: apply [[FN]]([[BASE]]) : $@convention(method) (@guaranteed CrashableBase) -> ()
 // CHECK-NEXT: [[RESULT:%.*]] = tuple ()
-// CHECK-NEXT: destroy_value [[SELF]] : $GenericCrashable<τ_0_0>
-// CHECK-NEXT: dealloc_stack [[BOX]] : $*GenericCrashable<τ_0_0>
 // CHECK-NEXT: return [[RESULT]] : $()
 
 class GenericCrashable<T> : CrashableBase, Crashable {}

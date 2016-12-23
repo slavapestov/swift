@@ -101,10 +101,7 @@ struct S: Fooable {
 // Witness thunk for nonmutating 'foo'
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV15guaranteed_self1SS_7FooableS_FS1_3foo{{.*}} : $@convention(witness_method) (Int, @in_guaranteed S) -> () {
 // CHECK:       bb0({{.*}} [[SELF_ADDR:%.*]] : $*S):
-// CHECK:         [[SELF_COPY:%.*]] = alloc_stack $S
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY]]
-// CHECK:         [[SELF:%.*]] = load [take] [[SELF_COPY]]
-// CHECK:         destroy_value [[SELF]]
+// CHECK:         [[SELF:%.*]] = load [take] [[SELF_ADDR]]
 // CHECK-NOT:     destroy_value [[SELF]]
 // CHECK-NOT:     destroy_addr [[SELF_COPY]]
 // CHECK-NOT:     destroy_addr [[SELF_ADDR]]
@@ -126,10 +123,7 @@ struct S: Fooable {
 // Witness thunk for prop1 getter
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV15guaranteed_self1SS_7FooableS_FS1_g5prop1Si : $@convention(witness_method) (@in_guaranteed S) -> Int
 // CHECK:       bb0([[SELF_ADDR:%.*]] : $*S):
-// CHECK:         [[SELF_COPY:%.*]] = alloc_stack $S
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY]]
-// CHECK:         [[SELF:%.*]] = load [take] [[SELF_COPY]]
-// CHECK:         destroy_value [[SELF]]
+// CHECK:         [[SELF:%.*]] = load [take] [[SELF_ADDR]]
 // CHECK-NOT:     destroy_value [[SELF]]
 // CHECK-NOT:     destroy_addr [[SELF_COPY]]
 // CHECK-NOT:     destroy_addr [[SELF_ADDR]]
@@ -147,10 +141,7 @@ struct S: Fooable {
 // Witness thunk for prop2 getter
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV15guaranteed_self1SS_7FooableS_FS1_g5prop2Si : $@convention(witness_method) (@in_guaranteed S) -> Int
 // CHECK:       bb0([[SELF_ADDR:%.*]] : $*S):
-// CHECK:         [[SELF_COPY:%.*]] = alloc_stack $S
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY]]
-// CHECK:         [[SELF:%.*]] = load [take] [[SELF_COPY]]
-// CHECK:         destroy_value [[SELF]]
+// CHECK:         [[SELF:%.*]] = load [take] [[SELF_ADDR]]
 // CHECK-NOT:     destroy_value [[SELF]]
 // CHECK-NOT:     destroy_addr [[SELF_COPY]]
 // CHECK-NOT:     destroy_addr [[SELF_ADDR]]
@@ -168,10 +159,7 @@ struct S: Fooable {
 // Witness thunk for prop3 getter
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV15guaranteed_self1SS_7FooableS_FS1_g5prop3Si : $@convention(witness_method) (@in_guaranteed S) -> Int
 // CHECK:       bb0([[SELF_ADDR:%.*]] : $*S):
-// CHECK:         [[SELF_COPY:%.*]] = alloc_stack $S
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY]]
-// CHECK:         [[SELF:%.*]] = load [take] [[SELF_COPY]]
-// CHECK:         destroy_value [[SELF]]
+// CHECK:         [[SELF:%.*]] = load [take] [[SELF_ADDR]]
 // CHECK-NOT:     destroy_value [[SELF]]
 // CHECK-NOT:     destroy_addr [[SELF_COPY]]
 // CHECK-NOT:     destroy_addr [[SELF_ADDR]]
@@ -179,10 +167,7 @@ struct S: Fooable {
 // Witness thunk for prop3 nonmutating setter
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWV15guaranteed_self1SS_7FooableS_FS1_s5prop3Si : $@convention(witness_method) (Int, @in_guaranteed S) -> ()
 // CHECK:       bb0({{.*}} [[SELF_ADDR:%.*]] : $*S):
-// CHECK:         [[SELF_COPY:%.*]] = alloc_stack $S
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY]]
-// CHECK:         [[SELF:%.*]] = load [take] [[SELF_COPY]]
-// CHECK:         destroy_value [[SELF]]
+// CHECK:         [[SELF:%.*]] = load [take] [[SELF_ADDR]]
 // CHECK-NOT:     destroy_value [[SELF]]
 // CHECK-NOT:     destroy_addr [[SELF_COPY]]
 // CHECK-NOT:     destroy_addr [[SELF_ADDR]]
@@ -250,21 +235,13 @@ struct AO<T>: Fooable {
 // Witness for nonmutating 'foo'
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWurGV15guaranteed_self2AOx_S_7FooableS_FS1_3foo{{.*}} : $@convention(witness_method) <τ_0_0> (Int, @in_guaranteed AO<τ_0_0>) -> ()
 // CHECK:       bb0({{.*}} [[SELF_ADDR:%.*]] : $*AO<τ_0_0>):
-// TODO: This copy isn't necessary.
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY:%.*]] :
-// CHECK:         apply {{.*}} [[SELF_COPY]]
-// CHECK:         destroy_addr [[SELF_COPY]]
+// CHECK:         apply {{.*}} [[SELF_ADDR]]
 // CHECK-NOT:     destroy_addr [[SELF_ADDR]]
 
-// Witness for 'bar', which is mutating in protocol but nonmutating in impl
+// Witness for 'bar', which is mutating in protocol and mutating in impl
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_TTWurGV15guaranteed_self2AOx_S_7FooableS_FS1_3bar{{.*}} : $@convention(witness_method) <τ_0_0> (@inout AO<τ_0_0>) -> ()
 // CHECK:       bb0([[SELF_ADDR:%.*]] : $*AO<τ_0_0>):
-// -- NB: This copy *is* necessary, unless we're willing to assume an inout
-//        parameter is not mutably aliased.
-// CHECK:         copy_addr [[SELF_ADDR]] to [initialization] [[SELF_COPY:%.*]] :
-// CHECK:         apply {{.*}} [[SELF_COPY]]
-// CHECK:         destroy_addr [[SELF_COPY]]
-// CHECK-NOT:     destroy_addr [[SELF_ADDR]]
+// CHECK:         apply {{.*}}([[SELF_ADDR]])
 
 class C: Fooable, Barrable {
   // Allocating initializer
@@ -409,13 +386,10 @@ func AO_curryThunk<T>(_ ao: AO<T>) -> ((AO<T>) -> (Int) -> ()/*, Int -> ()*/) {
 
 // CHECK-LABEL: sil [transparent] [thunk] @_TTWV15guaranteed_self9FakeArrayS_8SequenceS_FS1_17_constrainElement{{.*}} : $@convention(witness_method) (@in FakeElement, @in_guaranteed FakeArray) -> () {
 // CHECK: bb0([[ARG0_PTR:%.*]] : $*FakeElement, [[ARG1_PTR:%.*]] : $*FakeArray):
-// CHECK: [[GUARANTEED_COPY_STACK_SLOT:%.*]] = alloc_stack $FakeArray
-// CHECK: copy_addr [[ARG1_PTR]] to [initialization] [[GUARANTEED_COPY_STACK_SLOT]]
 // CHECK: [[ARG0:%.*]] = load [trivial] [[ARG0_PTR]]
 // CHECK: function_ref (extension in guaranteed_self):guaranteed_self.SequenceDefaults._constrainElement
 // CHECK: [[FUN:%.*]] = function_ref @_{{.*}}
-// CHECK: apply [[FUN]]<FakeArray>([[ARG0]], [[GUARANTEED_COPY_STACK_SLOT]])
-// CHECK: destroy_addr [[GUARANTEED_COPY_STACK_SLOT]]
+// CHECK: apply [[FUN]]<FakeArray>([[ARG0]], [[ARG1_PTR]])
 
 class Z {}
 
