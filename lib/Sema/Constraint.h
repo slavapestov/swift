@@ -154,8 +154,6 @@ enum class ConversionRestrictionKind {
   TupleToTuple,
   /// Scalar-to-tuple conversion.
   ScalarToTuple,
-  /// Tuple-to-scalar conversion.
-  TupleToScalar,
   /// Deep equality comparison.
   DeepEquality,
   /// Subclass-to-superclass conversion.
