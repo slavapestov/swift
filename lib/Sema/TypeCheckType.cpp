@@ -3326,6 +3326,7 @@ bool TypeChecker::isRepresentableInObjC(
     Type ResultType = FD->getResultInterfaceType();
     if (!ResultType->hasError() &&
         !ResultType->isVoid() &&
+        !ResultType->isUninhabited() &&
         !ResultType->isRepresentableIn(ForeignLanguage::ObjectiveC,
                                        const_cast<FuncDecl *>(FD))) {
       if (Diagnose) {
