@@ -3745,18 +3745,12 @@ class UnsupportedProtocolVisitor
   : public TypeReprVisitor<UnsupportedProtocolVisitor>, public ASTWalker
 {
   TypeChecker &TC;
-  bool recurseIntoSubstatements;
+  bool checkStatements;
   bool hitTopStmt;
     
 public:
-  UnsupportedProtocolVisitor(TypeChecker &tc) : TC(tc) {
-    recurseIntoSubstatements = true;
-    hitTopStmt = false;
-  }
-
-  void setRecurseIntoSubstatements(bool recurse) {
-    recurseIntoSubstatements = recurse;
-  }
+  UnsupportedProtocolVisitor(TypeChecker &tc, bool checkStatements)
+    : TC(tc), checkStatements(checkStatements), hitTopStmt(false) { }
 
   bool walkToTypeReprPre(TypeRepr *T) override {
     if (T->isInvalid())
@@ -3772,14 +3766,16 @@ public:
   }
 
   std::pair<bool, Stmt*> walkToStmtPre(Stmt *S) override {
-    if (recurseIntoSubstatements) {
-      return { true, S };
-    } else if (hitTopStmt) {
-      return { false, S };
-    } else {
+    if (checkStatements && !hitTopStmt) {
       hitTopStmt = true;
       return { true, S };
     }
+
+    return { false, S };
+  }
+
+  bool walkToDeclPre(Decl *D) override {
+    return !checkStatements;
   }
 
   void visitIdentTypeRepr(IdentTypeRepr *T) {
@@ -3836,7 +3832,7 @@ void TypeChecker::checkUnsupportedProtocolType(Decl *decl) {
   if (isa<ExtensionDecl>(decl))
     return;
 
-  UnsupportedProtocolVisitor visitor(*this);
+  UnsupportedProtocolVisitor visitor(*this, /*checkStatements=*/false);
   decl->walk(visitor);
 }
 
@@ -3844,10 +3840,6 @@ void TypeChecker::checkUnsupportedProtocolType(Stmt *stmt) {
   if (!stmt)
     return;
 
-  UnsupportedProtocolVisitor visitor(*this);
-    
-  // This method will already be called for all individual statements, so don't repeat
-  // that checking by walking into any statement inside this one.
-  visitor.setRecurseIntoSubstatements(false);
+  UnsupportedProtocolVisitor visitor(*this, /*checkStatements=*/true);
   stmt->walk(visitor);
 }
