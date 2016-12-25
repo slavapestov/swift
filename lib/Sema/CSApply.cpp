@@ -776,12 +776,10 @@ namespace {
         }
       }
 
-      // Produce a reference to the member, the type of the container it
-      // resides in, and the type produced by the reference itself.
-      Type containerTy;
+      // Produce a reference to the member and the type produced by the
+      // reference itself.
       ConcreteDeclRef memberRef;
       Type refTy;
-      Type dynamicSelfFnType;
       if (member->getInterfaceType()->is<GenericFunctionType>() ||
           openedFullType->hasTypeVariable()) {
         // We require substitutions. Figure out what they are.
@@ -800,18 +798,30 @@ namespace {
                   substitutions);
 
         memberRef = ConcreteDeclRef(context, member, substitutions);
-
-        if (auto openedFullFnType = openedFullType->getAs<FunctionType>()) {
-          auto openedBaseType = openedFullFnType->getInput()
-                                  ->getRValueInstanceType();
-          containerTy = solution.simplifyType(tc, openedBaseType);
-        }
       } else {
         // No substitutions required; the declaration reference is simple.
-        containerTy = member->getDeclContext()->getDeclaredTypeOfContext();
         memberRef = member;
         refTy = openedFullType;
       }
+
+      // If we're referring to the member of a module, it's just a simple
+      // reference.
+      if (baseTy->is<ModuleType>()) {
+        assert(semantics == AccessSemantics::Ordinary &&
+               "Direct property access doesn't make sense for this");
+        auto ref = new (context) DeclRefExpr(memberRef, memberLoc, Implicit);
+        cs.setType(ref, refTy);
+        ref->setFunctionRefKind(functionRefKind);
+        return cs.cacheType(new (context)
+                                DotSyntaxBaseIgnoredExpr(base, dotLoc, ref));
+      }
+
+      // Produce a reference to the type of the container the member
+      // resides in.
+      Type containerTy =
+          openedFullType->castTo<FunctionType>()
+              ->getInput()->getRValueInstanceType();
+      containerTy = solution.simplifyType(tc, containerTy);
 
       // If we opened up an existential when referencing this member, update
       // the base accordingly.
@@ -828,59 +838,21 @@ namespace {
 
       // If this is a method whose result type is dynamic Self, or a
       // construction, replace the result type with the actual object type.
+      Type dynamicSelfFnType;
       if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
         if ((isa<FuncDecl>(func) &&
              (cast<FuncDecl>(func)->hasDynamicSelf() ||
               (openedExistential &&
                cast<FuncDecl>(func)->hasArchetypeSelf()))) ||
             isPolymorphicConstructor(func)) {
-          refTy = refTy->replaceCovariantResultType(containerTy,
-                    func->getNumParameterLists());
-          dynamicSelfFnType = refTy->replaceCovariantResultType(
-                                baseTy,
-                                func->getNumParameterLists());
-
-          if (openedExistential) {
-            // Replace the covariant result type in the opened type. We need to
-            // handle dynamic member references, which wrap the function type
-            // in an optional.
-            OptionalTypeKind optKind;
-            if (auto optObject = openedType->getAnyOptionalObjectType(optKind))
-              openedType = optObject;
-            openedType = openedType->replaceCovariantResultType(
-                           baseTy,
-                           func->getNumParameterLists()-1);
-            if (optKind != OptionalTypeKind::OTK_None)
-              openedType = OptionalType::get(optKind, openedType);
+          refTy = refTy->replaceCovariantResultType(
+              containerTy, func->getNumParameterLists());
+          if (!baseTy->isEqual(containerTy)) {
+            dynamicSelfFnType = refTy->replaceCovariantResultType(
+                baseTy, func->getNumParameterLists());
           }
-
-          // If the type after replacing DynamicSelf with the provided base
-          // type is no different, we don't need to perform a conversion here.
-          if (refTy->isEqual(dynamicSelfFnType))
-            dynamicSelfFnType = nullptr;
         }
       }
-
-      // If we're referring to the member of a module, it's just a simple
-      // reference.
-      if (baseTy->is<ModuleType>()) {
-        assert(semantics == AccessSemantics::Ordinary &&
-               "Direct property access doesn't make sense for this");
-        assert(!dynamicSelfFnType && "No reference type to convert to");
-        auto ref = new (context) DeclRefExpr(memberRef, memberLoc, Implicit);
-        cs.setType(ref, refTy);
-        ref->setFunctionRefKind(functionRefKind);
-        return cs.cacheType(new (context)
-                                DotSyntaxBaseIgnoredExpr(base, dotLoc, ref));
-      }
-
-      // Otherwise, we're referring to a member of a type.
-      Type selfTy;
-      if (isa<ProtocolDecl>(member->getDeclContext()) &&
-          (baseTy->is<ArchetypeType>() || baseTy->isExistentialType()))
-        selfTy = baseTy;
-      else
-        selfTy = containerTy;
 
       // References to properties with accessors and storage usually go
       // through the accessors, but sometimes are direct.
@@ -895,6 +867,7 @@ namespace {
 
         // If the base is already an lvalue with the right base type, we can
         // pass it as an inout qualified type.
+        Type selfTy = containerTy;
         if (selfTy->isEqual(baseTy))
           if (cs.getType(base)->is<LValueType>())
             selfTy = InOutType::get(selfTy);
@@ -904,7 +877,7 @@ namespace {
       } else {
         // Convert the base to an rvalue of the appropriate metatype.
         base = coerceToType(base,
-                            MetatypeType::get(selfTy),
+                            MetatypeType::get(containerTy),
                             locator.withPathElement(
                               ConstraintLocator::MemberRefBase));
         if (!base)
@@ -1001,7 +974,7 @@ namespace {
           apply->setImplicit();
         }
       }
-      return finishApply(apply, openedType, locator);
+      return finishApply(apply, locator);
     }
     
     /// \brief Describes either a type or the name of a type to be resolved.
@@ -1119,13 +1092,8 @@ namespace {
     /// \param apply The function application to finish type-checking, which
     /// may be a newly-built expression.
     ///
-    /// \param openedType The "opened" type this expression had during
-    /// type checking, which will be used to specialize the resulting,
-    /// type-checked expression appropriately.
-    ///
     /// \param locator The locator for the original expression.
-    Expr *finishApply(ApplyExpr *apply, Type openedType,
-                      ConstraintLocatorBuilder locator);
+    Expr *finishApply(ApplyExpr *apply, ConstraintLocatorBuilder locator);
 
   private:
     /// \brief Retrieve the overload choice associated with the given
@@ -2130,7 +2098,7 @@ namespace {
             { tc.Context.Id_stringInterpolationSegment });
         cs.cacheType(apply->getArg());
 
-        auto converted = finishApply(apply, openedType, locatorBuilder);
+        auto converted = finishApply(apply, locatorBuilder);
         if (!converted)
           return nullptr;
 
@@ -2147,7 +2115,7 @@ namespace {
       ApplyExpr *apply = CallExpr::createImplicit(tc.Context, memberRef,
                                                   segments, names);
       cs.cacheSubExprTypes(apply);
-      expr->setSemanticExpr(finishApply(apply, openedType, locatorBuilder));
+      expr->setSemanticExpr(finishApply(apply, locatorBuilder));
       return expr;
     }
     
@@ -2380,7 +2348,7 @@ namespace {
                                             expr->getArgumentLabelLocs(),
                                             expr->hasTrailingClosure(),
                                             /*implicit=*/false);
-        result = finishApply(apply, Type(), cs.getConstraintLocator(expr));
+        result = finishApply(apply, cs.getConstraintLocator(expr));
       }
 
       result = coerceToType(result, resultTy, cs.getConstraintLocator(expr));
@@ -2466,7 +2434,7 @@ namespace {
       auto *call = new (cs.getASTContext()) DotSyntaxCallExpr(ctorRef, dotLoc,
                                                               base);
 
-      return finishApply(call, cs.getType(expr),
+      return finishApply(call,
                          ConstraintLocatorBuilder(
                            cs.getConstraintLocator(expr)));
     }
@@ -2845,7 +2813,7 @@ namespace {
     }
 
     Expr *visitApplyExpr(ApplyExpr *expr) {
-      return finishApply(expr, cs.getType(expr),
+      return finishApply(expr,
                          ConstraintLocatorBuilder(
                            cs.getConstraintLocator(expr)));
     }
@@ -6295,7 +6263,7 @@ TypeChecker::diagnoseInvalidDynamicConstructorReferences(Expr *base,
   return true;
 }
 
-Expr *ExprRewriter::finishApply(ApplyExpr *apply, Type openedType,
+Expr *ExprRewriter::finishApply(ApplyExpr *apply,
                                 ConstraintLocatorBuilder locator) {
   TypeChecker &tc = cs.getTypeChecker();
   
@@ -6473,7 +6441,7 @@ Expr *ExprRewriter::finishApply(ApplyExpr *apply, Type openedType,
   apply->setFn(declRef);
 
   // Tail-recur to actually call the constructor.
-  return finishApply(apply, openedType, locator);
+  return finishApply(apply, locator);
 }
 
 
@@ -7171,7 +7139,7 @@ Expr *TypeChecker::callWitness(Expr *base, DeclContext *dc,
   call->setFn(memberRef);
 
   // Call the witness.
-  Expr *result = rewriter.finishApply(call, openedType,
+  Expr *result = rewriter.finishApply(call,
                                       cs.getConstraintLocator(call));
   if (!result)
     return nullptr;

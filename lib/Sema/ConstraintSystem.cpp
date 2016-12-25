@@ -1038,7 +1038,7 @@ ConstraintSystem::getTypeOfMemberReference(
 
   // Handle associated type lookup as a special case, horribly.
   // FIXME: This is an awful hack.
-  if (auto assocType = dyn_cast<AssociatedTypeDecl>(value)) {
+  if (isa<AssociatedTypeDecl>(value)) {
     // Error recovery path.
     if (baseObjTy->isOpenedExistential()) {
       Type memberTy = ErrorType::get(TC.Context);
@@ -1047,41 +1047,11 @@ ConstraintSystem::getTypeOfMemberReference(
     }
 
     // Refer to a member of the archetype directly.
-    if (auto archetype = baseObjTy->getAs<ArchetypeType>()) {
-      Type memberTy = archetype->getNestedType(value->getName());
-      if (!isTypeReference)
-        memberTy = MetatypeType::get(memberTy);
+    auto archetype = baseObjTy->castTo<ArchetypeType>();
+    Type memberTy = archetype->getNestedType(value->getName());
+    if (!isTypeReference)
+      memberTy = MetatypeType::get(memberTy);
 
-      auto openedType = FunctionType::get(baseObjTy, memberTy);
-      return { openedType, memberTy };
-    }
-
-    // If we have a nominal type that conforms to the protocol in which the
-    // associated type resides, use the witness.
-    if (!baseObjTy->isExistentialType() &&
-        baseObjTy->getAnyNominal()) {
-      auto proto = cast<ProtocolDecl>(assocType->getDeclContext());
-      if (auto conformance =
-            TC.conformsToProtocol(baseObjTy, proto, DC,
-                                  ConformanceCheckFlags::InExpression)) {
-        if (conformance->isConcrete()) {
-          auto memberTy = conformance->getConcrete()->getTypeWitness(assocType,
-                                                                     &TC)
-            .getReplacement();
-          if (!isTypeReference)
-            memberTy = MetatypeType::get(memberTy);
-
-          auto openedType = FunctionType::get(baseObjTy, memberTy);
-          return { openedType, memberTy };
-        }
-      }
-    }
-
-    // FIXME: Totally bogus fallthrough.
-    Type memberTy = isTypeReference
-        ? assocType->getDeclaredInterfaceType()
-        : assocType->getInterfaceType();
-    memberTy = assocType->getProtocol()->mapTypeIntoContext(memberTy);
     auto openedType = FunctionType::get(baseObjTy, memberTy);
     return { openedType, memberTy };
   }
@@ -1230,29 +1200,6 @@ ConstraintSystem::getTypeOfMemberReference(
     }
 
     type = FunctionType::get(fnType->getInput(), elementTy);
-  } else if (isa<ProtocolDecl>(outerDC) &&
-             isa<AssociatedTypeDecl>(value)) {
-    // When we have an associated type, the base type conforms to the
-    // given protocol, so use the type witness directly.
-    // FIXME: Diagnose existentials properly.
-    auto proto = cast<ProtocolDecl>(outerDC);
-    auto assocType = cast<AssociatedTypeDecl>(value);
-
-    type = openedFnType->getResult();
-    if (baseOpenedTy->is<ArchetypeType>()) {
-      // For an archetype, we substitute the base object for the base.
-      // FIXME: Feels like a total hack.
-    } else if (!baseOpenedTy->isExistentialType() &&
-               !baseOpenedTy->is<ArchetypeType>()) {
-      if (auto conformance =
-            TC.conformsToProtocol(baseOpenedTy, proto, DC,
-                                  ConformanceCheckFlags::InExpression)) {
-        if (conformance->isConcrete()) {
-          type = conformance->getConcrete()->getTypeWitness(assocType, &TC)
-                   .getReplacement();
-        }
-      }
-    }
   } else if (!value->isInstanceMember() || isInstance) {
     // For a constructor, enum element, static method, static property,
     // or an instance method referenced through an instance, we've consumed the
