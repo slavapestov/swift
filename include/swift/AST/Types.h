@@ -3558,7 +3558,7 @@ class ProtocolType : public NominalType, public llvm::FoldingSetNode {
 public:
   /// \brief Retrieve the type when we're referencing the given protocol.
   /// declaration.
-  static ProtocolType *get(ProtocolDecl *D, const ASTContext &C);
+  static ProtocolType *get(ProtocolDecl *D, Type Parent, const ASTContext &C);
 
   ProtocolDecl *getDecl() const {
     return reinterpret_cast<ProtocolDecl *>(NominalType::getDecl());
@@ -3603,7 +3603,8 @@ public:
 
 private:
   friend class NominalTypeDecl;
-  ProtocolType(ProtocolDecl *TheDecl, const ASTContext &Ctx);
+  ProtocolType(ProtocolDecl *TheDecl, Type Parent, const ASTContext &Ctx,
+               RecursiveTypeProperties properties);
 };
 BEGIN_CAN_TYPE_WRAPPER(ProtocolType, NominalType)
   void getAnyExistentialTypeProtocols(SmallVectorImpl<ProtocolDecl *> &protos) {
