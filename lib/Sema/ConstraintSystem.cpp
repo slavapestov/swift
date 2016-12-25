@@ -1339,7 +1339,9 @@ void ConstraintSystem::resolveOverload(ConstraintLocator *locator,
     bool isDynamicResult
       = choice.getKind() == OverloadChoiceKind::DeclViaDynamic;
     // Retrieve the type of a reference to the specific declaration choice.
-    if (choice.getBaseType()) {
+    if (auto baseTy = choice.getBaseType()) {
+      assert(!baseTy->hasTypeParameter());
+
       auto getDotBase = [](const Expr *E) -> const DeclRefExpr * {
         if (E == nullptr) return nullptr;
         switch (E->getKind()) {
@@ -1358,7 +1360,7 @@ void ConstraintSystem::resolveOverload(ConstraintLocator *locator,
       auto anchor = locator ? locator->getAnchor() : nullptr;
       auto base = getDotBase(anchor);
       std::tie(openedFullType, refType)
-        = getTypeOfMemberReference(choice.getBaseType(), choice.getDecl(),
+        = getTypeOfMemberReference(baseTy, choice.getDecl(),
                                    isTypeReference, isDynamicResult,
                                    choice.getFunctionRefKind(),
                                    locator, base, nullptr);
