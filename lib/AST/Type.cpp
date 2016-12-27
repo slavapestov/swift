@@ -424,9 +424,27 @@ Type TypeBase::eraseOpenedExistential(Module *module,
   if (!hasOpenedExistential())
     return Type(this);
 
-  TypeSubstitutionMap substitutions;
-  substitutions[opened] = opened->getOpenedExistentialType();
-  return Type(this).subst(module, substitutions, None);
+  auto existentialType = opened->getOpenedExistentialType();
+
+  return Type(this).transform([&](Type t) -> Type {
+    // A metatype with an opened existential type becomes an
+    // existential metatype.
+    if (auto *metatypeType = dyn_cast<MetatypeType>(t.getPointer())) {
+      auto instanceType = metatypeType->getInstanceType();
+      if (instanceType->hasOpenedExistential()) {
+        instanceType = instanceType->eraseOpenedExistential(module, opened);
+        return ExistentialMetatypeType::get(instanceType);
+      }
+    }
+
+    // @opened P => P
+    if (auto *archetypeType = dyn_cast<ArchetypeType>(t.getPointer())) {
+      if (archetypeType == opened)
+        return existentialType;
+    }
+
+    return t;
+  });
 }
 
 void
@@ -732,6 +750,18 @@ Type TypeBase::replaceCovariantResultType(Type newResultType,
             resultOTK,
             objectType->replaceCovariantResultType(
                 newResultType, uncurryLevel, preserveOptionality));
+      }
+    }
+
+    // Correctly handle replacement of opened existential archetype with
+    // existential type -- metatype becomes existential metatype
+    if (auto metatypeType = getAs<AnyMetatypeType>()) {
+      if (auto instanceType = metatypeType->getInstanceType()) {
+        auto newInstanceType = instanceType->replaceCovariantResultType(
+            newResultType, uncurryLevel, preserveOptionality);
+        if (newResultType->isExistentialType())
+          return ExistentialMetatypeType::get(newInstanceType);
+        return MetatypeType::get(newInstanceType);
       }
     }
 
