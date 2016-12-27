@@ -1152,15 +1152,14 @@ ConstraintSystem::getTypeOfMemberReference(
   }
   // If this is an initializer, replace the result type with the base
   // object type.
-  else if (auto ctor = dyn_cast<ConstructorDecl>(value)) {
-    auto resultTy = baseObjTy;
-    if (ctor->getFailability() != OTK_None)
-      resultTy = OptionalType::get(ctor->getFailability(), resultTy);
-
-    openedType = openedType->replaceCovariantResultType(
-                     resultTy,
-                     /*uncurryLevel=*/ 2,
-                     /*preserveOptionality=*/ false);
+  else if (isa<ConstructorDecl>(value)) {
+    // This should really be checking for the ctor being defined in a
+    // class or protocol... but we also rely on this to re-sugar some
+    // constructor calls for some reason.
+    if (!baseObjTy->getAnyOptionalObjectType()) {
+      openedType = openedType->replaceCovariantResultType(
+          baseObjTy, /*uncurryLevel=*/ 2);
+    }
   }
 
   // If we are looking at a member of an existential, open the existential.

@@ -739,18 +739,15 @@ Type TypeBase::getWithoutParens() {
 }
 
 Type TypeBase::replaceCovariantResultType(Type newResultType,
-                                          unsigned uncurryLevel,
-                                          bool preserveOptionality) {
+                                          unsigned uncurryLevel) {
   if (uncurryLevel == 0) {
-    if (preserveOptionality) {
-      OptionalTypeKind resultOTK;
-      if (auto objectType = getAnyOptionalObjectType(resultOTK)) {
-        assert(!newResultType->getAnyOptionalObjectType());
-        return OptionalType::get(
-            resultOTK,
-            objectType->replaceCovariantResultType(
-                newResultType, uncurryLevel, preserveOptionality));
-      }
+    OptionalTypeKind resultOTK;
+    if (auto objectType = getAnyOptionalObjectType(resultOTK)) {
+      assert(!newResultType->getAnyOptionalObjectType());
+      return OptionalType::get(
+          resultOTK,
+          objectType->replaceCovariantResultType(
+              newResultType, uncurryLevel));
     }
 
     // Correctly handle replacement of opened existential archetype with
@@ -758,7 +755,7 @@ Type TypeBase::replaceCovariantResultType(Type newResultType,
     if (auto metatypeType = getAs<AnyMetatypeType>()) {
       if (auto instanceType = metatypeType->getInstanceType()) {
         auto newInstanceType = instanceType->replaceCovariantResultType(
-            newResultType, uncurryLevel, preserveOptionality);
+            newResultType, uncurryLevel);
         if (newResultType->isExistentialType())
           return ExistentialMetatypeType::get(newInstanceType);
         return MetatypeType::get(newInstanceType);
@@ -773,9 +770,8 @@ Type TypeBase::replaceCovariantResultType(Type newResultType,
   Type inputType = fnType->getInput();
   Type resultType =
     fnType->getResult()->replaceCovariantResultType(newResultType,
-                                                    uncurryLevel - 1,
-                                                    preserveOptionality);
-  
+                                                    uncurryLevel - 1);
+
   // Produce the resulting function type.
   if (auto genericFn = dyn_cast<GenericFunctionType>(fnType)) {
     return GenericFunctionType::get(genericFn->getGenericSignature(),
