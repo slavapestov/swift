@@ -844,20 +844,40 @@ namespace {
       // If this is a method whose result type is dynamic Self, or a
       // construction, replace the result type with the actual object type.
       Type dynamicSelfFnType;
-      if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
-        if ((isa<FuncDecl>(func) &&
-             (cast<FuncDecl>(func)->hasDynamicSelf() ||
-              (openedExistential &&
-               cast<FuncDecl>(func)->hasArchetypeSelf()))) ||
-            isPolymorphicConstructor(func)) {
-          refTy = refTy->replaceCovariantResultType(
-              containerTy, func->getNumParameterLists());
-          if (!baseTy->isEqual(containerTy)) {
-            dynamicSelfFnType = refTy->replaceCovariantResultType(
-                baseTy, func->getNumParameterLists());
+      if (!member->getDeclContext()->getAsProtocolOrProtocolExtensionContext()) {
+#if 0
+        llvm::errs() << "******** BEFORE:\n";
+        refTy->dump();
+#endif
+        if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
+          if ((isa<FuncDecl>(func) &&
+               (cast<FuncDecl>(func)->hasDynamicSelf() ||
+                (openedExistential &&
+                 cast<FuncDecl>(func)->hasArchetypeSelf()))) ||
+              isPolymorphicConstructor(func)) {
+            refTy = refTy->replaceCovariantResultType(
+                containerTy, func->getNumParameterLists());
+            if (!baseTy->isEqual(containerTy)) {
+              dynamicSelfFnType = refTy->replaceCovariantResultType(
+                  baseTy, func->getNumParameterLists());
+            }
           }
+#if 0
+        llvm::errs() << "******** AFTER:\n";
+        refTy->dump();
+#endif
         }
-      }
+      } /*else if (openedExistential) {
+        auto refFnTy = refTy->castTo<FunctionType>();
+        refTy = FunctionType::get(
+          refFnTy->getInput(),
+          refFnTy->getResult()->eraseOpenedExistential(
+              member->getDeclContext()->getParentModule(),
+              baseTy->castTo<ArchetypeType>()),
+          refFnTy->getExtInfo());
+        refTy->dump();
+        baseTy->dump();
+      }*/
 
       // References to properties with accessors and storage usually go
       // through the accessors, but sometimes are direct.

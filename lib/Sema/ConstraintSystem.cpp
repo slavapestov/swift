@@ -727,11 +727,20 @@ ConstraintSystem::getTypeOfReference(ValueDecl *value,
     
     // If this is a method whose result type is dynamic Self, replace
     // DynamicSelf with the actual object type.
-    if (func->hasDynamicSelf()) {
-      Type selfTy = openedFnType->getInput()->getRValueInstanceType();
-      openedType = openedType->replaceCovariantResultType(
-                     selfTy,
-                     func->getNumParameterLists());
+    if (!func->getDeclContext()->getAsProtocolOrProtocolExtensionContext()) {
+      if (func->hasDynamicSelf()) {
+        Type selfTy = openedFnType->getInput()->getRValueInstanceType();
+        openedType = openedType->replaceCovariantResultType(
+                       selfTy,
+                       func->getNumParameterLists());
+        openedFnType = openedType->castTo<FunctionType>();
+      }
+    } else {
+      openedType = openedType.transform([](Type t) -> Type {
+        if (auto *selfTy = dyn_cast<DynamicSelfType>(t.getPointer()))
+          return selfTy->getSelfType();
+        return t;
+      });
       openedFnType = openedType->castTo<FunctionType>();
     }
 
@@ -1045,6 +1054,8 @@ ConstraintSystem::getTypeOfMemberReference(
   if (isa<AssociatedTypeDecl>(value)) {
     // Error recovery path.
     if (baseObjTy->isOpenedExistential()) {
+      // suspect?
+      assert(false);
       Type memberTy = ErrorType::get(TC.Context);
       auto openedType = FunctionType::get(baseObjTy, memberTy);
       return { openedType, memberTy };
@@ -1139,27 +1150,35 @@ ConstraintSystem::getTypeOfMemberReference(
     }
   }
 
-  // If this is a method whose result type has a dynamic Self return, replace
-  // DynamicSelf with the actual object type.
-  if (auto func = dyn_cast<FuncDecl>(value)) {
-    if (func->hasDynamicSelf() ||
-        (baseObjTy->isExistentialType() &&
-         func->hasArchetypeSelf())) {
-      openedType = openedType->replaceCovariantResultType(
-                     baseObjTy,
-                     func->getNumParameterLists());
+  if (!outerDC->getAsProtocolOrProtocolExtensionContext()) {
+    // If this is a method whose result type has a dynamic Self return, replace
+    // DynamicSelf with the actual object type.
+    if (auto func = dyn_cast<FuncDecl>(value)) {
+      if (func->hasDynamicSelf() ||
+          (baseObjTy->isExistentialType() &&
+           func->hasArchetypeSelf())) {
+        openedType = openedType->replaceCovariantResultType(
+                       baseObjTy,
+                       func->getNumParameterLists());
+      }
+
+    // If this is an initializer, replace the result type with the base
+    // object type.
+    } else if (isa<ConstructorDecl>(value)) {
+      // This should really be checking for the ctor being defined in a
+      // class or protocol... but we also rely on this to re-sugar some
+      // constructor calls for some reason.
+      if (!baseObjTy->getAnyOptionalObjectType()) {
+        openedType = openedType->replaceCovariantResultType(
+            baseObjTy, /*uncurryLevel=*/ 2);
+      }
     }
-  }
-  // If this is an initializer, replace the result type with the base
-  // object type.
-  else if (isa<ConstructorDecl>(value)) {
-    // This should really be checking for the ctor being defined in a
-    // class or protocol... but we also rely on this to re-sugar some
-    // constructor calls for some reason.
-    if (!baseObjTy->getAnyOptionalObjectType()) {
-      openedType = openedType->replaceCovariantResultType(
-          baseObjTy, /*uncurryLevel=*/ 2);
-    }
+  } else {
+    openedType = openedType.transform([](Type t) -> Type {
+      if (auto *selfTy = dyn_cast<DynamicSelfType>(t.getPointer()))
+        return selfTy->getSelfType();
+      return t;
+    });
   }
 
   // If we are looking at a member of an existential, open the existential.
@@ -1222,6 +1241,26 @@ ConstraintSystem::getTypeOfMemberReference(
     // For an unbound instance method reference, replace the 'Self'
     // parameter with the base type.
     type = openedFnType->replaceSelfParameterType(baseObjTy);
+  }
+
+  if (baseObjTy->isExistentialType()) {
+    auto selfTy = replacements[outerDC->getSelfInterfaceType()->getCanonicalType()];
+
+    type = type.transform([&](Type t) -> Type {
+          if (auto *dynamicSelf = dyn_cast<DynamicSelfType>(t.getPointer()))
+            t = dynamicSelf->getSelfType()->getDesugaredType();
+          if (isa<TypeVariableType>(t.getPointer()))
+            if (t.getPointer() == selfTy)
+            return outerDC->getDeclaredTypeOfContext();
+          if (isa<MetatypeType>(t.getPointer()) &&
+              cast<MetatypeType>(t.getPointer())->getInstanceType().getPointer() == selfTy)
+            return ExistentialMetatypeType::get(outerDC->getDeclaredTypeOfContext());
+          return t;
+        });
+#if 0
+    type->dump();
+    baseObjTy.dump();
+#endif
   }
 
   // If we opened up any type variables, record the replacements.
