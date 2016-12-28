@@ -416,8 +416,7 @@ void TypeBase::getOpenedExistentials(
   });
 }
 
-Type TypeBase::eraseOpenedExistential(Module *module,
-                                      ArchetypeType *opened) {
+Type TypeBase::eraseOpenedExistential(ArchetypeType *opened) {
   assert(opened->getOpenedExistentialType() &&
          "Not an opened existential type?");
 
@@ -432,7 +431,7 @@ Type TypeBase::eraseOpenedExistential(Module *module,
     if (auto *metatypeType = dyn_cast<MetatypeType>(t.getPointer())) {
       auto instanceType = metatypeType->getInstanceType();
       if (instanceType->hasOpenedExistential()) {
-        instanceType = instanceType->eraseOpenedExistential(module, opened);
+        instanceType = instanceType->eraseOpenedExistential(opened);
         return ExistentialMetatypeType::get(instanceType);
       }
     }
@@ -443,6 +442,17 @@ Type TypeBase::eraseOpenedExistential(Module *module,
         return existentialType;
     }
 
+    return t;
+  });
+}
+
+Type TypeBase::eraseDynamicSelfType() {
+  if (!hasDynamicSelfType())
+    return this;
+
+  return Type(this).transform([](Type t) -> Type {
+    if (auto *selfTy = dyn_cast<DynamicSelfType>(t.getPointer()))
+      return selfTy->getSelfType();
     return t;
   });
 }

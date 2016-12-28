@@ -736,11 +736,7 @@ ConstraintSystem::getTypeOfReference(ValueDecl *value,
         openedFnType = openedType->castTo<FunctionType>();
       }
     } else {
-      openedType = openedType.transform([](Type t) -> Type {
-        if (auto *selfTy = dyn_cast<DynamicSelfType>(t.getPointer()))
-          return selfTy->getSelfType();
-        return t;
-      });
+      openedType = openedType->eraseDynamicSelfType();
       openedFnType = openedType->castTo<FunctionType>();
     }
 
@@ -1052,15 +1048,6 @@ ConstraintSystem::getTypeOfMemberReference(
   // Handle associated type lookup as a special case, horribly.
   // FIXME: This is an awful hack.
   if (isa<AssociatedTypeDecl>(value)) {
-    // Error recovery path.
-    if (baseObjTy->isOpenedExistential()) {
-      // suspect?
-      assert(false);
-      Type memberTy = ErrorType::get(TC.Context);
-      auto openedType = FunctionType::get(baseObjTy, memberTy);
-      return { openedType, memberTy };
-    }
-
     // Refer to a member of the archetype directly.
     auto archetype = baseObjTy->castTo<ArchetypeType>();
     Type memberTy = archetype->getNestedType(value->getName());
@@ -1174,11 +1161,7 @@ ConstraintSystem::getTypeOfMemberReference(
       }
     }
   } else {
-    openedType = openedType.transform([](Type t) -> Type {
-      if (auto *selfTy = dyn_cast<DynamicSelfType>(t.getPointer()))
-        return selfTy->getSelfType();
-      return t;
-    });
+    openedType = openedType->eraseDynamicSelfType();
   }
 
   // If we are looking at a member of an existential, open the existential.
@@ -1257,10 +1240,6 @@ ConstraintSystem::getTypeOfMemberReference(
             return ExistentialMetatypeType::get(outerDC->getDeclaredTypeOfContext());
           return t;
         });
-#if 0
-    type->dump();
-    baseObjTy.dump();
-#endif
   }
 
   // If we opened up any type variables, record the replacements.

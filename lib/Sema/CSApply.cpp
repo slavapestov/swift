@@ -701,9 +701,7 @@ namespace {
       Type resultTy;
       resultTy = cs.getType(result);
       if (resultTy->hasOpenedExistential(record.Archetype)) {
-        Type erasedTy = resultTy->eraseOpenedExistential(
-                          innerCS.DC->getParentModule(),
-                          record.Archetype);
+        Type erasedTy = resultTy->eraseOpenedExistential(record.Archetype);
         result = coerceToType(result, erasedTy, nullptr);
       }
 
@@ -845,10 +843,6 @@ namespace {
       // construction, replace the result type with the actual object type.
       Type dynamicSelfFnType;
       if (!member->getDeclContext()->getAsProtocolOrProtocolExtensionContext()) {
-#if 0
-        llvm::errs() << "******** BEFORE:\n";
-        refTy->dump();
-#endif
         if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
           if ((isa<FuncDecl>(func) &&
                (cast<FuncDecl>(func)->hasDynamicSelf() ||
@@ -862,22 +856,8 @@ namespace {
                   baseTy, func->getNumParameterLists());
             }
           }
-#if 0
-        llvm::errs() << "******** AFTER:\n";
-        refTy->dump();
-#endif
         }
-      } /*else if (openedExistential) {
-        auto refFnTy = refTy->castTo<FunctionType>();
-        refTy = FunctionType::get(
-          refFnTy->getInput(),
-          refFnTy->getResult()->eraseOpenedExistential(
-              member->getDeclContext()->getParentModule(),
-              baseTy->castTo<ArchetypeType>()),
-          refFnTy->getExtInfo());
-        refTy->dump();
-        baseTy->dump();
-      }*/
+      }
 
       // References to properties with accessors and storage usually go
       // through the accessors, but sometimes are direct.
@@ -928,9 +908,7 @@ namespace {
         // existential.
         if (openedExistential &&
             refType->hasOpenedExistential(knownOpened->second)) {
-          refType = refType->eraseOpenedExistential(
-                      cs.DC->getParentModule(),
-                      knownOpened->second);
+          refType = refType->eraseOpenedExistential(knownOpened->second);
         }
 
         cs.setType(ref, refType);

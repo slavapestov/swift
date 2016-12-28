@@ -490,7 +490,11 @@ public:
 
   /// Erase the given opened existential type by replacing it with its
   /// existential type throughout the given type.
-  Type eraseOpenedExistential(ModuleDecl *module, ArchetypeType *opened);
+  Type eraseOpenedExistential(ArchetypeType *opened);
+
+  /// Erase DynamicSelfType from the given type by replacing it with its
+  /// underlying type.
+  Type eraseDynamicSelfType();
 
   /// \brief Compute and return the set of type variables that occur within this
   /// type.
