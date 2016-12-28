@@ -1141,9 +1141,7 @@ ConstraintSystem::getTypeOfMemberReference(
     // If this is a method whose result type has a dynamic Self return, replace
     // DynamicSelf with the actual object type.
     if (auto func = dyn_cast<FuncDecl>(value)) {
-      if (func->hasDynamicSelf() ||
-          (baseObjTy->isExistentialType() &&
-           func->hasArchetypeSelf())) {
+      if (func->hasDynamicSelf()) {
         openedType = openedType->replaceCovariantResultType(
                        baseObjTy,
                        func->getNumParameterLists());

@@ -725,20 +725,14 @@ namespace {
       return true;
     }
 
-    /// Is the given function a constructor of a class or protocol?
-    /// Such functions are subject to DynamicSelf manipulations.
+    /// Is the given function a constructor of a class?
     ///
-    /// We want to avoid taking the DynamicSelf paths for other
-    /// constructors for two reasons:
-    ///   - it's an unnecessary cost
-    ///   - optionality preservation has a problem with constructors on
-    ///     optional types
+    /// Such functions are subject to DynamicSelf manipulations.
     static bool isPolymorphicConstructor(AbstractFunctionDecl *fn) {
       if (!isa<ConstructorDecl>(fn))
         return false;
-      auto *parent =
-        fn->getParent()->getAsNominalTypeOrNominalTypeExtensionContext();
-      return parent && (isa<ClassDecl>(parent) || isa<ProtocolDecl>(parent));
+      return (fn->getDeclContext()
+                  ->getAsClassOrClassExtensionContext() != nullptr);
     }
 
     /// \brief Build a new member reference with the given base and member.
@@ -845,9 +839,7 @@ namespace {
       if (!member->getDeclContext()->getAsProtocolOrProtocolExtensionContext()) {
         if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
           if ((isa<FuncDecl>(func) &&
-               (cast<FuncDecl>(func)->hasDynamicSelf() ||
-                (openedExistential &&
-                 cast<FuncDecl>(func)->hasArchetypeSelf()))) ||
+               cast<FuncDecl>(func)->hasDynamicSelf()) ||
               isPolymorphicConstructor(func)) {
             refTy = refTy->replaceCovariantResultType(
                 containerTy, func->getNumParameterLists());
