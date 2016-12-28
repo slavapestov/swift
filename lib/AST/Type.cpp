@@ -3067,7 +3067,8 @@ Type Type::substDependentTypesWithErrorTypes() const {
   return substType(*this,
                    [](SubstitutableType *t) -> Type { return Type(); },
                    MakeAbstractConformanceForGenericType(),
-                   SubstFlags::UseErrorType);
+                   (SubstFlags::AllowLoweredTypes |
+                    SubstFlags::UseErrorType));
 }
 
 Type TypeBase::getSuperclassForDecl(const ClassDecl *baseClass,
