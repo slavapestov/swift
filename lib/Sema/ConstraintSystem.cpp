@@ -1138,24 +1138,14 @@ ConstraintSystem::getTypeOfMemberReference(
   }
 
   if (!outerDC->getAsProtocolOrProtocolExtensionContext()) {
-    // If this is a method whose result type has a dynamic Self return, replace
-    // DynamicSelf with the actual object type.
-    if (auto func = dyn_cast<FuncDecl>(value)) {
-      if (func->hasDynamicSelf()) {
+    if (auto func = dyn_cast<AbstractFunctionDecl>(value)) {
+      if ((isa<FuncDecl>(func) &&
+           cast<FuncDecl>(func)->hasDynamicSelf()) ||
+          (isa<ConstructorDecl>(func) &&
+           !baseObjTy->getAnyOptionalObjectType())) {
         openedType = openedType->replaceCovariantResultType(
                        baseObjTy,
                        func->getNumParameterLists());
-      }
-
-    // If this is an initializer, replace the result type with the base
-    // object type.
-    } else if (isa<ConstructorDecl>(value)) {
-      // This should really be checking for the ctor being defined in a
-      // class or protocol... but we also rely on this to re-sugar some
-      // constructor calls for some reason.
-      if (!baseObjTy->getAnyOptionalObjectType()) {
-        openedType = openedType->replaceCovariantResultType(
-            baseObjTy, /*uncurryLevel=*/ 2);
       }
     }
   } else {
