@@ -4899,7 +4899,8 @@ static bool diagnoseSingleCandidateFailures(CalleeCandidateInfo &CCI,
     CallArgParam &arg = args[0];
     auto resTy = candidate.getResultType()->lookThroughAllAnyOptionalTypes();
     auto rawTy = isRawRepresentable(resTy, CCI.CS);
-    if (rawTy && resTy->getCanonicalType() == arg.Ty.getCanonicalTypeOrNull()) {
+    if (rawTy && arg.Ty &&
+        resTy->getCanonicalType() == arg.Ty->getCanonicalType()) {
       auto getInnerExpr = [](Expr *E) -> Expr* {
         ParenExpr *parenE = dyn_cast<ParenExpr>(E);
         if (!parenE)
