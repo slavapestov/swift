@@ -1224,20 +1224,25 @@ ConstraintSystem::getTypeOfMemberReference(
     type = openedFnType->replaceSelfParameterType(baseObjTy);
   }
 
+  // When accessing members of an existential, replace the 'Self' type
+  // parameter with the existential type, since formally the access will
+  // operate on existentials and not type parameters.
   if (baseObjTy->isExistentialType()) {
-    auto selfTy = replacements[outerDC->getSelfInterfaceType()->getCanonicalType()];
+    auto selfTy = replacements[outerDC->getSelfInterfaceType()
+          ->getCanonicalType()];
+    auto existentialTy = outerDC->getDeclaredTypeOfContext();
 
     type = type.transform([&](Type t) -> Type {
-          if (auto *dynamicSelf = dyn_cast<DynamicSelfType>(t.getPointer()))
-            t = dynamicSelf->getSelfType()->getDesugaredType();
-          if (isa<TypeVariableType>(t.getPointer()))
-            if (t.getPointer() == selfTy)
-            return outerDC->getDeclaredTypeOfContext();
-          if (isa<MetatypeType>(t.getPointer()) &&
-              cast<MetatypeType>(t.getPointer())->getInstanceType().getPointer() == selfTy)
-            return ExistentialMetatypeType::get(outerDC->getDeclaredTypeOfContext());
-          return t;
-        });
+      if (auto *dynamicSelf = t->getAs<DynamicSelfType>(t))
+        t = dynamicSelf->getSelfType();
+      if (t->is<TypeVariableType>(t))
+        if (t->isEqual(selfTy))
+        return existentialTy;
+      if (t->is<MetatypeType>(t) &&
+          cast<MetatypeType>(t)->getInstanceType()->isEqual(selfTy))
+        return ExistentialMetatypeType::get(existentialTy);
+      return t;
+    });
   }
 
   // If we opened up any type variables, record the replacements.
