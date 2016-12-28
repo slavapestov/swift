@@ -760,18 +760,6 @@ Type TypeBase::replaceCovariantResultType(Type newResultType,
               newResultType, uncurryLevel));
     }
 
-    // Correctly handle replacement of opened existential archetype with
-    // existential type -- metatype becomes existential metatype
-    if (auto metatypeType = getAs<AnyMetatypeType>()) {
-      if (auto instanceType = metatypeType->getInstanceType()) {
-        auto newInstanceType = instanceType->replaceCovariantResultType(
-            newResultType, uncurryLevel);
-        if (newResultType->isExistentialType())
-          return ExistentialMetatypeType::get(newInstanceType);
-        return MetatypeType::get(newInstanceType);
-      }
-    }
-
     return newResultType;
   }
 
