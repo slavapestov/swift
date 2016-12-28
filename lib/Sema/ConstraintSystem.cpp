@@ -1230,7 +1230,7 @@ ConstraintSystem::getTypeOfMemberReference(
   // When accessing members of an existential, replace the 'Self' type
   // parameter with the existential type, since formally the access will
   // operate on existentials and not type parameters.
-  if (baseObjTy->isExistentialType()) {
+  if (!isDynamicResult && baseObjTy->isExistentialType()) {
     auto selfTy = replacements[outerDC->getSelfInterfaceType()
           ->getCanonicalType()];
     auto existentialTy = outerDC->getDeclaredTypeOfContext();
