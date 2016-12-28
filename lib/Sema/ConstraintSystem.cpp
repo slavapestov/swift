@@ -1233,14 +1233,14 @@ ConstraintSystem::getTypeOfMemberReference(
     auto existentialTy = outerDC->getDeclaredTypeOfContext();
 
     type = type.transform([&](Type t) -> Type {
-      if (auto *dynamicSelf = t->getAs<DynamicSelfType>(t))
-        t = dynamicSelf->getSelfType();
-      if (t->is<TypeVariableType>(t))
+      if (auto *selfTy = t->getAs<DynamicSelfType>())
+        t = selfTy->getSelfType();
+      if (t->is<TypeVariableType>())
         if (t->isEqual(selfTy))
         return existentialTy;
-      if (t->is<MetatypeType>(t) &&
-          cast<MetatypeType>(t)->getInstanceType()->isEqual(selfTy))
-        return ExistentialMetatypeType::get(existentialTy);
+      if (auto *metatypeTy = t->getAs<MetatypeType>())
+        if (metatypeTy->getInstanceType()->isEqual(selfTy))
+          return ExistentialMetatypeType::get(existentialTy);
       return t;
     });
   }
