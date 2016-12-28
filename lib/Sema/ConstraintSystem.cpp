@@ -1159,6 +1159,9 @@ ConstraintSystem::getTypeOfMemberReference(
       }
     }
   } else {
+    // Protocol requirements returning Self have a dynamic Self return
+    // type. Erase the dynamic Self since it only comes into play during
+    // protocol conformance checking.
     openedType = openedType->eraseDynamicSelfType();
   }
 
