@@ -725,16 +725,6 @@ namespace {
       return true;
     }
 
-    /// Is the given function a constructor of a class?
-    ///
-    /// Such functions are subject to DynamicSelf manipulations.
-    static bool isPolymorphicConstructor(AbstractFunctionDecl *fn) {
-      if (!isa<ConstructorDecl>(fn))
-        return false;
-      return (fn->getDeclContext()
-                  ->getAsClassOrClassExtensionContext() != nullptr);
-    }
-
     /// \brief Build a new member reference with the given base and member.
     Expr *buildMemberRef(Expr *base, Type openedFullType, SourceLoc dotLoc,
                          ValueDecl *member, DeclNameLoc memberLoc,
@@ -840,7 +830,8 @@ namespace {
         if (auto func = dyn_cast<AbstractFunctionDecl>(member)) {
           if ((isa<FuncDecl>(func) &&
                cast<FuncDecl>(func)->hasDynamicSelf()) ||
-              isPolymorphicConstructor(func)) {
+              (isa<ConstructorDecl>(func) &&
+               containerTy->getClassOrBoundGenericClass())) {
             refTy = refTy->replaceCovariantResultType(
                 containerTy, func->getNumParameterLists());
             if (!baseTy->isEqual(containerTy)) {
