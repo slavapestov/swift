@@ -389,7 +389,10 @@ bool LetPropertiesOpt::isConstantLetProperty(VarDecl *Property) {
                       << "' has no unknown uses\n");
 
   // Only properties of simple types can be optimized.
-  if (!isSimpleType(Module->Types.getLoweredType(Property->getType()), *Module)) {
+  auto loweredType = Module->Types.getLoweredType(
+    Property->getDeclContext()->mapTypeIntoContext(
+      Property->getInterfaceType()));
+  if (!isSimpleType(loweredType, *Module)) {
      DEBUG(llvm::dbgs() << "Property '" << *Property
                        << "' is not of trivial type\n");
     SkipProcessing.insert(Property);

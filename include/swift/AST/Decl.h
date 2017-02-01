@@ -63,6 +63,7 @@ namespace swift {
   class EnumCaseDecl;
   class EnumElementDecl;
   class ParameterList;
+  class ParamDecl;
   class Pattern;
   struct PrintOptions;
   class ProtocolDecl;
@@ -4231,6 +4232,9 @@ public:
   /// Get the type of the variable within its context. If the context is generic,
   /// this will use archetypes.
   Type getType() const {
+    // FIXME: ClangImporter creates ParamDecls with funny DeclContexts
+    assert(isa<ParamDecl>(this) || getDeclContext()->isLocalContext() &&
+           "only local variables have a contextual type");
     assert(!typeInContext.isNull() && "no contextual type set yet");
     return typeInContext;
   }

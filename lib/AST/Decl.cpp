@@ -5030,7 +5030,7 @@ Type TypeBase::getSwiftNewtypeUnderlyingType() {
   for (auto member : structDecl->getMembers())
     if (auto varDecl = dyn_cast<VarDecl>(member))
       if (varDecl->getName() == getASTContext().Id_rawValue)
-        return varDecl->getType();
+        return varDecl->getInterfaceType();
 
   return {};
 }

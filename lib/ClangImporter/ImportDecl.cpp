@@ -105,7 +105,8 @@ static Accessibility getOverridableAccessibility(DeclContext *dc) {
 /// Create a typedpattern(namedpattern(decl))
 static Pattern *createTypedNamedPattern(VarDecl *decl) {
   ASTContext &Ctx = decl->getASTContext();
-  Type ty = decl->getType();
+  Type ty = decl->getDeclContext()->mapTypeIntoContext(
+      decl->getInterfaceType());
 
   Pattern *P = new (Ctx) NamedPattern(decl);
   P->setType(ty);
@@ -494,7 +495,7 @@ static FuncDecl *makeNewtypeBridgedRawValueGetter(
     ParameterList::createEmpty(C)
   };
 
-  auto computedType = computedVar->getType();
+  auto computedType = computedVar->getInterfaceType();
 
   auto getterDecl =
     FuncDecl::create(C, /*StaticLoc=*/SourceLoc(), StaticSpellingKind::None,
@@ -544,7 +545,7 @@ static FuncDecl *makeFieldGetterDecl(ClangImporter::Implementation &Impl,
     ParameterList::createEmpty(C)
   };
   
-  auto getterType = importedFieldDecl->getType();
+  auto getterType = importedFieldDecl->getInterfaceType();
   auto getterDecl =
     FuncDecl::create(C, /*StaticLoc=*/SourceLoc(), StaticSpellingKind::None,
                      /*FuncLoc=*/importedFieldDecl->getLoc(),
@@ -571,7 +572,7 @@ static FuncDecl *makeFieldSetterDecl(ClangImporter::Implementation &Impl,
                                         /*isStatic*/false, /*isInOut*/true);
   auto newValueDecl = new (C) ParamDecl(/*isLet */ true,SourceLoc(),SourceLoc(),
                                         Identifier(), SourceLoc(), C.Id_value,
-                                        importedFieldDecl->getType(),
+                                        importedFieldDecl->getInterfaceType(),
                                         importedDecl);
   newValueDecl->setInterfaceType(importedFieldDecl->getInterfaceType());
 
@@ -1104,8 +1105,9 @@ createValueConstructor(ClangImporter::Implementation &Impl,
     Identifier argName = generateParamName ? var->getName() : Identifier();
     auto param = new (context)
         ParamDecl(/*IsLet*/ true, SourceLoc(), SourceLoc(), argName,
-                  SourceLoc(), var->getName(), var->getType(), structDecl);
+                  SourceLoc(), var->getName(), Type(), structDecl);
     param->setInterfaceType(var->getInterfaceType());
+    param->setType(structDecl->mapTypeIntoContext(var->getInterfaceType()));
     valueParameters.push_back(param);
   }
 
@@ -1285,7 +1287,7 @@ static ConstructorDecl *createRawValueBridgingConstructor(
     auto rhs = new (cxt) CoerceExpr(
         new (cxt) DeclRefExpr(init->getParameterList(1)->get(0), DeclNameLoc(),
                               /*Implicit=*/true),
-        {}, {nullptr, storedRawValue->getType()});
+        {}, {nullptr, storedRawValue->getInterfaceType()});
 
     // Add assignment.
     auto assign = new (cxt) AssignExpr(lhs, SourceLoc(), rhs,
@@ -1784,17 +1786,21 @@ applyPropertyOwnership(VarDecl *prop,
   }
   if (attrs & clang::ObjCPropertyDecl::OBJC_PR_weak) {
     prop->getAttrs().add(new (ctx) OwnershipAttr(Ownership::Weak));
-    prop->setType(WeakStorageType::get(prop->getType(), ctx));
     prop->setInterfaceType(WeakStorageType::get(
         prop->getInterfaceType(), ctx));
+    prop->setType(
+      prop->getDeclContext()->mapTypeIntoContext(
+        prop->getInterfaceType()));
     return;
   }
   if ((attrs & clang::ObjCPropertyDecl::OBJC_PR_assign) ||
       (attrs & clang::ObjCPropertyDecl::OBJC_PR_unsafe_unretained)) {
     prop->getAttrs().add(new (ctx) OwnershipAttr(Ownership::Unmanaged));
-    prop->setType(UnmanagedStorageType::get(prop->getType(), ctx));
     prop->setInterfaceType(UnmanagedStorageType::get(
         prop->getInterfaceType(), ctx));
+    prop->setType(
+      prop->getDeclContext()->mapTypeIntoContext(
+        prop->getInterfaceType()));
     return;
   }
 }

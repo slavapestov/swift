@@ -1956,11 +1956,11 @@ void TypeChecker::checkNoEscapeAttr(ParamDecl *PD, NoEscapeAttr *attr) {
 
 
 void TypeChecker::checkOwnershipAttr(VarDecl *var, OwnershipAttr *attr) {
-  Type type = var->getType();
   Type interfaceType = var->getInterfaceType();
+  Type type = var->getDeclContext()->mapTypeIntoContext(interfaceType);
 
   // Just stop if we've already processed this declaration.
-  if (type->is<ReferenceStorageType>())
+  if (interfaceType->is<ReferenceStorageType>())
     return;
 
   auto ownershipKind = attr->get();

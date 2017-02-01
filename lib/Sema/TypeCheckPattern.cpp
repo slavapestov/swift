@@ -1102,10 +1102,10 @@ bool TypeChecker::coercePatternToType(Pattern *&P, DeclContext *dc, Type type,
     if (var->getAttrs().hasAttribute<OwnershipAttr>())
       type = getTypeOfRValue(var, false);
     else if (!var->isInvalid())
-      type = var->getType();
+      type = dc->mapTypeIntoContext(var->getInterfaceType());
     P->setType(type);
     var->getTypeLoc() = tyLoc;
-    var->getTypeLoc().setType(var->getType());
+    var->getTypeLoc().setType(dc->mapTypeIntoContext(var->getInterfaceType()));
 
     // If we are inferring a variable to have type AnyObject.Type,
     // "()", or optional thereof, emit a diagnostic.  In the first 2 cases, the

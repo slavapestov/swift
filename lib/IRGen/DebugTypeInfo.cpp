@@ -93,10 +93,8 @@ DebugTypeInfo DebugTypeInfo::getGlobal(SILGlobalVariable *GV,
   auto LowTy = GV->getLoweredType().getSwiftType();
   auto *Type = LowTy.getPointer();
   if (auto *Decl = GV->getDecl()) {
-    auto DeclType =
-        (Decl->hasType() ? Decl->getType()
-                         : Decl->getDeclContext()->mapTypeIntoContext(
-                               Decl->getInterfaceType()));
+    auto DeclType = Decl->getDeclContext()->mapTypeIntoContext(
+        Decl->getInterfaceType());
     if (DeclType->isEqual(LowTy))
       Type = DeclType.getPointer();
   }

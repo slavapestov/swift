@@ -851,7 +851,8 @@ bool SILGenModule::hasNonTrivialIVars(ClassDecl *cd) {
     VarDecl *vd = dyn_cast<VarDecl>(member);
     if (!vd || !vd->hasStorage()) continue;
 
-    const TypeLowering &ti = Types.getTypeLowering(vd->getType());
+    const TypeLowering &ti = Types.getTypeLowering(
+      cd->mapTypeIntoContext(vd->getInterfaceType()));
     if (!ti.isTrivial())
       return true;
   }

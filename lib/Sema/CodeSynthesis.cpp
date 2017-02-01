@@ -584,6 +584,8 @@ static Expr *synthesizeCopyWithZoneCall(Expr *Val, VarDecl *VD,
                                         TypeChecker &TC) {
   auto &Ctx = TC.Context;
 
+  auto *DC = VD->getDeclContext();
+
   // We support @NSCopying on class types (which conform to NSCopying),
   // protocols which conform, and option types thereof.
   Type UnderlyingType = TC.getTypeOfRValue(VD, /*want interface type*/false);
@@ -596,9 +598,9 @@ static Expr *synthesizeCopyWithZoneCall(Expr *Val, VarDecl *VD,
 
   // The element type must conform to NSCopying.  If not, emit an error and just
   // recovery by synthesizing without the copy call.
-  auto *CopyingProto = getNSCopyingProtocol(TC, VD->getDeclContext());
+  auto *CopyingProto = getNSCopyingProtocol(TC, DC);
   if (!CopyingProto || !TC.conformsToProtocol(UnderlyingType, CopyingProto,
-                                              VD->getDeclContext(), None)) {
+                                              DC, None)) {
     TC.diagnose(VD->getLoc(), diag::nscopying_doesnt_conform);
     return Val;
   }
@@ -624,7 +626,7 @@ static Expr *synthesizeCopyWithZoneCall(Expr *Val, VarDecl *VD,
   Expr *Call = CallExpr::createImplicit(Ctx, UDE, { Nil }, { Ctx.Id_with });
 
   TypeLoc ResultTy;
-  ResultTy.setType(VD->getType(), true);
+  ResultTy.setType(DC->mapTypeIntoContext(VD->getInterfaceType()), true);
 
   // If we're working with non-optional types, we're forcing the cast.
   if (!isOptional) {
@@ -1010,6 +1012,7 @@ namespace {
 static FuncDecl *completeLazyPropertyGetter(VarDecl *VD, VarDecl *Storage,
                                             TypeChecker &TC) {
   auto &Ctx = VD->getASTContext();
+  auto *DC = VD->getDeclContext();
 
   // The getter checks the optional, storing the initial value in if nil.  The
   // specific pattern we generate is:
@@ -1051,11 +1054,12 @@ static FuncDecl *completeLazyPropertyGetter(VarDecl *VD, VarDecl *Storage,
   // Build the "if" around the early return.
   Tmp1DRE = new (Ctx) DeclRefExpr(Tmp1VD, DeclNameLoc(), /*Implicit*/true,
                                   AccessSemantics::DirectToStorage);
-  
+
+  auto ContextTy = DC->mapTypeIntoContext(VD->getInterfaceType());
+
   // Call through "hasValue" on the decl ref.
-  Tmp1DRE->setType(OptionalType::get(VD->getType()));
-  constraints::ConstraintSystem cs(TC,
-                                   VD->getDeclContext(),
+  Tmp1DRE->setType(OptionalType::get(ContextTy));
+  constraints::ConstraintSystem cs(TC, DC,
                                    constraints::ConstraintSystemOptions());
   constraints::Solution solution(cs, constraints::Score());
   auto HasValueExpr = solution.convertOptionalToBool(Tmp1DRE, nullptr);
@@ -1067,7 +1071,7 @@ static FuncDecl *completeLazyPropertyGetter(VarDecl *VD, VarDecl *Storage,
 
   auto *Tmp2VD = new (Ctx) VarDecl(/*IsStatic*/false, /*IsLet*/true,
                                    /*IsCaptureList*/false, SourceLoc(),
-                                   Ctx.getIdentifier("tmp2"), VD->getType(),
+                                   Ctx.getIdentifier("tmp2"), ContextTy,
                                    Get);
   Tmp2VD->setImplicit();
 
@@ -1088,7 +1092,7 @@ static FuncDecl *completeLazyPropertyGetter(VarDecl *VD, VarDecl *Storage,
 
   Pattern *Tmp2PBDPattern = new (Ctx) NamedPattern(Tmp2VD, /*implicit*/true);
   Tmp2PBDPattern = new (Ctx) TypedPattern(Tmp2PBDPattern,
-                                          TypeLoc::withoutLoc(VD->getType()),
+                                          TypeLoc::withoutLoc(ContextTy),
                                           /*implicit*/true);
 
   auto *Tmp2PBD = PatternBindingDecl::create(Ctx, /*StaticLoc*/SourceLoc(),
@@ -1530,24 +1534,26 @@ void TypeChecker::completeLazyVarImplementation(VarDecl *VD) {
          "variable not validated yet");
   assert(!VD->isStatic() && "Static vars are already lazy on their own");
 
+  auto *DC = VD->getDeclContext();
+
   // Create the storage property as an optional of VD's type.
   SmallString<64> NameBuf = VD->getName().str();
   NameBuf += ".storage";
   auto StorageName = Context.getIdentifier(NameBuf);
-  auto StorageTy = OptionalType::get(VD->getType());
   auto StorageInterfaceTy = OptionalType::get(VD->getInterfaceType());
 
   auto *Storage = new (Context) VarDecl(/*IsStatic*/false, /*IsLet*/false,
                                         /*IsCaptureList*/false, VD->getLoc(),
-                                        StorageName, StorageTy,
-                                        VD->getDeclContext());
+                                        StorageName, Type(), DC);
   Storage->setInterfaceType(StorageInterfaceTy);
   Storage->setUserAccessible(false);
-  addMemberToContextIfNeeded(Storage, VD->getDeclContext(), VD);
+  addMemberToContextIfNeeded(Storage, DC, VD);
 
   // Create the pattern binding decl for the storage decl.  This will get
   // default initialized to nil.
   Pattern *PBDPattern = new (Context) NamedPattern(Storage, /*implicit*/true);
+
+  auto StorageTy = DC->mapTypeIntoContext(StorageInterfaceTy);
   PBDPattern = new (Context) TypedPattern(PBDPattern,
                                           TypeLoc::withoutLoc(StorageTy),
                                           /*implicit*/true);
@@ -1555,9 +1561,9 @@ void TypeChecker::completeLazyVarImplementation(VarDecl *VD) {
                                          StaticSpellingKind::None,
                                          /*varloc*/VD->getLoc(),
                                          PBDPattern, /*init*/nullptr,
-                                         VD->getDeclContext());
+                                         DC);
   PBD->setImplicit();
-  addMemberToContextIfNeeded(PBD, VD->getDeclContext());
+  addMemberToContextIfNeeded(PBD, DC);
 
   // Now that we've got the storage squared away, synthesize the getter.
   completeLazyPropertyGetter(VD, Storage, *this);
@@ -1573,7 +1579,7 @@ void TypeChecker::completeLazyVarImplementation(VarDecl *VD) {
   // prevents it from being dynamically dispatched.  Note that we do this after
   // the accessors are set up, because we don't want the setter for the lazy
   // property to inherit these properties from the storage.
-  if (VD->getDeclContext()->getAsClassOrClassExtensionContext())
+  if (DC->getAsClassOrClassExtensionContext())
     makeFinal(Context, Storage);
   Storage->setImplicit();
   Storage->setAccessibility(Accessibility::Private);

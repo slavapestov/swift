@@ -493,17 +493,19 @@ static Expr *foldSequence(TypeChecker &TC, DeclContext *DC,
 }
 
 Type TypeChecker::getTypeOfRValue(ValueDecl *value, bool wantInterfaceType) {
+  if (!value->hasInterfaceType())
+    validateDecl(value);
 
   Type type;
   if (wantInterfaceType) {
-    if (!value->hasInterfaceType())
-      validateDecl(value);
     type = value->getInterfaceType();
   } else {
     auto *var = cast<VarDecl>(value);
-    if (!var->hasType())
-      validateDecl(var);
-    type = var->getType();
+    if (var->getDeclContext()->isLocalContext()) {
+      type = var->getType();
+    } else {
+      type = var->getDeclContext()->mapTypeIntoContext(var->getInterfaceType());
+    }
   }
 
   return type->getLValueOrInOutObjectType()->getReferenceStorageReferent();

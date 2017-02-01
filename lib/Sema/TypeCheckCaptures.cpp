@@ -185,6 +185,7 @@ public:
     // Visit the type of the capture, if it isn't a class reference, since
     // we'd need the metadata to do so.
     if (VD->hasInterfaceType()
+        && VD->getDeclContext()->isLocalContext()
         && (!AFR.isObjC()
             || !isa<VarDecl>(VD)
             || !cast<VarDecl>(VD)->getType()->hasRetainablePointerRepresentation()))

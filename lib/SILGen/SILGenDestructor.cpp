@@ -126,7 +126,8 @@ void SILGenFunction::emitClassMemberDestruction(SILValue selfValue,
                                                 ClassDecl *cd,
                                                 CleanupLocation cleanupLoc) {
   for (VarDecl *vd : cd->getStoredProperties()) {
-    const TypeLowering &ti = getTypeLowering(vd->getType());
+    const TypeLowering &ti = getTypeLowering(
+      cd->mapTypeIntoContext(vd->getInterfaceType()));
     if (!ti.isTrivial()) {
       SILValue addr = B.createRefElementAddr(cleanupLoc, selfValue, vd,
                                          ti.getLoweredType().getAddressType());

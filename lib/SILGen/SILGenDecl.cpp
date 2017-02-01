@@ -968,7 +968,7 @@ InitializationPtr SILGenFunction::emitInitializationForVarDecl(VarDecl *vd) {
     return InitializationPtr(new KnownAddressInitialization(SV));
   }
 
-  CanType varType = vd->getType()->getCanonicalType();
+  CanType varType = vd->getInterfaceType()->getCanonicalType();
 
   assert(!isa<InOutType>(varType) && "local variables should never be inout");
 

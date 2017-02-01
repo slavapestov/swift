@@ -686,7 +686,7 @@ static void setBoundVarsTypeError(Pattern *pattern, ASTContext &ctx) {
   pattern->forEachVariable([&](VarDecl *var) {
     // Don't change the type of a variable that we've been able to
     // compute a type for.
-    if (var->hasType() && !var->getType()->hasError())
+    if (var->hasInterfaceType() && !var->getInterfaceType()->hasError())
       return;
 
     var->markInvalid();
@@ -1791,7 +1791,7 @@ static void checkAccessibility(TypeChecker &TC, const Decl *D) {
         if (seenVars.count(theVar) || theVar->isInvalid())
           return;
 
-        checkTypeAccessibility(TC, TypeLoc::withoutLoc(theVar->getType()),
+        checkTypeAccessibility(TC, TypeLoc::withoutLoc(theVar->getInterfaceType()),
                                theVar,
                                [&](AccessScope typeAccessScope,
                                    const TypeRepr *complainRepr,
@@ -1812,7 +1812,7 @@ static void checkAccessibility(TypeChecker &TC, const Decl *D) {
                                   theVarAccess,
                                   isa<FileUnit>(theVar->getDeclContext()),
                                   typeAccess,
-                                  theVar->getType());
+                                  theVar->getInterfaceType());
         });
         return;
       }
@@ -3651,9 +3651,9 @@ public:
   void visitBoundVariable(VarDecl *VD) {
     TC.validateDecl(VD);
     
-    if (!VD->getType()->isMaterializable()) {
+    if (!VD->getInterfaceType()->isMaterializable()) {
       TC.diagnose(VD->getStartLoc(), diag::var_type_not_materializable,
-                  VD->getType());
+                  VD->getInterfaceType());
       VD->markInvalid();
     }
 
@@ -3833,7 +3833,7 @@ public:
           TC.diagnose(var->getLoc(), diag::observingprop_requires_initializer);
           PBD->setInvalid();
           var->setInvalid();
-          if (!var->hasType()) {
+          if (!var->hasInterfaceType()) {
             var->markInvalid();
           }
           return;
@@ -3847,7 +3847,7 @@ public:
                       var->getCorrectStaticSpelling());
           PBD->setInvalid();
           var->setInvalid();
-          if (!var->hasType()) {
+          if (!var->hasInterfaceType()) {
             var->markInvalid();
           }
           return;
@@ -3861,7 +3861,7 @@ public:
                       diag::global_requires_initializer, var->isLet());
           PBD->setInvalid();
           var->setInvalid();
-          if (!var->hasType()) {
+          if (!var->hasInterfaceType()) {
             var->markInvalid();
           }
           return;
@@ -4789,13 +4789,12 @@ public:
     if (auto *VD = dyn_cast_or_null<VarDecl>(FD->getAccessorStorageDecl())) {
       if (VD->hasObservers()) {
         TC.validateDecl(VD);
-        Type valueTy = VD->getType()->getReferenceStorageReferent();
         Type valueIfaceTy = VD->getInterfaceType()->getReferenceStorageReferent();
         if (FD->isObservingAccessor() || (FD->isSetter() && FD->isImplicit())) {
           unsigned firstParamIdx = FD->getParent()->isTypeContext();
           auto *firstParamPattern = FD->getParameterList(firstParamIdx);
           auto *newValueParam = firstParamPattern->get(0);
-          newValueParam->setType(valueTy);
+          newValueParam->setType(FD->mapTypeIntoContext(valueIfaceTy));
           newValueParam->setInterfaceType(valueIfaceTy);
         } else if (FD->isGetter() && FD->isImplicit()) {
           FD->getBodyResultTypeLoc().setType(valueIfaceTy, true);
