@@ -3729,8 +3729,7 @@ case TypeKind::Id:
                         genericParams.end());
 
     // Produce the new generic function type.
-    auto sig = GenericSignature::get(genericParams, requirements,
-                                     function->getGenericSignature()->getConformances());
+    auto sig = GenericSignature::get(genericParams, requirements);
     return GenericFunctionType::get(sig, inputTy, resultTy,
                                     function->getExtInfo());
   }

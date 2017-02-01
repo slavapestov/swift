@@ -2240,11 +2240,6 @@ namespace {
       assert(TheSILModule.Types.getLoweredType(abstraction, origType)
                .getSwiftRValueType() == origType);
 
-      Type substTypee = origType.subst(Subst, Conformances, None);
-      if (!substTypee) {
-        llvm::errs() << "failed:\n";
-        origType.dump();
-      }
       CanType substType =
         origType.subst(Subst, Conformances, None)->getCanonicalType();
 
@@ -2286,8 +2281,6 @@ SILFunctionType::substGenericArgs(SILModule &silModule,
 
   assert(isPolymorphic());
   auto map = GenericSig->getSubstitutionMap(subs);
-  map.dump();
-  GenericSig->dump();
   SILTypeSubstituter substituter(silModule, map);
 
   return substituter.visitSILFunctionType(CanSILFunctionType(this),
@@ -2298,7 +2291,6 @@ CanSILFunctionType
 SILFunctionType::substGenericArgs(SILModule &silModule,
                                   TypeSubstitutionFn subs,
                                   LookupConformanceFn conformances) {
-  llvm::errs() << "HELLO\n";
   if (!isPolymorphic()) return CanSILFunctionType(this);
   SILTypeSubstituter substituter(silModule, subs, conformances);
   return substituter.visitSILFunctionType(CanSILFunctionType(this),

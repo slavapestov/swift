@@ -25,10 +25,8 @@ using namespace swift;
 
 GenericSignature::GenericSignature(ArrayRef<GenericTypeParamType *> params,
                                    ArrayRef<Requirement> requirements,
-                                   ArrayRef<StashedConformance> conformances,
                                    bool isKnownCanonical)
   : NumGenericParams(params.size()), NumRequirements(requirements.size()),
-    NumConformances(conformances.size()),
     CanonicalSignatureOrASTContext()
 {
   auto paramsBuffer = getGenericParamsBuffer();
@@ -39,11 +37,6 @@ GenericSignature::GenericSignature(ArrayRef<GenericTypeParamType *> params,
   auto reqtsBuffer = getRequirementsBuffer();
   for (unsigned i = 0; i < NumRequirements; ++i) {
     reqtsBuffer[i] = requirements[i];
-  }
-
-  auto conformancesBuffer = getConformancesBuffer();
-  for (unsigned i = 0; i < NumConformances; ++i) {
-    conformancesBuffer[i] = conformances[i];
   }
 
   if (isKnownCanonical)
@@ -133,8 +126,7 @@ bool GenericSignature::isCanonical() const {
 
 CanGenericSignature GenericSignature::getCanonical(
                                         ArrayRef<GenericTypeParamType *> params,
-                                        ArrayRef<Requirement> requirements,
-                                        ArrayRef<StashedConformance> conformances) {
+                                        ArrayRef<Requirement> requirements) {
   // Canonicalize the parameters and requirements.
   SmallVector<GenericTypeParamType*, 8> canonicalParams;
   canonicalParams.reserve(params.size());
@@ -156,7 +148,6 @@ CanGenericSignature GenericSignature::getCanonical(
                       reqt.getLayoutConstraint()));
   }
   auto canSig = get(canonicalParams, canonicalRequirements,
-                    conformances,
                     /*isKnownCanonical=*/true);
   return CanGenericSignature(canSig);
 }
@@ -167,8 +158,7 @@ GenericSignature::getCanonicalSignature() const {
   if (CanonicalSignatureOrASTContext.isNull()) {
     // Compute the canonical signature.
     CanGenericSignature canSig = getCanonical(getGenericParams(),
-                                              getRequirements(),
-                                              getConformances());
+                                              getRequirements());
 
     // Record either the canonical signature or an indication that
     // this is the canonical signature.
@@ -317,11 +307,6 @@ GenericSignature::getSubstitutionMap(ArrayRef<Substitution> subs,
   // An empty parameter list gives an empty map.
   if (subs.empty())
     assert(getGenericParams().empty() || areAllParamsConcrete());
-
-  // Add stashed conformances.
-  for (auto conformance : getConformances()) {
-    result.addConformance(conformance.depTy, conformance.ref);
-  }
 
   for (auto depTy : getAllDependentTypes()) {
     auto sub = subs.front();
