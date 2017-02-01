@@ -526,7 +526,8 @@ SILLayout *ModuleFile::readSILLayout(llvm::BitstreamCursor &Cursor) {
     readGenericRequirements(requirements, DeclTypeCursor);
     CanGenericSignature sig;
     if (!genericParams.empty() || !requirements.empty()) {
-      sig = GenericSignature::get(genericParams, requirements)
+      // FIXME FIXME FIXME
+      sig = GenericSignature::get(genericParams, requirements, {})
         ->getCanonicalSignature();
     }
     return SILLayout::get(getContext(), sig, fields);
@@ -1149,7 +1150,8 @@ ModuleFile::getGenericSignatureOrEnvironment(
 
   // Construct the generic signature from the loaded parameters and
   // requirements.
-  auto signature = GenericSignature::get(paramTypes, requirements);
+  // FIXME FIXME FIXME
+  auto signature = GenericSignature::get(paramTypes, requirements, {});
 
   // If we only want the signature, return it now.
   if (!wantEnvironment) return signature;
@@ -1603,7 +1605,8 @@ Decl *ModuleFile::resolveCrossReference(ModuleDecl *M, uint32_t pathLen) {
         }
         readGenericRequirements(requirements, DeclTypeCursor);
 
-        genericSig = GenericSignature::getCanonical(params, requirements);
+        // FIXME FIXME FIXME
+        genericSig = GenericSignature::getCanonical(params, requirements, {});
       }
 
       continue;
@@ -4070,7 +4073,8 @@ Type ModuleFile::getType(TypeID TID) {
     readGenericRequirements(requirements, DeclTypeCursor);
     auto info = GenericFunctionType::ExtInfo(*rep, throws);
 
-    auto sig = GenericSignature::get(genericParams, requirements);
+    // FIXME FIXME FIXME
+    auto sig = GenericSignature::get(genericParams, requirements, {});
     typeOrOffset = GenericFunctionType::get(sig,
                                             getType(inputID),
                                             getType(resultID),
@@ -4249,7 +4253,8 @@ Type ModuleFile::getType(TypeID TID) {
 
     GenericSignature *genericSig = nullptr;
     if (!genericParamTypes.empty() || !requirements.empty())
-      genericSig = GenericSignature::get(genericParamTypes, requirements,
+      // FIXME FIXME FIXME
+      genericSig = GenericSignature::get(genericParamTypes, requirements, {},
                                          /*isKnownCanonical=*/true);
 
     typeOrOffset = SILFunctionType::get(genericSig, extInfo,
@@ -4436,7 +4441,8 @@ void ModuleFile::finishNormalConformance(NormalProtocolConformance *conformance,
       readGenericRequirements(requirements, DeclTypeCursor);
 
       // Form the generic signature for the synthetic environment.
-      syntheticSig = GenericSignature::get(genericParams, requirements);
+      // FIXME FIXME FIXME
+      syntheticSig = GenericSignature::get(genericParams, requirements, {});
 
       // Create an archetype builder, which will help us create the
       // synthetic environment.

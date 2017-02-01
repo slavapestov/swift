@@ -119,6 +119,12 @@ struct ArchetypeBuilder::Implementation {
   llvm::DenseSet<std::pair<GenericEnvironment *,
                            ArchetypeBuilder::PotentialArchetype *>>
     ConcreteSubs;
+
+  // should this be a MapVector???
+  // FIXME FIXME FIXME
+  DenseMap<CanType,
+           SmallVector<ProtocolConformanceRef, 1>>
+    Conformances;
 };
 
 ArchetypeBuilder::PotentialArchetype::~PotentialArchetype() {
@@ -1303,6 +1309,12 @@ bool ArchetypeBuilder::addSameTypeRequirementToConcrete(
                       ->getCanonicalType();
     for (auto conforms : T->getConformsTo()) {
       auto protocol = conforms.first;
+
+      llvm::errs() << "======\n";
+      depTy.dump();
+      Concrete.dump();
+      protocol->getDeclaredInterfaceType()->dump();
+
       auto conformance =
         getLookupConformanceFn()(depTy, Concrete,
                                  protocol->getDeclaredInterfaceType()
@@ -1314,6 +1326,7 @@ bool ArchetypeBuilder::addSameTypeRequirementToConcrete(
         return true;
       }
 
+      Impl->Conformances[depTy].push_back(*conformance);
       conformances.insert({protocol, *conformance});
     }
   }
@@ -2159,7 +2172,14 @@ GenericSignature *ArchetypeBuilder::getGenericSignature() {
   SmallVector<Requirement, 4> requirements;
   collectRequirements(*this, Impl->GenericParams, requirements);
 
-  auto sig = GenericSignature::get(Impl->GenericParams, requirements);
+  SmallVector<StashedConformance, 1> conformances;
+  for (auto pair : Impl->Conformances) {
+    for (auto conformance : pair.second)
+      conformances.push_back(StashedConformance{CanType(pair.first), conformance});
+  }
+  
+  auto sig = GenericSignature::get(Impl->GenericParams, requirements,
+                                   conformances);
   return sig;
 }
 

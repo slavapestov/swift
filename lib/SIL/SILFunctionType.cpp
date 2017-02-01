@@ -2240,6 +2240,11 @@ namespace {
       assert(TheSILModule.Types.getLoweredType(abstraction, origType)
                .getSwiftRValueType() == origType);
 
+      Type substTypee = origType.subst(Subst, Conformances, None);
+      if (!substTypee) {
+        llvm::errs() << "failed:\n";
+        origType.dump();
+      }
       CanType substType =
         origType.subst(Subst, Conformances, None)->getCanonicalType();
 
