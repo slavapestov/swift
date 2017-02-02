@@ -2075,8 +2075,10 @@ void IRGenSILFunction::visitFullApplySite(FullApplySite site) {
 
   // Pass the generic arguments.
   if (hasPolymorphicParameters(origCalleeType)) {
+    auto subMap = origCalleeType->getGenericSignature()->getSubstitutionMap(
+      site.getSubstitutions());
     emitPolymorphicArguments(*this, origCalleeType, substCalleeType,
-                             site.getSubstitutions(), &witnessMetadata, llArgs);
+                             subMap, &witnessMetadata, llArgs);
   }
 
   // Add all those arguments.
