@@ -33,7 +33,7 @@ namespace irgen {
   void emitBuiltinCall(IRGenFunction &IGF, Identifier FnId,
                        SILType resultType,
                        Explosion &args, Explosion &result,
-                       ArrayRef<Substitution> substitutions);
+                       SubstitutionList substitutions);
 
 } // end namespace irgen
 } // end namespace swift

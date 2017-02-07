@@ -135,10 +135,10 @@ public:
 
   /// Build an interface type substitution map from a vector of Substitutions
   /// that correspond to the generic parameters in this generic signature.
-  SubstitutionMap getSubstitutionMap(ArrayRef<Substitution> args) const;
+  SubstitutionMap getSubstitutionMap(SubstitutionList args) const;
 
   /// Same as above, but updates an existing map.
-  void getSubstitutionMap(ArrayRef<Substitution> args,
+  void getSubstitutionMap(SubstitutionList args,
                           SubstitutionMap &subMap) const;
 
   /// Build an interface type substitution map from a type substitution function
