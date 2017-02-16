@@ -556,7 +556,16 @@ auto GenericSignatureBuilder::PotentialArchetype::getNestedType(
   for (auto &conforms : conformsTo) {
     auto proto = conforms.first;
 
-    for (auto member : proto->lookupDirect(nestedName)) {
+    // Make sure we don't trigger deserialization of extensions,
+    // since they can refer back to a protocol we're currently
+    // type checking.
+    //
+    // Note that typealiases in extensions won't matter here,
+    // because a typealias is never going to be a representative
+    // PA.
+    auto members = proto->lookupDirect(nestedName,
+                                       /*ignoreNewExtensions=*/true);
+    for (auto member : members) {
       PotentialArchetype *pa;
       
       if (auto assocType = dyn_cast<AssociatedTypeDecl>(member)) {
