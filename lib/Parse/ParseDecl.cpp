@@ -5409,7 +5409,7 @@ parseDeclProtocol(ParseDeclOptions Flags, DeclAttributes &Attributes) {
 ///   decl-subscript:
 ///     subscript-head get-set
 ///   subscript-head
-///     'subscript' attribute-list parameter-clause '->' type
+///     attribute-list? 'subscript' parameter-clause '->' type
 /// \endverbatim
 ParserResult<SubscriptDecl>
 Parser::parseDeclSubscript(ParseDeclOptions Flags,
@@ -5418,6 +5418,20 @@ Parser::parseDeclSubscript(ParseDeclOptions Flags,
   ParserStatus Status;
   SourceLoc SubscriptLoc = consumeToken(tok::kw_subscript);
 
+  // Parse the generic-params, if present.
+  Optional<Scope> GenericsScope;
+  GenericsScope.emplace(this, ScopeKind::Generics);
+  GenericParamList *GenericParams;
+  bool GPHasCodeCompletion = false;
+
+  auto Result = maybeParseGenericParams();
+  GenericParams = Result.getPtrOrNull();
+  GPHasCodeCompletion |= Result.hasCodeCompletion();
+
+  if (GPHasCodeCompletion && !CodeCompletion)
+    return makeParserCodeCompletionStatus();
+
+  // Parse the parameter list.
   SmallVector<Identifier, 4> argumentNames;
   ParserResult<ParameterList> Indices
     = parseSingleParameterClause(ParameterContextKind::Subscript,
@@ -5438,19 +5452,32 @@ Parser::parseDeclSubscript(ParseDeclOptions Flags,
   if (ElementTy.isNull() || ElementTy.hasCodeCompletion())
     return ParserStatus(ElementTy);
 
-  
+  diagnoseWhereClauseInGenericParamList(GenericParams);
+
+  // Parse a 'where' clause if present, adding it to our GenericParamList.
+  if (Tok.is(tok::kw_where)) {
+    auto whereStatus = parseFreestandingGenericWhereClause(GenericParams);
+    if (whereStatus.shouldStopParsing())
+      return whereStatus;
+  }
+
   // Build an AST for the subscript declaration.
   DeclName name = DeclName(Context, Context.Id_subscript, argumentNames);
   auto *Subscript = new (Context) SubscriptDecl(name,
                                                 SubscriptLoc, Indices.get(),
                                                 ArrowLoc, ElementTy.get(),
                                                 CurDeclContext,
-                                                /*GenericParams=*/nullptr);
+                                                GenericParams);
   Subscript->getAttrs() = Attributes;
-  
+
+  // Code completion for the generic type params.
+  //
+  // FIXME: What is this?
+  if (GPHasCodeCompletion)
+    CodeCompletion->setDelayedParsedDecl(Subscript);
+
   Decls.push_back(Subscript);
 
-  
   // '{'
   // Parse getter and setter.
   ParsedAccessors accessors;

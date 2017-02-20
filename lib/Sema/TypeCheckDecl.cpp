@@ -4813,6 +4813,15 @@ public:
       }
     }
 
+    // Accessors of generic subscripts get a copy of the subscript's generic
+    // parameter list, since they're not logically nested inside the
+    // subscript.
+    if (auto *SD = dyn_cast_or_null<SubscriptDecl>(FD->getAccessorStorageDecl())) {
+      assert(!FD->getGenericParams());
+      if (auto *gp = SD->getGenericParams())
+        FD->setGenericParams(gp);
+    }
+
     // Before anything else, set up the 'self' argument correctly if present.
     if (FD->getDeclContext()->isTypeContext())
       configureImplicitSelf(TC, FD);
