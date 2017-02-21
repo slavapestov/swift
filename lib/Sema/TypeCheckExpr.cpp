@@ -596,6 +596,13 @@ Type TypeChecker::getUnopenedTypeOfReference(ValueDecl *value, Type baseType,
                                LValueType::get(RFT->getResult()),
                                RFT->getExtInfo());
     }
+
+    // FIXME: Fix downstream callers.
+    if (auto *genericFn = requestedType->getAs<GenericFunctionType>()) {
+      return FunctionType::get(genericFn->getInput(),
+                               genericFn->getResult(),
+                               genericFn->getExtInfo());
+    }
   }
 
   // If we're dealing with contextual types, and we referenced this type from
