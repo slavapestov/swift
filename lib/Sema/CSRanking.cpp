@@ -297,10 +297,16 @@ static Type addCurriedSelfType(ASTContext &ctx, Type type, DeclContext *dc) {
   if (!dc->isTypeContext())
     return type;
 
-  auto nominal = dc->getAsNominalTypeOrNominalTypeExtensionContext();
-  auto selfTy = nominal->getInterfaceType()->castTo<MetatypeType>()
-                  ->getInstanceType();
-  if (auto sig = nominal->getGenericSignatureOfContext())
+  GenericSignature *sig = dc->getGenericSignatureOfContext();
+  if (auto *genericFn = type->getAs<GenericFunctionType>()) {
+    sig = genericFn->getGenericSignature();
+    type = FunctionType::get(genericFn->getInput(),
+                             genericFn->getResult(),
+                             genericFn->getExtInfo());
+  }
+
+  auto selfTy = dc->getDeclaredInterfaceType();
+  if (sig)
     return GenericFunctionType::get(sig, selfTy, type,
                                     AnyFunctionType::ExtInfo());
   return FunctionType::get(selfTy, type);
@@ -531,8 +537,6 @@ static bool isDeclAsSpecializedAs(TypeChecker &tc, DeclContext *dc,
         }
       } else {
         // Add a curried 'self' type.
-        assert(!type1->is<GenericFunctionType>() && "Odd generic function type?");
-        assert(!type2->is<GenericFunctionType>() && "Odd generic function type?");
         type1 = addCurriedSelfType(tc.Context, type1, decl1->getDeclContext());
         type2 = addCurriedSelfType(tc.Context, type2, decl2->getDeclContext());
 
