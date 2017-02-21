@@ -1079,13 +1079,42 @@ ConstraintSystem::getTypeOfMemberReference(
     getNumRemovedArgumentLabels(TC.Context, value, isCurriedInstanceReference,
                                 functionRefKind);
 
-  if (auto genericFn = value->getInterfaceType()->getAs<GenericFunctionType>()){
-    openedType = openFunctionType(genericFn, numRemovedArgumentLabels,
+  if (isa<AbstractFunctionDecl>(value) ||
+      isa<EnumElementDecl>(value)) {
+    // This is the easy case.
+    auto funcType = value->getInterfaceType()->getAs<AnyFunctionType>();
+
+    openedType = openFunctionType(funcType, numRemovedArgumentLabels,
                                   locator, replacements, innerDC, outerDC,
                                   /*skipProtocolSelfConstraint=*/true);
+
+    if (!outerDC->getAsProtocolOrProtocolExtensionContext()) {
+      if (auto func = dyn_cast<AbstractFunctionDecl>(value)) {
+        if ((isa<FuncDecl>(func) &&
+             cast<FuncDecl>(func)->hasDynamicSelf()) ||
+            (isa<ConstructorDecl>(func) &&
+             !baseObjTy->getAnyOptionalObjectType())) {
+          openedType = openedType->replaceCovariantResultType(
+              baseObjTy,
+              func->getNumParameterLists());
+        }
+      }
+    }
   } else {
+    // If we're not coming from something function-like, prepend the type
+    // for 'self' to the type.
+    assert(isa<AbstractStorageDecl>(value) ||
+           isa<TypeDecl>(value));
+
     openedType = TC.getUnopenedTypeOfReference(value, baseTy, useDC, base,
                                                /*wantInterfaceType=*/true);
+
+    // Remove argument labels, if needed.
+    openedType = removeArgumentLabels(openedType, numRemovedArgumentLabels);
+
+    // If we have a type reference, look through the metatype.
+    if (isTypeReference)
+      openedType = openedType->castTo<AnyMetatypeType>()->getInstanceType();
 
     // The type of 'Self' that will be added if the declaration
     // is not naturally a function type with a 'Self' parameter.
@@ -1093,7 +1122,6 @@ ConstraintSystem::getTypeOfMemberReference(
     auto isClassBoundExistential = false;
 
     if (auto sig = innerDC->getGenericSignatureOfContext()) {
-
       // Open up the generic parameter list for the container.
       openGeneric(innerDC, outerDC, sig,
                   /*skipProtocolSelfConstraint=*/true,
@@ -1109,12 +1137,12 @@ ConstraintSystem::getTypeOfMemberReference(
       // class-bound existential so we won't inappropriately wrap the
       // self type in an inout later on.
       isClassBoundExistential = nominal->getDeclaredType()
-          ->isClassExistentialType();
+        ->isClassExistentialType();
 
       if (outerDC->getAsProtocolOrProtocolExtensionContext()) {
         // Retrieve the type variable for 'Self'.
         selfTy = replacements[outerDC->getSelfInterfaceType()
-                                     ->getCanonicalType()];
+                              ->getCanonicalType()];
       } else {
         // Open the nominal type.
         selfTy = openType(nominal->getDeclaredInterfaceType(), locator,
@@ -1124,40 +1152,18 @@ ConstraintSystem::getTypeOfMemberReference(
       selfTy = outerDC->getDeclaredTypeOfContext();
     }
 
-    // Remove argument labels, if needed.
-    openedType = removeArgumentLabels(openedType, numRemovedArgumentLabels);
+    // If self is a struct, properly qualify it based on our base
+    // qualification.  If we have an lvalue coming in, we expect an inout.
+    if (!isClassBoundExistential &&
+        !selfTy->hasReferenceSemantics() &&
+        baseTy->is<LValueType>() &&
+        !selfTy->hasError())
+      selfTy = InOutType::get(selfTy);
 
-    // If we have a type reference, look through the metatype.
-    if (isTypeReference)
-      openedType = openedType->castTo<AnyMetatypeType>()->getInstanceType();
-
-    // If we're not coming from something function-like, prepend the type
-    // for 'self' to the type.
-    if (!isa<AbstractFunctionDecl>(value) && !isa<EnumElementDecl>(value)) {
-      // If self is a struct, properly qualify it based on our base
-      // qualification.  If we have an lvalue coming in, we expect an inout.
-      if (!isClassBoundExistential &&
-          !selfTy->hasReferenceSemantics() &&
-          baseTy->is<LValueType>() &&
-          !selfTy->hasError())
-        selfTy = InOutType::get(selfTy);
-
-      openedType = FunctionType::get(selfTy, openedType);
-    }
+    openedType = FunctionType::get(selfTy, openedType);
   }
 
-  if (!outerDC->getAsProtocolOrProtocolExtensionContext()) {
-    if (auto func = dyn_cast<AbstractFunctionDecl>(value)) {
-      if ((isa<FuncDecl>(func) &&
-           cast<FuncDecl>(func)->hasDynamicSelf()) ||
-          (isa<ConstructorDecl>(func) &&
-           !baseObjTy->getAnyOptionalObjectType())) {
-        openedType = openedType->replaceCovariantResultType(
-                       baseObjTy,
-                       func->getNumParameterLists());
-      }
-    }
-  } else {
+  if (outerDC->getAsProtocolOrProtocolExtensionContext()) {
     // Protocol requirements returning Self have a dynamic Self return
     // type. Erase the dynamic Self since it only comes into play during
     // protocol conformance checking.
