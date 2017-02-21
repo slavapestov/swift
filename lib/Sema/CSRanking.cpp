@@ -595,13 +595,15 @@ static bool isDeclAsSpecializedAs(TypeChecker &tc, DeclContext *dc,
         openedType1 = cs.openType(type1, locator, replacements);
       }
 
-      for (const auto &replacement : replacements) {
-        if (auto mapped = dc1->mapTypeIntoContext(replacement.first)) {
-          cs.addConstraint(ConstraintKind::Bind, replacement.second, mapped,
-                           locator);
+      if (!isa<SubscriptDecl>(decl1)) {
+        for (const auto &replacement : replacements) {
+          if (auto mapped = dc1->mapTypeIntoContext(replacement.first)) {
+            cs.addConstraint(ConstraintKind::Bind, replacement.second, mapped,
+                             locator);
+          }
         }
       }
-
+      
       // Extract the self types from the declarations, if they have them.
       Type selfTy1;
       Type selfTy2;
