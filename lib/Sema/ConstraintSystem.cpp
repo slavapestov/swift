@@ -455,6 +455,10 @@ Type ConstraintSystem::openType(
        Type startingType,
        ConstraintLocatorBuilder locator,
        llvm::DenseMap<CanType, TypeVariableType *> &replacements) {
+  if (!startingType->hasTypeParameter() &&
+      !startingType->hasUnboundGenericType())
+    return startingType;
+
   ReplaceDependentTypes replaceDependentTypes(*this, locator, replacements);
   return startingType.transform(replaceDependentTypes);
 }
@@ -503,13 +507,8 @@ Type ConstraintSystem::openFunctionType(
                 replacements);
 
     // Transform the input and output types.
-    Type inputTy = openType(genericFn->getInput(), locator, replacements);
-    if (!inputTy)
-      return Type();
-
-    Type resultTy = openType(genericFn->getResult(), locator, replacements);
-    if (!resultTy)
-      return Type();
+    auto inputTy = openType(genericFn->getInput(), locator, replacements);
+    auto resultTy = openType(genericFn->getResult(), locator, replacements);
 
     // Build the resulting (non-generic) function type.
     type = FunctionType::get(inputTy, resultTy,
@@ -517,7 +516,6 @@ Type ConstraintSystem::openFunctionType(
                                withThrows(genericFn->throws()));
   } else {
     type = openType(funcType, locator, replacements);
-    if (!type) return Type();
   }
 
   return removeArgumentLabels(type, numArgumentLabelsToRemove);
@@ -1116,41 +1114,25 @@ ConstraintSystem::getTypeOfMemberReference(
     if (isTypeReference)
       openedType = openedType->castTo<AnyMetatypeType>()->getInstanceType();
 
-    // The type of 'Self' that will be added if the declaration
-    // is not naturally a function type with a 'Self' parameter.
-    Type selfTy;
-    auto isClassBoundExistential = false;
-
     if (auto sig = innerDC->getGenericSignatureOfContext()) {
       // Open up the generic parameter list for the container.
       openGeneric(innerDC, outerDC, sig,
                   /*skipProtocolSelfConstraint=*/true,
                   locator, replacements);
-
-      // Open up the type of the member.
-      openedType = openType(openedType, locator, replacements);
-
-      // Determine the object type of 'self'.
-      auto nominal = outerDC->getAsNominalTypeOrNominalTypeExtensionContext();
-
-      // We want to track if the generic context is represented by a
-      // class-bound existential so we won't inappropriately wrap the
-      // self type in an inout later on.
-      isClassBoundExistential = nominal->getDeclaredType()
-        ->isClassExistentialType();
-
-      if (outerDC->getAsProtocolOrProtocolExtensionContext()) {
-        // Retrieve the type variable for 'Self'.
-        selfTy = replacements[outerDC->getSelfInterfaceType()
-                              ->getCanonicalType()];
-      } else {
-        // Open the nominal type.
-        selfTy = openType(nominal->getDeclaredInterfaceType(), locator,
-                          replacements);
-      }
-    } else {
-      selfTy = outerDC->getDeclaredTypeOfContext();
     }
+
+    // Open up the type of the member.
+    openedType = openType(openedType, locator, replacements);
+
+    // Determine the object type of 'self'.
+    auto selfTy = openType(outerDC->getSelfInterfaceType(), locator,
+                           replacements);
+
+    // We want to track if the generic context is represented by a
+    // class-bound existential so we won't inappropriately wrap the
+    // self type in an inout later on.
+    auto isClassBoundExistential = outerDC->getDeclaredTypeOfContext()
+        ->isClassExistentialType();
 
     // If self is a struct, properly qualify it based on our base
     // qualification.  If we have an lvalue coming in, we expect an inout.
