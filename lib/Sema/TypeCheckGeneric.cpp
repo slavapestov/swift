@@ -929,13 +929,7 @@ void TypeChecker::configureInterfaceType(SubscriptDecl *subscript,
                                          GenericSignature *sig) {
   auto elementTy = subscript->getElementTypeLoc().getType();
   auto indicesTy = subscript->getIndices()->getInterfaceType(Context);
-  Type funcTy;
-
-  if (sig)
-    funcTy = GenericFunctionType::get(sig, indicesTy, elementTy,
-                                      AnyFunctionType::ExtInfo());
-  else
-    funcTy = FunctionType::get(indicesTy, elementTy);
+  auto funcTy = FunctionType::get(indicesTy, elementTy);
 
   // Record the interface type.
   subscript->setInterfaceType(funcTy);
