@@ -1072,7 +1072,6 @@ ConstraintSystem::getTypeOfMemberReference(
 
   // Open the type of the generic function or member of a generic type.
   Type openedType;
-  auto isClassBoundExistential = false;
   llvm::DenseMap<CanType, TypeVariableType *> localReplacements;
   auto &replacements = replacementsPtr ? *replacementsPtr : localReplacements;
   bool isCurriedInstanceReference = value->isInstanceMember() && !isInstance;
@@ -1091,6 +1090,8 @@ ConstraintSystem::getTypeOfMemberReference(
     // The type of 'Self' that will be added if the declaration
     // is not naturally a function type with a 'Self' parameter.
     Type selfTy;
+    auto isClassBoundExistential = false;
+
     if (auto sig = innerDC->getGenericSignatureOfContext()) {
 
       // Open up the generic parameter list for the container.
