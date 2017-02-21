@@ -488,9 +488,14 @@ static bool isDeclAsSpecializedAs(TypeChecker &tc, DeclContext *dc,
       // A non-generic declaration is more specialized than a generic declaration.
       if (auto func1 = dyn_cast<AbstractFunctionDecl>(decl1)) {
         auto func2 = cast<AbstractFunctionDecl>(decl2);
-        if (static_cast<bool>(func1->getGenericParams()) !=
-              static_cast<bool>(func2->getGenericParams()))
-          return func2->getGenericParams();
+        if (func1->isGeneric() != func2->isGeneric())
+          return func2->isGeneric();
+      }
+
+      if (auto subscript1 = dyn_cast<SubscriptDecl>(decl1)) {
+        auto subscript2 = cast<SubscriptDecl>(decl2);
+        if (subscript1->isGeneric() != subscript2->isGeneric())
+          return subscript2->isGeneric();
       }
 
       // A witness is always more specialized than the requirement it satisfies.
