@@ -1213,7 +1213,7 @@ public:
                                   SourceLoc LAngleLoc,
                                   ArrayRef<GenericTypeParamDecl *> Params,
                                   SourceLoc WhereLoc,
-                                  MutableArrayRef<RequirementRepr> Requirements,
+                                  ArrayRef<RequirementRepr> Requirements,
                                   SourceLoc RAngleLoc);
 
   MutableArrayRef<GenericTypeParamDecl *> getParams() {
@@ -1331,6 +1331,11 @@ public:
       ++depth;
     return depth;
   }
+
+  /// Create a copy of the generic parameter list and all of its generic
+  /// parameter declarations. The copied generic parameters are re-parented
+  /// to the given DeclContext.
+  GenericParamList *clone(DeclContext *dc) const;
 
   void print(raw_ostream &OS);
   void dump();
