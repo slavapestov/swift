@@ -1976,16 +1976,27 @@ namespace {
     CanType visitType(CanType origType) {
       assert(!isa<AnyFunctionType>(origType));
       assert(!isa<LValueType>(origType) && !isa<InOutType>(origType));
-      auto substType = origType.subst(Subst, Conformances)->getCanonicalType();
+
+      if (!origType->hasArchetype() && !origType->hasTypeParameter())
+        return origType;
+
+      CanType canType;
+      auto substType = origType.subst(Subst, Conformances);
+      if (auto replacementSig = TheSILModule.Types.getCurGenericContext()) {
+        canType = replacementSig->getCanonicalTypeInContext(
+          TheSILModule.getSwiftModule(), substType);
+      } else {
+        canType = substType->getCanonicalType();
+      }
 
       // If the substitution didn't change anything, we know that the
       // original type was a lowered type, so we're good.
-      if (origType == substType) {
+      if (origType == canType) {
         return origType;
       }
 
       AbstractionPattern abstraction(Sig, origType);
-      return TheSILModule.Types.getLoweredType(abstraction, substType)
+      return TheSILModule.Types.getLoweredType(abstraction, canType)
                .getSwiftRValueType();
     }
   };
