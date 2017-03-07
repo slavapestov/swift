@@ -38,6 +38,13 @@ bool SubstitutionMap::hasArchetypes() const {
   return false;
 }
 
+bool SubstitutionMap::hasOpenedExistential() const {
+  for (auto &entry : subMap)
+    if (entry.second->hasOpenedExistential())
+      return true;
+  return false;
+}
+
 bool SubstitutionMap::hasDynamicSelf() const {
   for (auto &entry : subMap)
     if (entry.second->hasDynamicSelfType())
@@ -213,6 +220,12 @@ void SubstitutionMap::
 addParent(CanType type, CanType parent, AssociatedTypeDecl *assocType) {
   assert(type && parent && assocType);
   parentMap[type.getPointer()].push_back(std::make_pair(parent, assocType));
+}
+
+
+SubstitutionMap SubstitutionMap::subst(const SubstitutionMap &subMap) const {
+  return subst(QuerySubstitutionMap{*this},
+               LookUpConformanceInSubstitutionMap(*this));
 }
 
 SubstitutionMap SubstitutionMap::subst(TypeSubstitutionFn subs,

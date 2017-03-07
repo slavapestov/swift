@@ -87,8 +87,16 @@ public:
   /// Query whether any replacement types in the map contain archetypes.
   bool hasArchetypes() const;
 
+  /// Query whether any replacement types in the map contain an opened
+  /// existential.
+  bool hasOpenedExistential() const;
+
   /// Query whether any replacement type sin the map contain dynamic Self.
   bool hasDynamicSelf() const;
+
+  /// Apply a substitution to all replacement types in the map. Does not
+  /// change keys.
+  SubstitutionMap subst(const SubstitutionMap &subMap) const;
 
   /// Apply a substitution to all replacement types in the map. Does not
   /// change keys.
