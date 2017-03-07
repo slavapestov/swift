@@ -1949,7 +1949,7 @@ class MarkUninitializedBehaviorInst final : public SILInstruction,
     Self,
   };
   
-  size_t numTrailingObjects(OverloadToken<Substitution>) {
+  size_t numTrailingObjects(OverloadToken<Substitution>) const {
     return NumInitStorageSubstitutions + NumSetterSubstitutions;
   }
   
@@ -2303,8 +2303,7 @@ public:
   SILType getBoundType() const { return BoundType ; }
 
   // Implement llvm::TrailingObjects.
-  size_t numTrailingObjects(
-  	  typename TrailingObjects::template OverloadToken<Operand>) const {
+  size_t numTrailingObjects(OverloadToken<Operand>) const {
     return NumOperands;
   }
 
