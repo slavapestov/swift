@@ -96,7 +96,7 @@ protected:
     return ty.subst(SubsMap)->getCanonicalType();
   }
 
-  ProtocolConformanceRef remapConformance(CanType type,
+  ProtocolConformanceRef remapConformance(Type type,
                                           ProtocolConformanceRef conf) {
     return conf.subst(type,
                       QuerySubstitutionMap{SubsMap},

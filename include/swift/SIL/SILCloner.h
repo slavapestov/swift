@@ -95,7 +95,7 @@ protected:
   const SILDebugScope *remapScope(const SILDebugScope *DS) { return DS; }
   SILType remapType(SILType Ty) { return Ty; }
   CanType remapASTType(CanType Ty) { return Ty; }
-  ProtocolConformanceRef remapConformance(CanType Ty, ProtocolConformanceRef C){
+  ProtocolConformanceRef remapConformance(Type Ty, ProtocolConformanceRef C){
     return C;
   }
   SILValue remapValue(SILValue Value);
@@ -109,12 +109,12 @@ protected:
   const SILDebugScope *getOpScope(const SILDebugScope *DS) {
     return asImpl().remapScope(DS);
   }
-  SubstitutionList getOpSubstitutions(SubstitutionList Subs) {
+  SmallVector<Substitution, 4> getOpSubstitutions(SubstitutionList Subs) {
     SmallVector<Substitution, 4> NewSubs;
     for (auto Sub : Subs) {
-      NewSubs.push_back(getImpl().getOpSubstitution(Sub));
+      NewSubs.push_back(getOpSubstitution(Sub));
     }
-    return getBuilder().getASTContext().AllocateCopy(NewSubs);
+    return NewSubs;
   }
   
   SILType getTypeInClonedContext(SILType Ty) {
@@ -157,15 +157,16 @@ protected:
         return t;
       })->getCanonicalType();
   }
+
   CanType getOpASTType(CanType ty) {
     ty = getASTTypeInClonedContext(ty);
     return asImpl().remapASTType(ty);
   }
 
-  ProtocolConformanceRef getOpConformance(CanType ty,
+  ProtocolConformanceRef getOpConformance(Type ty,
                                           ProtocolConformanceRef conformance) {
     auto newConformance =
-      conformance.subst(sub.getReplacement(),
+      conformance.subst(ty,
                         [&](SubstitutableType *t) -> Type {
                           if (t->isOpenedExistential()) {
                             auto found = OpenedExistentialSubs.find(
@@ -193,7 +194,7 @@ protected:
 
     auto &ctx = sub.getReplacement()->getASTContext();
     return Substitution(newReplacement,
-                        ctx.AllocateCopy(conformances)));
+                        ctx.AllocateCopy(conformances));
   }
 
   SILValue getOpValue(SILValue Value) {
