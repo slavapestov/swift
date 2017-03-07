@@ -638,11 +638,11 @@ class AllocStackInst final
                                 SILOpenedArchetypesState &OpenedArchetypes,
                                 SILDebugVariable Var);
 
+public:
   size_t numTrailingObjects(OverloadToken<Operand>) const {
     return NumOperands;
   }
 
-public:
   ~AllocStackInst() {
     Operand *Operands = getTrailingObjects<Operand>();
     for (unsigned i = 0, end = NumOperands; i < end; ++i) {
@@ -878,11 +878,11 @@ class AllocBoxInst final
                               SILOpenedArchetypesState &OpenedArchetypes,
                               SILDebugVariable Var);
 
+public:
   size_t numTrailingObjects(OverloadToken<Operand>) const {
     return NumOperands;
   }
 
-public:
   ~AllocBoxInst() {
     Operand *Operands = getTrailingObjects<Operand>();
     for (unsigned i = 0, end = NumOperands; i < end; ++i) {
@@ -950,11 +950,11 @@ class AllocExistentialBoxInst final
          CanType ConcreteType, ArrayRef<ProtocolConformanceRef> Conformances,
          SILFunction *Parent, SILOpenedArchetypesState &OpenedArchetypes);
 
+public:
   size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
     return NumConformances;
   }
 
-public:
   ~AllocExistentialBoxInst() {
     Operand *Operands = getTrailingObjects<Operand>();
     for (unsigned i = 0, end = NumOperands; i < end; ++i) {
@@ -4023,11 +4023,15 @@ class InitExistentialAddrInst final
          ArrayRef<ProtocolConformanceRef> Conformances, SILFunction *Parent,
          SILOpenedArchetypesState &OpenedArchetypes);
 
+public:
   size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
     return NumConformances;
   }
 
-public:
+  size_t numTrailingObjects(OverloadToken<Operand>) const {
+    return NumOperands;
+  }
+
   ArrayRef<ProtocolConformanceRef> getConformances() const;
   
   CanType getFormalConcreteType() const {
@@ -4063,11 +4067,15 @@ class InitExistentialOpaqueInst final
          ArrayRef<ProtocolConformanceRef> Conformances, SILFunction *Parent,
          SILOpenedArchetypesState &OpenedArchetypes);
 
+public:
   size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
     return NumConformances;
   }
 
-public:
+  size_t numTrailingObjects(OverloadToken<Operand>) const {
+    return NumOperands;
+  }
+
   CanType getFormalConcreteType() const { return ConcreteType; }
 
   ArrayRef<ProtocolConformanceRef> getConformances() const;
@@ -4100,11 +4108,15 @@ class InitExistentialRefInst final
          ArrayRef<ProtocolConformanceRef> Conformances, SILFunction *Parent,
          SILOpenedArchetypesState &OpenedArchetypes);
 
+public:
   size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
     return NumConformances;
   }
 
-public:
+  size_t numTrailingObjects(OverloadToken<Operand>) const {
+    return NumOperands;
+  }
+
   CanType getFormalConcreteType() const {
     return ConcreteType;
   }
@@ -4138,11 +4150,15 @@ class InitExistentialMetatypeInst final
          SILValue metatype, ArrayRef<ProtocolConformanceRef> conformances,
          SILFunction *parent, SILOpenedArchetypesState &OpenedArchetypes);
 
+public:
   size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
     return NumConformances;
   }
 
-public:
+  size_t numTrailingObjects(OverloadToken<Operand>) const {
+    return NumOperands;
+  }
+
   /// Return the object type which was erased.  That is, if this
   /// instruction erases Decoder<T>.Type.Type to Printable.Type.Type,
   /// this method returns Decoder<T>.
