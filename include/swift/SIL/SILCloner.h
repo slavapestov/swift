@@ -17,6 +17,7 @@
 #ifndef SWIFT_SIL_SILCLONER_H
 #define SWIFT_SIL_SILCLONER_H
 
+#include "swift/AST/ProtocolConformance.h"
 #include "swift/SIL/SILOpenedArchetypesTracker.h"
 #include "swift/SIL/SILBuilder.h"
 #include "swift/SIL/SILDebugScope.h"
@@ -1470,6 +1471,19 @@ SILCloner<ImplClass>::visitWitnessMethodInst(WitnessMethodInst *Inst) {
       getOpConformance(Inst->getLookupType(), Inst->getConformance());
   auto lookupType = Inst->getLookupType();
   auto newLookupType = getOpASTType(lookupType);
+
+  if (conformance.isConcrete()) {
+    CanType Ty = conformance.getConcrete()->getType()->getCanonicalType();
+
+    if (Ty != newLookupType) {
+      assert(Ty->isExactSuperclassOf(newLookupType, nullptr) &&
+             "Should only create upcasts for sub class.");
+
+      // We use the super class as the new look up type.
+      newLookupType = Ty;
+    }
+  }
+
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   doPostProcess(
       Inst,
