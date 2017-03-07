@@ -96,19 +96,11 @@ protected:
     return ty.subst(SubsMap)->getCanonicalType();
   }
 
-  Substitution remapSubstitution(Substitution sub) {
-    // Remap opened archetypes into the cloned context.
-    sub = Substitution(
-        getASTTypeInClonedContext(sub.getReplacement()->getCanonicalType()),
-        sub.getConformances());
-    // Now remap the substitution. 
-    return sub.subst(SubsMap);
-  }
-
   ProtocolConformanceRef remapConformance(CanType type,
                                           ProtocolConformanceRef conf) {
-    Substitution sub(type, conf);
-    return remapSubstitution(sub).getConformances()[0];
+    return conf.subst(type,
+                      QuerySubstitutionMap{SubsMap},
+                      LookUpConformanceInSubstitutionMap(SubsMap));
   }
 
   void visitApplyInst(ApplyInst *Inst) {

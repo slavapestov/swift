@@ -109,37 +109,12 @@ protected:
   const SILDebugScope *getOpScope(const SILDebugScope *DS) {
     return asImpl().remapScope(DS);
   }
-  Substitution getOpSubstitution(Substitution sub) {
-    return asImpl().remapSubstitution(sub);
-  }
-  Substitution remapSubstitution(Substitution sub) {
-    CanType newReplacement =
-      asImpl().getOpASTType(sub.getReplacement()->getCanonicalType());
-    
-    return Substitution(newReplacement, sub.getConformances());
-  }
   SubstitutionList getOpSubstitutions(SubstitutionList Subs) {
-    MutableArrayRef<Substitution> newSubsBuf;
-    
-    auto copySubs = [&]{
-      if (!newSubsBuf.empty())
-        return;
-      newSubsBuf = getBuilder().getASTContext()
-                               .template Allocate<Substitution>(Subs.size());
-      memcpy(newSubsBuf.data(), Subs.data(),
-             sizeof(Substitution) * Subs.size());
-      Subs = newSubsBuf;
-    };
-
-    for (unsigned i = 0, e = Subs.size(); i < e; ++i) {
-      Substitution newSub = asImpl().getOpSubstitution(Subs[i]);
-      if (newSub != Subs[i]) {
-        copySubs();
-        newSubsBuf[i] = newSub;
-      }
+    SmallVector<Substitution, 4> NewSubs;
+    for (auto Sub : Subs) {
+      NewSubs.push_back(getImpl().getOpSubstitution(Sub));
     }
-    
-    return Subs;
+    return getBuilder().getASTContext().AllocateCopy(NewSubs);
   }
   
   SILType getTypeInClonedContext(SILType Ty) {
@@ -187,27 +162,38 @@ protected:
     return asImpl().remapASTType(ty);
   }
 
-  /// Remap an entire set of conformances.
-  ///
-  /// Returns the passed-in conformances array if none of the elements
-  /// changed.
-  ArrayRef<ProtocolConformanceRef> getOpConformances(CanType type,
-                             ArrayRef<ProtocolConformanceRef> oldConformances) {
-    Substitution sub(type, oldConformances);
-    Substitution mappedSub = asImpl().remapSubstitution(sub);
-    ArrayRef<ProtocolConformanceRef> newConformances =
-      mappedSub.getConformances();
-
-    // Use the existing conformances array if possible.
-    if (oldConformances == newConformances)
-      return oldConformances;
-
-    return type->getASTContext().AllocateCopy(newConformances);
-  }
-
   ProtocolConformanceRef getOpConformance(CanType ty,
                                           ProtocolConformanceRef conformance) {
-    return asImpl().remapConformance(ty, conformance);
+    auto newConformance =
+      conformance.subst(sub.getReplacement(),
+                        [&](SubstitutableType *t) -> Type {
+                          if (t->isOpenedExistential()) {
+                            auto found = OpenedExistentialSubs.find(
+                              t->castTo<ArchetypeType>());
+                            if (found != OpenedExistentialSubs.end())
+                              return found->second;
+                            return t;
+                          }
+                          return t;
+                        },
+                        MakeAbstractConformanceForGenericType());
+    return asImpl().remapConformance(ty, newConformance);
+  }
+
+  Substitution getOpSubstitution(Substitution sub) {
+    CanType newReplacement =
+      getOpASTType(sub.getReplacement()->getCanonicalType());
+
+    SmallVector<ProtocolConformanceRef, 2> conformances;
+    for (auto conformance : sub.getConformances()) {
+      conformance = getOpConformance(sub.getReplacement(),
+                                     conformance);
+      conformances.push_back(conformance);
+    }
+
+    auto &ctx = sub.getReplacement()->getASTContext();
+    return Substitution(newReplacement,
+                        ctx.AllocateCopy(conformances)));
   }
 
   SILValue getOpValue(SILValue Value) {
@@ -539,9 +525,11 @@ SILCloner<ImplClass>::visitAllocExistentialBoxInst(
                                                 AllocExistentialBoxInst *Inst) {
   auto origExistentialType = Inst->getExistentialType();
   auto origFormalType = Inst->getFormalConcreteType();
-  
-  auto conformances =getOpConformances(origFormalType, Inst->getConformances());
-  
+
+  SmallVector<ProtocolConformanceRef, 2> conformances;
+  for (auto conformance : Inst->getConformances())
+    conformances.push_back(getOpConformance(origFormalType, conformance));
+
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   doPostProcess(Inst,
     getBuilder().createAllocExistentialBox(getOpLocation(Inst->getLoc()),
@@ -1615,7 +1603,11 @@ template<typename ImplClass>
 void
 SILCloner<ImplClass>::visitInitExistentialAddrInst(InitExistentialAddrInst *Inst) {
   CanType origFormalType = Inst->getFormalConcreteType();
-  auto conformances =getOpConformances(origFormalType, Inst->getConformances());
+
+  SmallVector<ProtocolConformanceRef, 2> conformances;
+  for (auto conformance : Inst->getConformances())
+    conformances.push_back(getOpConformance(origFormalType, conformance));
+
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   doPostProcess(Inst,
     getBuilder().createInitExistentialAddr(getOpLocation(Inst->getLoc()),
@@ -1629,8 +1621,11 @@ template <typename ImplClass>
 void SILCloner<ImplClass>::visitInitExistentialOpaqueInst(
     InitExistentialOpaqueInst *Inst) {
   CanType origFormalType = Inst->getFormalConcreteType();
-  auto conformances =
-      getOpConformances(origFormalType, Inst->getConformances());
+
+  SmallVector<ProtocolConformanceRef, 2> conformances;
+  for (auto conformance : Inst->getConformances())
+    conformances.push_back(getOpConformance(origFormalType, conformance));
+
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   doPostProcess(Inst,
                 getBuilder().createInitExistentialOpaque(
@@ -1643,8 +1638,12 @@ template<typename ImplClass>
 void
 SILCloner<ImplClass>::
 visitInitExistentialMetatypeInst(InitExistentialMetatypeInst *Inst) {
-  auto conformances = getOpConformances(Inst->getFormalErasedObjectType(),
-                                        Inst->getConformances());
+  auto origFormalType = Inst->getFormalErasedObjectType();
+
+  SmallVector<ProtocolConformanceRef, 2> conformances;
+  for (auto conformance : Inst->getConformances())
+    conformances.push_back(getOpConformance(origFormalType, conformance));
+
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   doPostProcess(Inst,
     getBuilder().createInitExistentialMetatype(getOpLocation(Inst->getLoc()),
@@ -1658,7 +1657,11 @@ void
 SILCloner<ImplClass>::
 visitInitExistentialRefInst(InitExistentialRefInst *Inst) {
   CanType origFormalType = Inst->getFormalConcreteType();
-  auto conformances =getOpConformances(origFormalType, Inst->getConformances());
+
+  SmallVector<ProtocolConformanceRef, 2> conformances;
+  for (auto conformance : Inst->getConformances())
+    conformances.push_back(getOpConformance(origFormalType, conformance));
+
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   doPostProcess(Inst,
     getBuilder().createInitExistentialRef(getOpLocation(Inst->getLoc()),
