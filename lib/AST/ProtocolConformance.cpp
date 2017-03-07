@@ -102,6 +102,9 @@ ProtocolConformanceRef::subst(Type origType,
   auto substType = origType.subst(subs, conformances,
                                   SubstFlags::UseErrorType);
 
+  if (substType->isOpenedExistential())
+    return *this;
+
   // If we have a concrete conformance, we need to substitute the
   // conformance to apply to the new type.
   if (isConcrete())
@@ -123,6 +126,9 @@ ProtocolConformanceRef::subst(Type origType,
   // If that didn't find anything, we can still synthesize AnyObject
   // conformances from thin air.  FIXME: gross.
   if (proto->isSpecificProtocol(KnownProtocolKind::AnyObject)) {
+    if (substType->isExistentialType())
+      return *this;
+
     ClassDecl *classDecl = nullptr;
     auto archetype = substType->getAs<ArchetypeType>();
 
