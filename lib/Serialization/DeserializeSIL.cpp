@@ -972,33 +972,31 @@ bool SILDeserializer::readSILInstruction(SILFunction *Fn, SILBasicBlock *BB,
       conformances.push_back(conformance);
     }
 
-    auto ctxConformances = MF->getContext().AllocateCopy(conformances);
-
     switch ((ValueKind)OpCode) {
     default: llvm_unreachable("Out of sync with parent switch");
     case ValueKind::InitExistentialAddrInst:
       ResultVal = Builder.createInitExistentialAddr(Loc, operand,
                                                 ConcreteTy,
                                                 Ty,
-                                                ctxConformances);
+                                                conformances);
       break;
     case ValueKind::InitExistentialOpaqueInst:
       ResultVal = Builder.createInitExistentialOpaque(Loc, Ty, ConcreteTy,
-                                                      operand, ctxConformances);
+                                                      operand, conformances);
       break;
     case ValueKind::InitExistentialMetatypeInst:
       ResultVal = Builder.createInitExistentialMetatype(Loc, operand, Ty,
-                                                        ctxConformances);
+                                                        conformances);
       break;
     case ValueKind::InitExistentialRefInst:
       ResultVal = Builder.createInitExistentialRef(Loc, Ty,
                                          ConcreteTy,
                                          operand,
-                                         ctxConformances);
+                                         conformances);
       break;
     case ValueKind::AllocExistentialBoxInst:
       ResultVal = Builder.createAllocExistentialBox(Loc, Ty, ConcreteTy,
-                                  ctxConformances);
+                                  conformances);
       break;
     }
     break;

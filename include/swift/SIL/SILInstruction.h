@@ -931,12 +931,13 @@ public:
 /// value is uninitialized.
 class AllocExistentialBoxInst final
     : public AllocationInst,
-      private llvm::TrailingObjects<AllocExistentialBoxInst, Operand> {
+      private llvm::TrailingObjects<AllocExistentialBoxInst, Operand,
+                                    ProtocolConformanceRef> {
   friend TrailingObjects;
   friend SILBuilder;
   unsigned NumOperands;
   CanType ConcreteType;
-  ArrayRef<ProtocolConformanceRef> Conformances;
+  unsigned NumConformances;
 
   AllocExistentialBoxInst(SILDebugLocation DebugLoc, SILType ExistentialType,
                           CanType ConcreteType,
@@ -961,9 +962,7 @@ public:
 
   SILType getExistentialType() const { return getType(); }
 
-  ArrayRef<ProtocolConformanceRef> getConformances() const {
-    return Conformances;
-  }
+  ArrayRef<ProtocolConformanceRef> getConformances() const;
 
   ArrayRef<Operand> getAllOperands() const {
     return {getTrailingObjects<Operand>(), NumOperands};
@@ -4002,21 +4001,18 @@ class InitExistentialAddrInst final
                                 ValueKind::InitExistentialAddrInst,
                                 InitExistentialAddrInst,
                                 SILInstruction,
-                                true>
+                                true,
+                                ProtocolConformanceRef>
 {
   friend SILBuilder;
 
   CanType ConcreteType;
-  ArrayRef<ProtocolConformanceRef> Conformances;
+  unsigned NumConformances;
 
   InitExistentialAddrInst(SILDebugLocation DebugLoc, SILValue Existential,
                           ArrayRef<SILValue> TypeDependentOperands,
                           CanType ConcreteType, SILType ConcreteLoweredType,
-                          ArrayRef<ProtocolConformanceRef> Conformances)
-      : UnaryInstructionWithTypeDependentOperandsBase(DebugLoc, Existential,
-                             TypeDependentOperands,
-                             ConcreteLoweredType.getAddressType()),
-        ConcreteType(ConcreteType), Conformances(Conformances) {}
+                          ArrayRef<ProtocolConformanceRef> Conformances);
 
   static InitExistentialAddrInst *
   create(SILDebugLocation DebugLoc, SILValue Existential, CanType ConcreteType,
@@ -4025,9 +4021,7 @@ class InitExistentialAddrInst final
          SILOpenedArchetypesState &OpenedArchetypes);
 
 public:
-  ArrayRef<ProtocolConformanceRef> getConformances() const {
-    return Conformances;
-  }
+  ArrayRef<ProtocolConformanceRef> getConformances() const;
   
   CanType getFormalConcreteType() const {
     return ConcreteType;
@@ -4045,19 +4039,16 @@ public:
 class InitExistentialOpaqueInst final
     : public UnaryInstructionWithTypeDependentOperandsBase<
           ValueKind::InitExistentialOpaqueInst, InitExistentialOpaqueInst,
-          SILInstruction, true> {
+          SILInstruction, true, ProtocolConformanceRef> {
   friend SILBuilder;
 
   CanType ConcreteType;
-  ArrayRef<ProtocolConformanceRef> Conformances;
+  unsigned NumConformances;
 
   InitExistentialOpaqueInst(SILDebugLocation DebugLoc, SILType ExistentialType,
                             CanType FormalConcreteType, SILValue Instance,
                             ArrayRef<SILValue> TypeDependentOperands,
-                            ArrayRef<ProtocolConformanceRef> Conformances)
-      : UnaryInstructionWithTypeDependentOperandsBase(
-            DebugLoc, Instance, TypeDependentOperands, ExistentialType),
-        ConcreteType(FormalConcreteType), Conformances(Conformances) {}
+                            ArrayRef<ProtocolConformanceRef> Conformances);
 
   static InitExistentialOpaqueInst *
   create(SILDebugLocation DebugLoc, SILType ExistentialType,
@@ -4068,9 +4059,7 @@ class InitExistentialOpaqueInst final
 public:
   CanType getFormalConcreteType() const { return ConcreteType; }
 
-  ArrayRef<ProtocolConformanceRef> getConformances() const {
-    return Conformances;
-  }
+  ArrayRef<ProtocolConformanceRef> getConformances() const;
 };
 
 /// InitExistentialRefInst - Given a class instance reference and a set of
@@ -4081,21 +4070,18 @@ class InitExistentialRefInst final
                                 ValueKind::InitExistentialRefInst,
                                 InitExistentialRefInst,
                                 SILInstruction,
-                                true>
+                                true,
+                                ProtocolConformanceRef>
 {
   friend SILBuilder;
 
   CanType ConcreteType;
-  ArrayRef<ProtocolConformanceRef> Conformances;
+  unsigned NumConformances;
 
   InitExistentialRefInst(SILDebugLocation DebugLoc, SILType ExistentialType,
                          CanType FormalConcreteType, SILValue Instance,
                          ArrayRef<SILValue> TypeDependentOperands,
-                         ArrayRef<ProtocolConformanceRef> Conformances)
-      : UnaryInstructionWithTypeDependentOperandsBase(DebugLoc, Instance,
-                                               TypeDependentOperands,
-                                               ExistentialType),
-        ConcreteType(FormalConcreteType), Conformances(Conformances) {}
+                         ArrayRef<ProtocolConformanceRef> Conformances);
 
   static InitExistentialRefInst *
   create(SILDebugLocation DebugLoc, SILType ExistentialType,
@@ -4110,9 +4096,7 @@ public:
     return ConcreteType;
   }
 
-  ArrayRef<ProtocolConformanceRef> getConformances() const {
-    return Conformances;
-  }
+  ArrayRef<ProtocolConformanceRef> getConformances() const;
 };
 
 /// InitExistentialMetatypeInst - Given a metatype reference and a set

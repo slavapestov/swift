@@ -294,9 +294,17 @@ AllocExistentialBoxInst::AllocExistentialBoxInst(
     : AllocationInst(ValueKind::AllocExistentialBoxInst, Loc,
                      ExistentialType.getObjectType()),
       NumOperands(TypeDependentOperands.size()),
-      ConcreteType(ConcreteType), Conformances(Conformances) {
+      ConcreteType(ConcreteType),
+      NumConformances(Conformances.size()) {
   TrailingOperandsList::InitOperandsList(getAllOperands().begin(), this,
                                          TypeDependentOperands);
+  std::uninitialized_copy(Conformances.begin(), Conformances.end(),
+                          getTrailingObjects<ProtocolConformanceRef>());
+}
+
+ArrayRef<ProtocolConformanceRef>
+AllocExistentialBoxInst::getConformances() const {
+  return {getTrailingObjects<ProtocolConformanceRef>(), NumConformances};
 }
 
 static void declareWitnessTable(SILModule &Mod,
@@ -1513,6 +1521,21 @@ DynamicMethodInst::create(SILDebugLocation DebugLoc, SILValue Operand,
                                           Member, Ty, Volatile);
 }
 
+InitExistentialAddrInst::InitExistentialAddrInst(
+    SILDebugLocation DebugLoc, SILValue Existential,
+    ArrayRef<SILValue> TypeDependentOperands,
+    CanType ConcreteType, SILType ConcreteLoweredType,
+    ArrayRef<ProtocolConformanceRef> Conformances)
+  : UnaryInstructionWithTypeDependentOperandsBase(
+        DebugLoc, Existential,
+        TypeDependentOperands,
+        ConcreteLoweredType.getAddressType()),
+    ConcreteType(ConcreteType),
+    NumConformances(Conformances.size()) {
+  std::uninitialized_copy(Conformances.begin(), Conformances.end(),
+                          getTrailingObjects<ProtocolConformanceRef>());
+}
+
 InitExistentialAddrInst *InitExistentialAddrInst::create(
     SILDebugLocation Loc, SILValue Existential, CanType ConcreteType,
     SILType ConcreteLoweredType, ArrayRef<ProtocolConformanceRef> Conformances,
@@ -1522,7 +1545,8 @@ InitExistentialAddrInst *InitExistentialAddrInst::create(
   collectTypeDependentOperands(TypeDependentOperands, OpenedArchetypes, *F,
                                ConcreteType);
   unsigned size =
-      totalSizeToAlloc<swift::Operand>(1 + TypeDependentOperands.size());
+    totalSizeToAlloc<swift::Operand, ProtocolConformanceRef>(
+      1 + TypeDependentOperands.size(), Conformances.size());
   void *Buffer = Mod.allocateInst(size,
                                   alignof(InitExistentialAddrInst));
   for (ProtocolConformanceRef C : Conformances)
@@ -1534,6 +1558,24 @@ InitExistentialAddrInst *InitExistentialAddrInst::create(
                                                 Conformances);
 }
 
+ArrayRef<ProtocolConformanceRef>
+InitExistentialAddrInst::getConformances() const {
+  return {getTrailingObjects<ProtocolConformanceRef>(), NumConformances};
+}
+
+InitExistentialOpaqueInst::InitExistentialOpaqueInst(
+    SILDebugLocation DebugLoc, SILType ExistentialType,
+    CanType FormalConcreteType, SILValue Instance,
+    ArrayRef<SILValue> TypeDependentOperands,
+    ArrayRef<ProtocolConformanceRef> Conformances)
+  : UnaryInstructionWithTypeDependentOperandsBase(
+        DebugLoc, Instance, TypeDependentOperands, ExistentialType),
+        ConcreteType(FormalConcreteType),
+        NumConformances(Conformances.size()) {
+  std::uninitialized_copy(Conformances.begin(), Conformances.end(),
+                          getTrailingObjects<ProtocolConformanceRef>());
+}
+
 InitExistentialOpaqueInst *InitExistentialOpaqueInst::create(
     SILDebugLocation Loc, SILType ExistentialType, CanType ConcreteType,
     SILValue Instance, ArrayRef<ProtocolConformanceRef> Conformances,
@@ -1543,15 +1585,35 @@ InitExistentialOpaqueInst *InitExistentialOpaqueInst::create(
   collectTypeDependentOperands(TypeDependentOperands, OpenedArchetypes, *F,
                                ConcreteType);
   unsigned size =
-      totalSizeToAlloc<swift::Operand>(1 + TypeDependentOperands.size());
+    totalSizeToAlloc<swift::Operand, ProtocolConformanceRef>(
+      1 + TypeDependentOperands.size(), Conformances.size());
 
-  void *Buffer = Mod.allocateInst(size, alignof(InitExistentialRefInst));
+  void *Buffer = Mod.allocateInst(size, alignof(InitExistentialOpaqueInst));
   for (ProtocolConformanceRef C : Conformances)
     declareWitnessTable(Mod, C);
 
   return ::new (Buffer)
       InitExistentialOpaqueInst(Loc, ExistentialType, ConcreteType, Instance,
                                 TypeDependentOperands, Conformances);
+}
+
+ArrayRef<ProtocolConformanceRef>
+InitExistentialOpaqueInst::getConformances() const {
+  return {getTrailingObjects<ProtocolConformanceRef>(), NumConformances};
+}
+
+InitExistentialRefInst::InitExistentialRefInst(
+    SILDebugLocation DebugLoc, SILType ExistentialType,
+    CanType FormalConcreteType, SILValue Instance,
+    ArrayRef<SILValue> TypeDependentOperands,
+    ArrayRef<ProtocolConformanceRef> Conformances)
+  : UnaryInstructionWithTypeDependentOperandsBase(DebugLoc, Instance,
+                                                  TypeDependentOperands,
+                                                  ExistentialType),
+    ConcreteType(FormalConcreteType),
+    NumConformances(Conformances.size()) {
+  std::uninitialized_copy(Conformances.begin(), Conformances.end(),
+                          getTrailingObjects<ProtocolConformanceRef>());
 }
 
 InitExistentialRefInst *
@@ -1565,7 +1627,8 @@ InitExistentialRefInst::create(SILDebugLocation Loc, SILType ExistentialType,
   collectTypeDependentOperands(TypeDependentOperands, OpenedArchetypes, *F,
                                ConcreteType);
   unsigned size =
-      totalSizeToAlloc<swift::Operand>(1 + TypeDependentOperands.size());
+    totalSizeToAlloc<swift::Operand, ProtocolConformanceRef>(
+      1 + TypeDependentOperands.size(), Conformances.size());
 
   void *Buffer = Mod.allocateInst(size,
                                   alignof(InitExistentialRefInst));
@@ -1577,6 +1640,11 @@ InitExistentialRefInst::create(SILDebugLocation Loc, SILType ExistentialType,
                                                Instance,
                                                TypeDependentOperands,
                                                Conformances);
+}
+
+ArrayRef<ProtocolConformanceRef>
+InitExistentialRefInst::getConformances() const {
+  return {getTrailingObjects<ProtocolConformanceRef>(), NumConformances};
 }
 
 InitExistentialMetatypeInst::InitExistentialMetatypeInst(
