@@ -128,15 +128,15 @@ protected:
     return asImpl().remapType(Ty);
   }
 
-  CanType getASTTypeInClonedContext(CanType ty) {
+  CanType getASTTypeInClonedContext(Type ty) {
     // Do not substitute opened existential types, if we do not have any.
     if (!ty->hasOpenedExistential())
-      return ty;
+      return ty->getCanonicalType();
     // Do not substitute opened existential types, if it is not required.
     // This is often the case when cloning basic blocks inside the same
     // function.
     if (OpenedExistentialSubs.empty())
-      return ty;
+      return ty->getCanonicalType();
 
     return ty.transform(
       [&](Type t) -> Type {
@@ -178,7 +178,8 @@ protected:
                           return t;
                         },
                         MakeAbstractConformanceForGenericType());
-    return asImpl().remapConformance(ty, newConformance);
+    return asImpl().remapConformance(getASTTypeInClonedContext(ty),
+                                     newConformance);
   }
 
   Substitution getOpSubstitution(Substitution sub) {
@@ -1437,7 +1438,7 @@ SILCloner<ImplClass>::visitClassMethodInst(ClassMethodInst *Inst) {
     getBuilder().createClassMethod(getOpLocation(Inst->getLoc()),
                                    getOpValue(Inst->getOperand()),
                                    Inst->getMember(),
-                                   getOpType(Inst->getType()),
+                                   Inst->getType(),
                                    Inst->isVolatile()));
 }
 
@@ -1449,16 +1450,15 @@ SILCloner<ImplClass>::visitSuperMethodInst(SuperMethodInst *Inst) {
     getBuilder().createSuperMethod(getOpLocation(Inst->getLoc()),
                                    getOpValue(Inst->getOperand()),
                                    Inst->getMember(),
-                                   getOpType(Inst->getType()),
+                                   Inst->getType(),
                                    Inst->isVolatile()));
 }
 
 template<typename ImplClass>
 void
 SILCloner<ImplClass>::visitWitnessMethodInst(WitnessMethodInst *Inst) {
-  auto conformance =
-      getOpConformance(Inst->getLookupType(), Inst->getConformance());
   auto lookupType = Inst->getLookupType();
+  auto conformance = getOpConformance(lookupType, Inst->getConformance());
   auto newLookupType = getOpASTType(lookupType);
 
   if (conformance.isConcrete()) {
@@ -1480,7 +1480,7 @@ SILCloner<ImplClass>::visitWitnessMethodInst(WitnessMethodInst *Inst) {
           .createWitnessMethod(
               getOpLocation(Inst->getLoc()),
               newLookupType, conformance,
-              Inst->getMember(), getOpType(Inst->getType()),
+              Inst->getMember(), Inst->getType(),
               Inst->isVolatile()));
 }
 
