@@ -950,6 +950,10 @@ class AllocExistentialBoxInst final
          CanType ConcreteType, ArrayRef<ProtocolConformanceRef> Conformances,
          SILFunction *Parent, SILOpenedArchetypesState &OpenedArchetypes);
 
+  size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
+    return NumConformances;
+  }
+
 public:
   ~AllocExistentialBoxInst() {
     Operand *Operands = getTrailingObjects<Operand>();
@@ -4020,6 +4024,10 @@ class InitExistentialAddrInst final
          ArrayRef<ProtocolConformanceRef> Conformances, SILFunction *Parent,
          SILOpenedArchetypesState &OpenedArchetypes);
 
+  size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
+    return NumConformances;
+  }
+
 public:
   ArrayRef<ProtocolConformanceRef> getConformances() const;
   
@@ -4056,6 +4064,10 @@ class InitExistentialOpaqueInst final
          ArrayRef<ProtocolConformanceRef> Conformances, SILFunction *Parent,
          SILOpenedArchetypesState &OpenedArchetypes);
 
+  size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
+    return NumConformances;
+  }
+
 public:
   CanType getFormalConcreteType() const { return ConcreteType; }
 
@@ -4089,7 +4101,9 @@ class InitExistentialRefInst final
          ArrayRef<ProtocolConformanceRef> Conformances, SILFunction *Parent,
          SILOpenedArchetypesState &OpenedArchetypes);
 
-  //size_t numTrailingObjects(OverloadToken<Operand>) const { return NumOperands; }
+  size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
+    return NumConformances;
+  }
 
 public:
   CanType getFormalConcreteType() const {
@@ -4124,6 +4138,10 @@ class InitExistentialMetatypeInst final
   create(SILDebugLocation DebugLoc, SILType existentialMetatypeType,
          SILValue metatype, ArrayRef<ProtocolConformanceRef> conformances,
          SILFunction *parent, SILOpenedArchetypesState &OpenedArchetypes);
+
+  size_t numTrailingObjects(OverloadToken<ProtocolConformanceRef>) const {
+    return NumConformances;
+  }
 
 public:
   /// Return the object type which was erased.  That is, if this
