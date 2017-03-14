@@ -886,7 +886,10 @@ namespace {
           rep = SILFunctionTypeRepresentation::Method;
 
         auto origCallbackFnType = SGF.SGM.Types.getMaterializeForSetCallbackType(
-          decl, materialized.genericSig, materialized.origSelfType, rep);
+            decl,
+            materialized.origSelfType->getGenericSignature(),
+            materialized.origSelfType->getType(),
+            rep);
         auto origCallbackType = SILType::getPrimitiveObjectType(origCallbackFnType);
         callback = SGF.B.createPointerToThinFunction(loc, callback, origCallbackType);
 
@@ -906,9 +909,8 @@ namespace {
           if (base.getType().isAddress()) {
             baseAddress = base.getValue();
           } else {
-            AbstractionPattern origSelfType(materialized.genericSig,
-                                            materialized.origSelfType);
-            base = SGF.emitSubstToOrigValue(loc, base, origSelfType,
+            base = SGF.emitSubstToOrigValue(loc, base,
+                                            *materialized.origSelfType,
                                             baseFormalType);
 
             baseAddress = SGF.emitTemporaryAllocation(loc, base.getType());

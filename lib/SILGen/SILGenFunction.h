@@ -209,8 +209,7 @@ struct MaterializedLValue {
   ManagedValue temporary;
 
   // Only set if a callback is required
-  CanType origSelfType;
-  CanGenericSignature genericSig;
+  Optional<AbstractionPattern> origSelfType;
   SILValue callback;
   SILValue callbackStorage;
 
@@ -218,13 +217,11 @@ struct MaterializedLValue {
   explicit MaterializedLValue(ManagedValue temporary)
     : temporary(temporary) {}
   MaterializedLValue(ManagedValue temporary,
-                     CanType origSelfType,
-                     CanGenericSignature genericSig,
+                     AbstractionPattern origSelfType,
                      SILValue callback,
                      SILValue callbackStorage)
     : temporary(temporary),
       origSelfType(origSelfType),
-      genericSig(genericSig),
       callback(callback),
       callbackStorage(callbackStorage) {}
 };
