@@ -101,6 +101,9 @@ private:
     // parameters for the parent context are handled by the parent.
     asImpl().addGenericFields(theClass, type, theClass);
 
+    if (!theClass->hasKnownSwiftImplementation())
+      return;
+
     // Add entries for the methods.
     for (auto member : theClass->getMembers()) {
       // If this is a non-overriding final member, we don't need table entries.
@@ -121,26 +124,19 @@ private:
       if (auto fn = dyn_cast<FuncDecl>(member)) {
         // Ignore accessors.  These get added when their AbstractStorageDecl is
         // visited.
-        if (fn->isAccessor())
+        if (fn->isObservingAccessor())
           continue;
 
-        addMethodEntries(fn);
+        maybeAddMethod(fn, SILDeclRef::Kind::Func);
       } else if (auto ctor = dyn_cast<ConstructorDecl>(member)) {
         // Stub constructors don't get an entry.
         if (ctor->hasStubImplementation())
           continue;
 
         // Add entries for constructors.
-        addMethodEntries(ctor);
-      } else if (auto *asd = dyn_cast<AbstractStorageDecl>(member)) {
-        // FIXME: Stored properties should either be final or have accessors.
-        if (!asd->hasAccessorFunctions()) continue;
-
-        addMethodEntries(asd->getGetter());
-        if (auto *setter = asd->getSetter())
-          addMethodEntries(setter);
-        if (auto *materializeForSet = asd->getMaterializeForSetFunc())
-          addMethodEntries(materializeForSet);
+        if (ctor->isRequired())
+          maybeAddMethod(ctor, SILDeclRef::Kind::Allocator);
+        maybeAddMethod(ctor, SILDeclRef::Kind::Initializer);
       }
     }
 
@@ -175,21 +171,6 @@ private:
 private:
   void addFieldEntries(VarDecl *field) {
     asImpl().addFieldOffset(field);
-  }
-
-  void addMethodEntries(AbstractFunctionDecl *fn) {
-    // If the method does not have a vtable entry, don't add any.
-    if (!hasKnownVTableEntry(IGM, fn))
-      return;
-
-    if (isa<FuncDecl>(fn))
-      maybeAddMethod(fn, SILDeclRef::Kind::Func);
-    else {
-      auto ctor = cast<ConstructorDecl>(fn);
-      if (ctor->isRequired())
-        maybeAddMethod(fn, SILDeclRef::Kind::Allocator);
-      maybeAddMethod(fn, SILDeclRef::Kind::Initializer);
-    }
   }
 
   void maybeAddMethod(AbstractFunctionDecl *fn,
