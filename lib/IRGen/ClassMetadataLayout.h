@@ -117,7 +117,9 @@ private:
           continue;
 
       // @NSManaged properties and methods don't have vtable entries.
-      if (member->getAttrs().hasAttribute<NSManagedAttr>())
+      if (member->getAttrs().hasAttribute<NSManagedAttr>() ||
+          (isa<FuncDecl>(member) &&
+           cast<FuncDecl>(member)->getAccessorStorageDecl()->getAttrs().hasAttribute<NSManagedAttr>()))
         continue;
 
       // Add entries for methods.
