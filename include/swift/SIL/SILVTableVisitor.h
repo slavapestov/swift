@@ -35,6 +35,8 @@ namespace swift {
 template <class T> class SILVTableVisitor : public ASTVisitor<T> {
   T &asDerived() { return *static_cast<T*>(this); }
 
+  void addEntry(SILDeclRef entry) {}
+
   // Default for members that don't require vtable entries.
   void visitDecl(Decl*) {}
 
@@ -50,7 +52,7 @@ template <class T> class SILVTableVisitor : public ASTVisitor<T> {
     // FIXME: If it doesn't override anything and its final or dynamic
     // skip it.
 
-    addEntry(SILDeclRef(fd));
+    asDerived().addEntry(SILDeclRef(fd));
   }
 
   void visitConstructorDecl(ConstructorDecl *cd) {
@@ -61,34 +63,25 @@ template <class T> class SILVTableVisitor : public ASTVisitor<T> {
 
     // Required constructors (or overrides thereof) have their allocating entry
     // point in the vtable.
-    bool isRequired = false;
-    auto override = cd;
-    while (override) {
-      if (override->isRequired()) {
-        isRequired = true;
-        break;
-      }
-      override = override->getOverriddenDecl();
-    }
-    if (isRequired) {
-      addEntry(SILDeclRef(cd, SILDeclRef::Kind::Allocator));
-    }
+    if (cd->isRequired())
+      asDerived().addEntry(SILDeclRef(cd, SILDeclRef::Kind::Allocator));
 
     // All constructors have their initializing constructor in the
     // vtable, which can be used by a convenience initializer.
-    addEntry(SILDeclRef(cd, SILDeclRef::Kind::Initializer));
+    asDerived().addEntry(SILDeclRef(cd, SILDeclRef::Kind::Initializer));
   }
 
-  void visitDestructorDecl(DestructorDecl *dd) {
-    if (dd->getParent()->getAsClassOrClassExtensionContext() == theClass) {
-      // Add the deallocating destructor to the vtable just for the purpose
-      // that it is referenced and cannot be eliminated by dead function removal.
-      // In reality, the deallocating destructor is referenced directly from
-      // the HeapMetadata for the class.
-      addEntry(SILDeclRef(dd, SILDeclRef::Kind::Deallocator));
+protected:
+  void visitMembers(ClassDecl *theClass) {
+    if (!theClass->hasKnownSwiftImplementation())
+      return;
 
-      if (SGM.requiresIVarDestroyer(theClass))
-        addEntry(SILDeclRef(theClass, SILDeclRef::Kind::IVarDestroyer));
+    for (auto member : theClass->getMembers()) {
+      if (auto *VD = dyn_cast<ValueDecl>(member))
+        if (VD->isFinal() && VD->getOverriddenDecl() == nullptr)
+          continue;
+
+      visit(member);
     }
   }
 }

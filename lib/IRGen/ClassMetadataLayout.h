@@ -18,6 +18,7 @@
 #define SWIFT_IRGEN_CLASSMETADATALAYOUT_H
 
 #include "swift/SIL/SILDeclRef.h"
+#include "swift/SIL/SILVTableVisitor.h"
 #include "IRGen.h"
 #include "MetadataLayout.h"
 
@@ -28,7 +29,9 @@ class IRGenModule;
 
 /// A CRTP class for laying out class metadata.  Note that this does
 /// *not* handle the metadata template stuff.
-template <class Impl> class ClassMetadataLayout : public MetadataLayout<Impl> {
+template <class Impl> class ClassMetadataLayout
+    : public MetadataLayout<Impl>,
+      SILVTableVisitor<Impl> {
   typedef MetadataLayout<Impl> super;
 
 protected:
