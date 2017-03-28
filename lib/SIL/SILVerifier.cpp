@@ -3899,6 +3899,7 @@ public:
     PrettyStackTraceSILFunction stackTrace("verifying", F);
 
     if (F->getLinkage() == SILLinkage::PrivateExternal) {
+      // Try enabling this
       // FIXME: uncomment these checks.
       // <rdar://problem/18635841> SILGen can create non-fragile external
       // private_external declarations
@@ -3919,9 +3920,12 @@ public:
 
       assert(F->isAvailableExternally() &&
              "external declaration of internal SILFunction not allowed");
-      assert(!hasSharedVisibility(F->getLinkage()) &&
-             "external declarations of SILFunctions with shared visibility is not "
-             "allowed");
+      //if (hasSharedVisibility(F->getLinkage())) {
+      //  F->getModule().dump();
+      //}
+      //assert(!hasSharedVisibility(F->getLinkage()) &&
+      //       "external declarations of SILFunctions with shared visibility is not "
+      //       "allowed");
       // If F is an external declaration, there is nothing further to do,
       // return.
       return;

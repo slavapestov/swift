@@ -1948,11 +1948,28 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
   if (witnessRef.isAlwaysInline())
     InlineStrategy = AlwaysInline;
 
-  // Witness thunks for fragile conformances have shared linkage;
-  // otherwise the thunk can just be private.
-  SILLinkage linkage = (isFragile
-                        ? SILLinkage::Shared
-                        : SILLinkage::Private);
+  SILLinkage linkage;
+  if (isFragile) {
+    // If we can serialize a reference to the witness, give the thunk
+    // shared linkage and make it fragile.
+    //
+    // FIXME: Consider always making dynamic thunks and imported things
+    // fragile.
+    if (!witnessRef.getDecl()->isDynamic() &&
+        (witnessRef.isFragile() ||
+         isAvailableExternally(witnessRef.getLinkage(NotForDefinition)))) {
+      linkage = SILLinkage::Shared;
+    } else {
+      // Otherwise, the thunk has to be public, since it is referenced
+      // from a serialized witness table.
+      linkage = SILLinkage::Public;
+      isFragile = IsNotFragile;
+    }
+  } else {
+    // We're not serializing the witness table, so the witness thunk
+    // can be private.
+    linkage = SILLinkage::Private;
+  }
 
   auto *f = M.createFunction(
       linkage, nameBuffer, witnessSILFnType,
