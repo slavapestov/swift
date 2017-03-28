@@ -2025,16 +2025,48 @@ class SILGenDefaultWitnessTable
     : public SILGenWitnessTable<SILGenDefaultWitnessTable> {
   using super = SILGenWitnessTable<SILGenDefaultWitnessTable>;
 
-public:
   SILGenModule &SGM;
   ProtocolDecl *Proto;
   SILLinkage Linkage;
+  IsFragile_t isFragile;
 
   SmallVector<SILDefaultWitnessTable::Entry, 8> DefaultWitnesses;
 
-  SILGenDefaultWitnessTable(SILGenModule &SGM, ProtocolDecl *proto,
-                            SILLinkage linkage)
-      : SGM(SGM), Proto(proto), Linkage(linkage) { }
+public:
+  SILGenDefaultWitnessTable(SILGenModule &SGM, ProtocolDecl *proto)
+      : SGM(SGM), Proto(proto) {
+    Linkage = getSILLinkage(getDeclLinkage(Proto), ForDefinition);
+
+    isFragile = IsNotFragile;
+
+    // Serialize the witness table if we're serializing everything with
+    // -sil-serialize-all.
+    if (SGM.makeModuleFragile)
+      isFragile = IsFragile;
+
+    // Serialize the witness table if the protocol is externally
+    // visible.
+    if (Proto->getEffectiveAccess() >= Accessibility::Public)
+      isFragile = IsFragile;
+
+    // Not all protocols use witness tables; in this case we just skip
+    // all of emit() below completely.
+    if (!Lowering::TypeConverter::protocolRequiresWitnessTable(proto))
+      Proto = nullptr;
+  }
+
+  SILDefaultWitnessTable *emit() {
+    if (!Proto)
+      return nullptr;
+
+    visitProtocolDecl(Proto);
+
+    auto *wtable =
+      SGM.M.createDefaultWitnessTableDeclaration(Proto, Linkage);
+    wtable->convertToDefinition(DefaultWitnesses, IsFragile);
+
+    return wtable;
+  }
 
   void addMissingDefault() {
     DefaultWitnesses.push_back(SILDefaultWitnessTable::Entry());
@@ -2068,7 +2100,7 @@ public:
                  SILDeclRef witnessRef,
                  IsFreeFunctionWitness_t isFree,
                  Witness witness) {
-    SILFunction *witnessFn = SGM.emitProtocolWitness(nullptr, IsNotFragile,
+    SILFunction *witnessFn = SGM.emitProtocolWitness(nullptr, isFragile,
                                                      requirementRef, witnessRef,
                                                      isFree, witness);
     auto entry = SILDefaultWitnessTable::Entry(requirementRef, witnessFn);
@@ -2102,15 +2134,8 @@ public:
 } // end anonymous namespace
 
 void SILGenModule::emitDefaultWitnessTable(ProtocolDecl *protocol) {
-  SILLinkage linkage =
-      getSILLinkage(getDeclLinkage(protocol), ForDefinition);
-
-  SILGenDefaultWitnessTable builder(*this, protocol, linkage);
-  builder.visitProtocolDecl(protocol);
-
-  SILDefaultWitnessTable *defaultWitnesses =
-      M.createDefaultWitnessTableDeclaration(protocol, linkage);
-  defaultWitnesses->convertToDefinition(builder.DefaultWitnesses);
+  SILGenDefaultWitnessTable builder(*this, protocol);
+  builder.emit();
 }
 
 SILFunction *SILGenModule::

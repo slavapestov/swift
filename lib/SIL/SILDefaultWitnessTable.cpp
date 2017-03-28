@@ -36,12 +36,13 @@ void SILDefaultWitnessTable::addDefaultWitnessTable() {
 
 SILDefaultWitnessTable *
 SILDefaultWitnessTable::create(SILModule &M, SILLinkage Linkage,
+                               bool IsFragile,
                                const ProtocolDecl *Protocol,
                                ArrayRef<SILDefaultWitnessTable::Entry> entries){
   // Allocate the witness table and initialize it.
   auto *buf = M.allocate<SILDefaultWitnessTable>(1);
   SILDefaultWitnessTable *wt =
-      ::new (buf) SILDefaultWitnessTable(M, Linkage, Protocol, entries);
+      ::new (buf) SILDefaultWitnessTable(M, Linkage, IsFragile, Protocol, entries);
 
   wt->addDefaultWitnessTable();
 
@@ -66,24 +67,26 @@ SILDefaultWitnessTable::create(SILModule &M, SILLinkage Linkage,
 SILDefaultWitnessTable::
 SILDefaultWitnessTable(SILModule &M,
                        SILLinkage Linkage,
+                       bool IsFragile,
                        const ProtocolDecl *Protocol,
                        ArrayRef<Entry> entries)
-  : Mod(M), Linkage(Linkage), Protocol(Protocol), Entries(),
-    IsDeclaration(true) {
+  : Mod(M), Linkage(Linkage), Protocol(Protocol),
+    Entries(), IsDeclaration(true), IsFragile(false) {
 
-  convertToDefinition(entries);
+  convertToDefinition(entries, IsFragile);
 }
 
 SILDefaultWitnessTable::SILDefaultWitnessTable(SILModule &M,
                                                SILLinkage Linkage,
                                                const ProtocolDecl *Protocol)
-  : Mod(M), Linkage(Linkage), Protocol(Protocol), Entries(),
-    IsDeclaration(true) {}
+  : Mod(M), Linkage(Linkage), Protocol(Protocol),
+    Entries(), IsDeclaration(true), IsFragile(false) {}
 
 void SILDefaultWitnessTable::
-convertToDefinition(ArrayRef<Entry> entries) {
+convertToDefinition(ArrayRef<Entry> entries, bool isFragile) {
   assert(IsDeclaration);
   IsDeclaration = false;
+  IsFragile = isFragile;
 
   Entries = Mod.allocateCopy(entries);
 

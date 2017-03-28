@@ -213,8 +213,9 @@ namespace sil_block {
 
   using DefaultWitnessTableLayout = BCRecordLayout<
     SIL_DEFAULT_WITNESS_TABLE,
-    DeclIDField,  // ID of ProtocolDecl
-    SILLinkageField  // Linkage
+    DeclIDField,      // ID of ProtocolDecl
+    SILLinkageField,  // Linkage
+    BCFixed<1>        // fragile
     // Default witness table entries will be serialized after.
   >;
 

@@ -1951,7 +1951,9 @@ writeSILDefaultWitnessTable(const SILDefaultWitnessTable &wt) {
     Out, ScratchRecord,
     SILAbbrCodes[DefaultWitnessTableLayout::Code],
     S.addDeclRef(wt.getProtocol()),
-    toStableSILLinkage(wt.getLinkage()));
+    toStableSILLinkage(wt.getLinkage()),
+    wt.isFragile()
+  );
 
   for (auto &entry : wt.getEntries()) {
     if (!entry.isValid()) {
@@ -2073,9 +2075,8 @@ void SILSerializer::writeSILBlock(const SILModule *SILMod) {
 
   // Write out DefaultWitnessTables.
   for (const SILDefaultWitnessTable &wt : SILMod->getDefaultWitnessTables()) {
-    // FIXME: Don't need to serialize private and internal default witness
-    // tables.
-    if (wt.getProtocol()->getDeclContext()->isChildContextOf(assocDC))
+    if ((ShouldSerializeAll || wt.isFragile()) &&
+        wt.getProtocol()->getDeclContext()->isChildContextOf(assocDC))
       writeSILDefaultWitnessTable(wt);
   }
 

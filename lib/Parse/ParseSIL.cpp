@@ -4969,7 +4969,7 @@ ProtocolConformance *SILParser::parseProtocolConformanceHelper(
   return retVal;
 }
 
-/// decl-sil-witness ::= 'sil_witness_table' sil-linkage?
+/// decl-sil-witness ::= 'sil_witness_table' sil-linkage? fragile?
 ///                      normal-protocol-conformance decl-sil-witness-body
 /// normal-protocol-conformance ::=
 ///   generic-parameter-list? type: protocolName module ModuleName
@@ -5174,7 +5174,7 @@ bool Parser::parseSILWitnessTable() {
 }
 
 /// decl-sil-default-witness ::= 'sil_default_witness_table' 
-///                              sil-linkage identifier
+///                              sil-linkage? fragile? identifier
 ///                              decl-sil-default-witness-body
 /// decl-sil-default-witness-body:
 ///   '{' sil-default-witness-entry* '}'
@@ -5188,7 +5188,13 @@ bool Parser::parseSILDefaultWitnessTable() {
   // Parse the linkage.
   Optional<SILLinkage> Linkage;
   parseSILLinkage(Linkage, *this);
-  
+
+  bool isFragile = false;
+  if (parseDeclSILOptional(nullptr, &isFragile, nullptr, nullptr,
+                           nullptr, nullptr, nullptr, nullptr, nullptr,
+                           nullptr, WitnessState))
+    return true;
+
   Scope S(this, ScopeKind::TopLevel);
   // We should use WitnessTableBody. This ensures that the generic params
   // are visible.
@@ -5254,7 +5260,8 @@ bool Parser::parseSILDefaultWitnessTable() {
   if (!Linkage)
     Linkage = SILLinkage::Public;
 
-  SILDefaultWitnessTable::create(*SIL->M, *Linkage, protocol, witnessEntries);
+  SILDefaultWitnessTable::create(*SIL->M, *Linkage, isFragile, protocol,
+                                 witnessEntries);
   BodyScope.reset();
   return false;
 }

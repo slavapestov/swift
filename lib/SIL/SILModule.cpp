@@ -174,7 +174,7 @@ SILModule::lookUpWitnessTable(const ProtocolConformance *C,
     return wtable;
 
   // Otherwise try to deserialize it. If we succeed return the deserialized
-  // function.
+  // witness table.
   //
   // *NOTE* In practice, wtable will be deserializedTable, but I do not want to rely
   // on that behavior for now.
@@ -196,21 +196,20 @@ SILModule::lookUpDefaultWitnessTable(const ProtocolDecl *Protocol,
 
   auto found = DefaultWitnessTableMap.find(Protocol);
   if (found == DefaultWitnessTableMap.end()) {
-    if (deserializeLazily) {
-      SILLinkage linkage =
-        getSILLinkage(getDeclLinkage(Protocol), ForDefinition);
-      SILDefaultWitnessTable *wtable =
-        SILDefaultWitnessTable::create(*this, linkage, Protocol);
-      wtable = getSILLoader()->lookupDefaultWitnessTable(wtable);
-      if (wtable)
-        DefaultWitnessTableMap[Protocol] = wtable;
-      return wtable;
-    }
-
     return nullptr;
   }
 
-  return found->second;
+  auto *wtable = found->second;
+
+  if (wtable->isDefinition())
+    return wtable;
+
+  if (deserializeLazily)
+    if (auto deserialized = getSILLoader()->lookupDefaultWitnessTable(wtable))
+      return deserialized;
+
+  // If we fail, just return the declaration.
+  return wtable;
 }
 
 SILDefaultWitnessTable *

@@ -2547,8 +2547,9 @@ readDefaultWitnessTable(DeclID WId, SILDefaultWitnessTable *existingWt) {
   (void)kind;
 
   unsigned RawLinkage;
+  bool isFragile;
   DeclID protoId;
-  DefaultWitnessTableLayout::readRecord(scratch, protoId, RawLinkage);
+  DefaultWitnessTableLayout::readRecord(scratch, protoId, RawLinkage, isFragile);
 
   auto Linkage = fromStableSILLinkage(RawLinkage);
   if (!Linkage) {
@@ -2627,7 +2628,7 @@ readDefaultWitnessTable(DeclID WId, SILDefaultWitnessTable *existingWt) {
     kind = SILCursor.readRecord(entry.ID, scratch);
   }
 
-  wT->convertToDefinition(witnessEntries);
+  wT->convertToDefinition(witnessEntries, isFragile);
   wTableOrOffset.set(wT, /*fully deserialized*/ true);
   if (Callback)
     Callback->didDeserializeDefaultWitnessTableEntries(MF->getAssociatedModule(), wT);

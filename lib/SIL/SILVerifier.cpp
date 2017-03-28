@@ -4085,12 +4085,17 @@ void SILDefaultWitnessTable::verify(const SILModule &M) const {
       continue;
 
     SILFunction *F = E.getWitness();
-    // FIXME
-    #if 0
-    assert(!isLessVisibleThan(F->getLinkage(), getLinkage()) &&
-           "Default witness tables should not reference "
-           "less visible functions.");
-    #endif
+
+    // If a SILDefaultWitnessTable is going to be serialized, it must only
+    // reference public or shared [fragile] functions.
+    if (isFragile()) {
+      assert((!isLessVisibleThan(F->getLinkage(), getLinkage()) ||
+              (F->isFragile() &&
+               F->getLinkage() == SILLinkage::Shared)) &&
+             "Default witness tables should not reference "
+             "less visible functions.");
+    }
+
     assert(F->getLoweredFunctionType()->getRepresentation() ==
            SILFunctionTypeRepresentation::WitnessMethod &&
            "Default witnesses must have witness_method representation.");

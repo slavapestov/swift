@@ -98,12 +98,17 @@ private:
   /// the default witness table from outside its defining translation unit.
   bool IsDeclaration;
 
+  /// Whether or not this witness table is fragile. Fragile means that the
+  /// table may be serialized and "inlined" into another module.
+  bool IsFragile;
+
   /// Private constructor for making SILDefaultWitnessTable declarations.
   SILDefaultWitnessTable(SILModule &M, SILLinkage Linkage,
                          const ProtocolDecl *Protocol);
 
   /// Private constructor for making SILDefaultWitnessTable definitions.
   SILDefaultWitnessTable(SILModule &M, SILLinkage Linkage,
+                         bool IsFragile,
                          const ProtocolDecl *Protocol,
                          ArrayRef<Entry> entries);
 
@@ -116,6 +121,7 @@ public:
 
   /// Create a new SILDefaultWitnessTable definition with the given entries.
   static SILDefaultWitnessTable *create(SILModule &M, SILLinkage Linkage,
+                                        bool IsFragile,
                                         const ProtocolDecl *Protocol,
                                         ArrayRef<Entry> entries);
 
@@ -127,12 +133,18 @@ public:
   /// Set the linkage of the default witness table.
   void setLinkage(SILLinkage l) { Linkage = l; }
 
-  void convertToDefinition(ArrayRef<Entry> entries);
+  void convertToDefinition(ArrayRef<Entry> entries, bool isFragile);
 
   ~SILDefaultWitnessTable();
 
   /// Return true if this is a declaration with no body.
   bool isDeclaration() const { return IsDeclaration; }
+
+  /// Return true if this is a definition with a body.
+  bool isDefinition() const { return !IsDeclaration; }
+
+  /// Returns true if this default witness table is fragile.
+  bool isFragile() const { return IsFragile; }
 
   /// Return the AST ProtocolDecl this default witness table is associated with.
   const ProtocolDecl *getProtocol() const { return Protocol; }
