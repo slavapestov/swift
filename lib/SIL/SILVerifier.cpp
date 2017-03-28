@@ -4044,15 +4044,20 @@ void SILWitnessTable::verify(const SILModule &M) const {
 
   auto *protocol = getConformance()->getProtocol();
 
-  // Currently all witness tables have public conformances, thus witness tables
-  // should not reference SILFunctions without public/public_external linkage.
-  // FIXME: Once we support private conformances, update this.
   for (const Entry &E : getEntries())
     if (E.getKind() == SILWitnessTable::WitnessKind::Method) {
       SILFunction *F = E.getMethodWitness().Witness;
       if (F) {
-        assert(!isLessVisibleThan(F->getLinkage(), getLinkage()) &&
-               "Witness tables should not reference less visible functions.");
+        // If a SILWitnessTable is going to be serialized, it must only
+        // reference public or shared [fragile] functions.
+        if (isFragile()) {
+          assert((!isLessVisibleThan(F->getLinkage(), getLinkage()) ||
+                  (F->isFragile() &&
+                   F->getLinkage() == SILLinkage::Shared)) &&
+                 "Fragile witness tables should not reference "
+                 "less visible functions.");
+        }
+
         assert(F->getLoweredFunctionType()->getRepresentation() ==
                SILFunctionTypeRepresentation::WitnessMethod &&
                "Witnesses must have witness_method representation.");
