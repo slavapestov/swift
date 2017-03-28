@@ -1617,6 +1617,7 @@ public:
   NormalProtocolConformance *Conformance;
   std::vector<SILWitnessTable::Entry> Entries;
   SILLinkage Linkage;
+  IsFragile_t isFragile;
 
   SILGenConformance(SILGenModule &SGM, NormalProtocolConformance *C)
     // We only need to emit witness tables for base NormalProtocolConformances.
@@ -1624,9 +1625,26 @@ public:
       Linkage(getLinkageForProtocolConformance(Conformance,
                                                ForDefinition))
   {
-    // Not all protocols use witness tables.
-    if (!Lowering::TypeConverter::protocolRequiresWitnessTable(
-        Conformance->getProtocol()))
+    auto *proto = Conformance->getProtocol();
+
+    isFragile = IsNotFragile;
+
+    // Serialize the witness table if we're serializing everything with
+    // -sil-serialize-all.
+    if (SGM.makeModuleFragile)
+      isFragile = IsFragile;
+
+    // Serialize the witness table if type has a fixed layout in all
+    // resilience domains, and the conformance is externally visible.
+    auto nominal = Conformance->getInterfaceType()->getAnyNominal();
+    if (nominal->hasFixedLayout() &&
+        proto->getEffectiveAccess() >= Accessibility::Public &&
+        nominal->getEffectiveAccess() >= Accessibility::Public)
+      isFragile = IsFragile;
+
+    // Not all protocols use witness tables; in this case we just skip
+    // all of emit() below completely.
+    if (!Lowering::TypeConverter::protocolRequiresWitnessTable(proto))
       Conformance = nullptr;
   }
 
@@ -1637,19 +1655,6 @@ public:
 
     auto *proto = Conformance->getProtocol();
     visitProtocolDecl(proto);
-
-    // Serialize the witness table in two cases:
-    // 1) We're serializing everything
-    // 2) The type has a fixed layout in all resilience domains, and the
-    //    conformance is externally visible
-    IsFragile_t isFragile = IsNotFragile;
-    if (SGM.makeModuleFragile)
-      isFragile = IsFragile;
-    if (auto nominal = Conformance->getInterfaceType()->getAnyNominal())
-      if (nominal->hasFixedLayout() &&
-          proto->getEffectiveAccess() >= Accessibility::Public &&
-          nominal->getEffectiveAccess() >= Accessibility::Public)
-        isFragile = IsFragile;
 
     // Check if we already have a declaration or definition for this witness
     // table.
@@ -1733,7 +1738,8 @@ public:
     }
 
     SILFunction *witnessFn =
-      SGM.emitProtocolWitness(Conformance, Linkage, requirementRef, witnessRef,
+      SGM.emitProtocolWitness(Conformance, isFragile,
+                              requirementRef, witnessRef,
                               isFree, witness);
     Entries.push_back(
                     SILWitnessTable::MethodWitness{requirementRef, witnessFn});
@@ -1844,7 +1850,7 @@ static bool maybeOpenCodeProtocolWitness(SILGenFunction &gen,
 
 SILFunction *
 SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
-                                  SILLinkage linkage,
+                                  IsFragile_t isFragile,
                                   SILDeclRef requirement,
                                   SILDeclRef witnessRef,
                                   IsFreeFunctionWitness_t isFree,
@@ -1942,11 +1948,11 @@ SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
   if (witnessRef.isAlwaysInline())
     InlineStrategy = AlwaysInline;
 
-  IsFragile_t isFragile = IsNotFragile;
-  if (makeModuleFragile)
-    isFragile = IsFragile;
-  if (witnessRef.isFragile())
-    isFragile = IsFragile;
+  // Witness thunks for fragile conformances have shared linkage;
+  // otherwise the thunk can just be private.
+  SILLinkage linkage = (isFragile
+                        ? SILLinkage::Shared
+                        : SILLinkage::Private);
 
   auto *f = M.createFunction(
       linkage, nameBuffer, witnessSILFnType,
@@ -2045,7 +2051,7 @@ public:
                  SILDeclRef witnessRef,
                  IsFreeFunctionWitness_t isFree,
                  Witness witness) {
-    SILFunction *witnessFn = SGM.emitProtocolWitness(nullptr, Linkage,
+    SILFunction *witnessFn = SGM.emitProtocolWitness(nullptr, IsNotFragile,
                                                      requirementRef, witnessRef,
                                                      isFree, witness);
     auto entry = SILDefaultWitnessTable::Entry(requirementRef, witnessFn);

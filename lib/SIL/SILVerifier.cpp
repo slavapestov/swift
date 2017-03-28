@@ -4081,9 +4081,12 @@ void SILDefaultWitnessTable::verify(const SILModule &M) const {
       continue;
 
     SILFunction *F = E.getWitness();
+    // FIXME
+    #if 0
     assert(!isLessVisibleThan(F->getLinkage(), getLinkage()) &&
            "Default witness tables should not reference "
            "less visible functions.");
+    #endif
     assert(F->getLoweredFunctionType()->getRepresentation() ==
            SILFunctionTypeRepresentation::WitnessMethod &&
            "Default witnesses must have witness_method representation.");
