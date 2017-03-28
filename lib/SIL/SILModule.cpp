@@ -576,6 +576,10 @@ void SILModule::linkAllVTables() {
   getSILLoader()->getAllVTables();
 }
 
+void SILModule::linkAll() {
+  getSILLoader()->getAllForModule(getSwiftModule()->getName());
+}
+
 void SILModule::invalidateSILLoaderCaches() {
   getSILLoader()->invalidateCaches();
 }

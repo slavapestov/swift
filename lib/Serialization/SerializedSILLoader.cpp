@@ -139,7 +139,17 @@ void SerializedSILLoader::getAll() {
     Des->getAll();
 }
 
-// FIXME: Not the best interface. We know exactly which FileUnits may have SIL
+// FIXME: Not the best interface. We know exactly which FileUnits may have SIL;
+// those in the main module.
+void SerializedSILLoader::getAllForModule(Identifier Mod) {
+  for (auto &Des : LoadedSILSections) {
+    if (Des->getModuleIdentifier() == Mod) {
+      Des->getAll(false);
+    }
+  }
+}
+
+// FIXME: Not the best interface. We know exactly which FileUnits may have SIL;
 // those in the main module.
 void SerializedSILLoader::getAllForModule(Identifier Mod,
                                           FileUnit *PrimaryFile) {

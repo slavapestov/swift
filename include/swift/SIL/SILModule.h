@@ -459,6 +459,8 @@ public:
   /// Link in all VTables in the module.
   void linkAllVTables();
 
+  void linkAll();
+  
   /// \brief Return the declaration of a utility function that can,
   /// but needn't, be shared between modules.
   SILFunction *getOrCreateSharedFunction(SILLocation loc,

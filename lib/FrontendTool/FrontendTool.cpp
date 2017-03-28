@@ -542,6 +542,8 @@ static bool performCompile(std::unique_ptr<CompilerInstance> &Instance,
     }
   }
 
+  //SM->dump();
+
   if (observer) {
     observer->performedSILGeneration(*SM);
   }
@@ -592,26 +594,33 @@ static bool performCompile(std::unique_ptr<CompilerInstance> &Instance,
   if (Invocation.getSILOptions().LinkMode == SILOptions::LinkAll)
     performSILLinking(SM.get(), true);
 
-  {
-    SharedTimer timer("SIL verification (pre-optimization)");
-    SM->verify();
+  if (!PrimarySourceFile) {
+    SM->linkAll();
+    SM->dump();
   }
 
-  // Perform SIL optimization passes if optimizations haven't been disabled.
-  // These may change across compiler versions.
-  {
-    SharedTimer timer("SIL optimization");
-    if (Invocation.getSILOptions().Optimization >
-        SILOptions::SILOptMode::None) {
-      StringRef CustomPipelinePath =
-        Invocation.getSILOptions().ExternalPassPipelineFilename;
-      if (!CustomPipelinePath.empty()) {
-        runSILOptimizationPassesWithFileSpecification(*SM, CustomPipelinePath);
+  if (PrimarySourceFile) {
+    {
+      SharedTimer timer("SIL verification (pre-optimization)");
+      SM->verify();
+    }
+
+    // Perform SIL optimization passes if optimizations haven't been disabled.
+    // These may change across compiler versions.
+    {
+      SharedTimer timer("SIL optimization");
+      if (Invocation.getSILOptions().Optimization >
+          SILOptions::SILOptMode::None) {
+        StringRef CustomPipelinePath =
+          Invocation.getSILOptions().ExternalPassPipelineFilename;
+        if (!CustomPipelinePath.empty()) {
+          runSILOptimizationPassesWithFileSpecification(*SM, CustomPipelinePath);
+        } else {
+          runSILOptimizationPasses(*SM);
+        }
       } else {
-        runSILOptimizationPasses(*SM);
+        runSILPassesForOnone(*SM);
       }
-    } else {
-      runSILPassesForOnone(*SM);
     }
   }
 
