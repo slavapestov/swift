@@ -385,7 +385,7 @@ public:
   /// Returns true if this function can be inlined into a fragile function
   /// body.
   bool hasValidLinkageForFragileInline() const {
-    return isFragile() || isThunk() == IsReabstractionThunk;
+    return isFragile();
   }
 
   /// Returns true if this function can be referenced from a fragile function
