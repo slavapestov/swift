@@ -457,7 +457,7 @@ public:
     }
 
     SILFunction *witnessFn =
-      SGM.emitProtocolWitness(Conformance, Fragile,
+      SGM.emitProtocolWitness(Conformance, Linkage, Fragile,
                               requirementRef, witnessRef,
                               isFree, witness);
     Entries.push_back(
@@ -569,6 +569,7 @@ static bool maybeOpenCodeProtocolWitness(SILGenFunction &gen,
 
 SILFunction *
 SILGenModule::emitProtocolWitness(ProtocolConformance *conformance,
+                                  SILLinkage linkage,
                                   IsFragile_t fragile,
                                   SILDeclRef requirement,
                                   SILDeclRef witnessRef,
@@ -771,6 +772,7 @@ public:
                  IsFreeFunctionWitness_t isFree,
                  Witness witness) {
     SILFunction *witnessFn = SGM.emitProtocolWitness(nullptr,
+                                                     Linkage,
                                                      IsNotFragile,
                                                      requirementRef, witnessRef,
                                                      isFree, witness);
