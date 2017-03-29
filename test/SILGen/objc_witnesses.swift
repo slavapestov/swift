@@ -79,10 +79,10 @@ class Electron : Orbital {
 }
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_T014objc_witnesses8ElectronCAA7OrbitalA2aDP13quantumNumberSifgTW
-// CHECK-LABEL: sil shared [transparent] [thunk] @_T014objc_witnesses8ElectronC13quantumNumberSifgTD
+// CHECK-LABEL: sil shared [transparent] [fragile] [thunk] @_T014objc_witnesses8ElectronC13quantumNumberSifgTD
 
 // CHECK-LABEL: sil hidden [transparent] [thunk] @_T014objc_witnesses8ElectronCAA7OrbitalA2aDP13quantumNumberSifsTW
-// CHECK-LABEL: sil shared [transparent] [thunk] @_T014objc_witnesses8ElectronC13quantumNumberSifsTD
+// CHECK-LABEL: sil shared [transparent] [fragile] [thunk] @_T014objc_witnesses8ElectronC13quantumNumberSifsTD
 
 // witness is a dynamic thunk and is public:
 
