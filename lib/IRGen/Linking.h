@@ -596,12 +596,15 @@ public:
 
   /// Returns true if this function is only serialized, but not necessarily
   /// code-gen'd. These are fragile transparent functions.
+  ///
+  /// FIXME: This should go away. SIL-only functions should just have shared
+  /// linkage.
   bool isSILOnly() const {
     if (getKind() != Kind::SILFunction)
       return false;
 
     SILFunction *F = getSILFunction();
-    return F->isTransparent() && F->isDefinition() && F->isFragile();
+    return F->isTransparent() && F->isDefinition() && F->isSerialized();
   }
 
   SILGlobalVariable *getSILGlobalVariable() const {
