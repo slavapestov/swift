@@ -26,7 +26,7 @@ func b<T : Ordinable>(seq seq: T) -> (Int) -> Int {
 // CHECK: }
 
 // -- Closure entry point
-// CHECK: define linkonce_odr hidden swiftcc i64 @_T07closure1bS2icx3seq_tAA9OrdinableRzlFS2icfU_(i64, %swift.refcounted*, %swift.type* %T, i8** %T.Ordinable) {{.*}} {
+// CHECK: define private swiftcc i64 @_T07closure1bS2icx3seq_tAA9OrdinableRzlFS2icfU_(i64, %swift.refcounted*, %swift.type* %T, i8** %T.Ordinable) {{.*}} {
 
 // -- partial_apply stub
 // CHECK: define internal swiftcc i64 @_T07closure1bS2icx3seq_tAA9OrdinableRzlFS2icfU_TA(i64, %swift.refcounted* swiftself) {{.*}} {
