@@ -182,6 +182,8 @@ bool SILLinkerVisitor::visitApplyInst(ApplyInst *AI) {
   if (!Callee)
     return false;
 
+  // FIXME: This is likely meaningless
+
   // If the linking mode is not link all, AI is not transparent, and the
   // callee is not shared, we don't want to perform any linking.
   if (!isLinkAll() && !Callee->isTransparent() &&
@@ -198,7 +200,9 @@ bool SILLinkerVisitor::visitPartialApplyInst(PartialApplyInst *PAI) {
   SILFunction *Callee = PAI->getReferencedFunction();
   if (!Callee)
     return false;
-  if (!isLinkAll() && !Callee->isTransparent() &&
+
+  // FIXME: This is likely meaningless
+v  if (!isLinkAll() && !Callee->isTransparent() &&
       !hasSharedVisibility(Callee->getLinkage()))
     return false;
 
@@ -211,6 +215,8 @@ bool SILLinkerVisitor::visitFunctionRefInst(FunctionRefInst *FRI) {
   // behind as dead code. This shouldn't happen, but if it does don't get into
   // an inconsistent state.
   SILFunction *Callee = FRI->getReferencedFunction();
+
+  // FIXME: This is likely meaningless
   if (!isLinkAll() && !Callee->isTransparent() &&
       !hasSharedVisibility(Callee->getLinkage()))
     return false;
