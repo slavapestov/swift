@@ -316,7 +316,7 @@ public:
   
   /// Emit a protocol witness entry point.
   SILFunction *emitProtocolWitness(ProtocolConformance *conformance,
-                                   SILLinkage linkage,
+                                   IsSerialized_t isSerialized,
                                    SILDeclRef requirement,
                                    SILDeclRef witnessRef,
                                    IsFreeFunctionWitness_t isFree,
