@@ -2487,8 +2487,9 @@ bool TypeChecker::isSubstitutableFor(Type type, ArchetypeType *archetype,
 }
 
 Expr *TypeChecker::coerceToMaterializable(Expr *expr) {
+  // If expr has no type, just assume it's the right expr.
   // If the type is already materializable, then we're already done.
-  if (expr->getType()->isMaterializable())
+  if (!expr->getType() || expr->getType()->isMaterializable())
     return expr;
   
   // Load lvalues.
