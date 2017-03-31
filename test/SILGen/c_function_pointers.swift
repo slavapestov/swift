@@ -55,7 +55,7 @@ func pointers_to_bad_swift_functions(_ x: Int) {
 }
 
 // CHECK-LABEL: sil private @_T019c_function_pointers22StructWithInitializersV3fn1yyXCvfiyycfU_ : $@convention(thin) () -> () {
-// CHECK-LABEL: sil shared [thunk] @_T019c_function_pointers22StructWithInitializersV3fn1yyXCvfiyycfU_To : $@convention(c) () -> () {
+// CHECK-LABEL: sil private [thunk] @_T019c_function_pointers22StructWithInitializersV3fn1yyXCvfiyycfU_To : $@convention(c) () -> () {
 
 struct StructWithInitializers {
   let fn1: @convention(c) () -> () = {}
