@@ -1962,6 +1962,10 @@ bool TypeChecker::typeCheckBinding(Pattern *&pattern, Expr *&initializer,
                                      contextualPurpose,
                                      flags,
                                      &listener);
+  
+  if (hadError && !initializer->getType()) {
+    initializer->setType(ErrorType::get(Context));
+  }
 
   if (hadError && !pattern->hasType()) {
     pattern->setType(ErrorType::get(Context));
