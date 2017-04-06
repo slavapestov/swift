@@ -263,6 +263,10 @@ def enable_experimental_property_behaviors :
   Flag<["-"], "enable-experimental-property-behaviors">,
   HelpText<"Enable experimental property behaviors">;
 
+def enable_experimental_subclass_existentials : Flag<["-"],
+  "enable-experimental-subclass-existentials">,
+  HelpText<"Enable classes to appear in protocol composition types">;
+
 def enable_cow_existentials : Flag<["-"], "enable-cow-existentials">,
   HelpText<"Enable the copy-on-write existential implementation">;
 
