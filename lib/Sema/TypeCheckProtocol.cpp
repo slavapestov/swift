@@ -25,6 +25,7 @@
 #include "swift/AST/ASTContext.h"
 #include "swift/AST/ASTPrinter.h"
 #include "swift/AST/Decl.h"
+#include "swift/AST/ExistentialLayout.h"
 #include "swift/AST/GenericEnvironment.h"
 #include "swift/AST/GenericSignature.h"
 #include "swift/AST/NameLookup.h"
@@ -3862,12 +3863,8 @@ compareDeclsForInference(TypeChecker &TC, DeclContext *DC,
       continue;
     switch (reqt.getKind()) {
     case RequirementKind::Conformance: {
-      SmallVector<ProtocolDecl*, 4> protos;
-      reqt.getSecondType()->getExistentialTypeProtocols(protos);
-      
-      for (auto proto : protos) {
-        insertProtocol(proto);
-      }
+      auto *proto = reqt.getSecondType()->castTo<ProtocolType>()->getDecl();
+      insertProtocol(proto);
       break;
     }
     case RequirementKind::Superclass:
@@ -3899,12 +3896,8 @@ compareDeclsForInference(TypeChecker &TC, DeclContext *DC,
       continue;
     switch (reqt.getKind()) {
     case RequirementKind::Conformance: {
-      SmallVector<ProtocolDecl*, 4> protos;
-      reqt.getSecondType()->getExistentialTypeProtocols(protos);
-      
-      for (auto proto : protos) {
-        removeProtocol(proto);
-      }
+      auto *proto = reqt.getSecondType()->castTo<ProtocolType>()->getDecl();
+      removeProtocol(proto);
       break;
     }
     case RequirementKind::Superclass:
@@ -5194,26 +5187,40 @@ Optional<ProtocolConformanceRef> TypeChecker::containsProtocol(
   // Existential types don't need to conform, i.e., they only need to
   // contain the protocol.
   if (T->isExistentialType()) {
-    SmallVector<ProtocolDecl *, 4> protocols;
-    T->getExistentialTypeProtocols(protocols);
+    ExistentialLayout layout;
+    T->getExistentialLayout(layout);
 
-    for (auto P : protocols) {
-      // Special case -- any class-bound protocol can be passed as an
-      // AnyObject argument.
-      if (P->requiresClass() &&
-          Proto->isSpecificProtocol(KnownProtocolKind::AnyObject))
-        return ProtocolConformanceRef(Proto);
+    // First, any class-constrained existential semantically contains
+    // AnyObject.
+    //
+    // FIXME: This check is moving elsewhere soon.
+    if (layout.requiresClass &&
+        Proto->isSpecificProtocol(KnownProtocolKind::AnyObject)) {
+      return ProtocolConformanceRef(Proto);
+    }
 
-      // If we found the protocol we're looking forward, return an abstract
-      /// conformance to it.
-      if (P == Proto || P->inheritsFrom(Proto))
+    // Next, if we have a superclass constraint, the class may conform
+    // concretely.
+    if (layout.superclass) {
+      if (auto result = conformsToProtocol(layout.superclass, Proto,
+                                           DC, options)) {
+        return result;
+      }
+    }
+
+    // Finally, check if the existential contains the protocol in question.
+    for (auto P : layout.protocols) {
+      // If we found the protocol we're looking for, return an abstract
+      // conformance to it.
+      if (P == Proto || P->inheritsFrom(Proto)) {
         return ProtocolConformanceRef(Proto);
+      }
     }
 
     return None;
   }
 
-  // Check whether this type conforms to the protocol.
+  // For non-existential types, this is equivalent to checking conformance.
   return conformsToProtocol(T, Proto, DC, options);
 }
 
@@ -5307,10 +5314,10 @@ TypeChecker::conformsToProtocol(Type T, ProtocolDecl *Proto, DeclContext *DC,
     }
 
     if (T->isExistentialType()) {
-      SmallVector<ProtocolDecl *, 2> protos;
-      T->getExistentialTypeProtocols(protos);
+      ExistentialLayout layout;
+      T->getExistentialLayout(layout);
       bool anyUnsatisfied = false;
-      for (auto *proto : protos) {
+      for (auto *proto : layout.protocols) {
         if ((*unsatisfiedDependency)(requestInheritedProtocols(proto)))
           anyUnsatisfied = true;
       }

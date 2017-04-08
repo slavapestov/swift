@@ -22,6 +22,7 @@
 #include "swift/AST/ASTWalker.h"
 #include "swift/AST/Builtins.h"
 #include "swift/AST/DiagnosticsSema.h"
+#include "swift/AST/ExistentialLayout.h"
 #include "swift/AST/GenericEnvironment.h"
 #include "swift/AST/LazyResolver.h"
 #include "swift/AST/LinkLibrary.h"
@@ -586,6 +587,7 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
       }
     }
 
+    // FIXME: This will go away soon.
     if (protocol->isSpecificProtocol(KnownProtocolKind::AnyObject)) {
       if (archetype->requiresClass())
         return ProtocolConformanceRef(protocol);
@@ -605,13 +607,13 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
   // existential's list of conformances and the existential conforms to
   // itself.
   if (type->isExistentialType()) {
-    SmallVector<ProtocolDecl *, 4> protocols;
-    type->getExistentialTypeProtocols(protocols);
+    ExistentialLayout layout;
+    type->getExistentialLayout(layout);
 
     // Due to an IRGen limitation, witness tables cannot be passed from an
     // existential to an archetype parameter, so for now we restrict this to
     // @objc protocols.
-    for (auto proto : protocols) {
+    for (auto proto : layout.protocols) {
       if (!proto->isObjC() &&
           !proto->isSpecificProtocol(KnownProtocolKind::AnyObject))
         return None;
@@ -624,15 +626,25 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
       return None;
 
     // Special-case AnyObject, which may not be in the list of conformances.
+    //
+    // FIXME: This is going away soon.
     if (protocol->isSpecificProtocol(KnownProtocolKind::AnyObject)) {
-      if (type->isClassExistentialType())
+      if (layout.requiresClass)
         return ProtocolConformanceRef(protocol);
 
       return None;
     }
 
-    // Look for this protocol within the existential's list of conformances.
-    for (auto proto : protocols) {
+    // If the existential is class-constrained, the class might conform
+    // concretely.
+    if (layout.superclass) {
+      if (auto result = lookupConformance(layout.superclass, protocol,
+                                          resolver))
+        return result;
+    }
+
+    // Otherwise, the existential might conform abstractly.
+    for (auto proto : layout.protocols) {
       if (proto == protocol || proto->inheritsFrom(protocol))
         return ProtocolConformanceRef(protocol);
     }
