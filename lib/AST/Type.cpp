@@ -3105,10 +3105,19 @@ Type TypeBase::getSuperclassForDecl(const ClassDecl *baseClass,
                                     LazyResolver *resolver) {
   Type t(this);
   while (t) {
-    auto *derivedClass = dyn_cast_or_null<ClassDecl>(t->getAnyNominal());
-    assert(derivedClass && "expected a class here");
+    // If we have a class-constrained archetype or class-constrained
+    // existential, get the underlying superclass constraint.
+    auto *nominalDecl = t->getAnyNominal();
+    if (!nominalDecl) {
+      assert(t->is<ArchetypeType>() || t->isExistentialType() &&
+             "expected a class, archetype or existentiall");
+      t = t->getSuperclass(resolver);
+      assert(t && "archetype or existential is not class constrained");
+      continue;
+    }
+    assert(isa<ClassDecl>(nominalDecl) && "expected a class here");
 
-    if (derivedClass == baseClass)
+    if (nominalDecl == baseClass)
       return t;
 
     t = t->getSuperclass(resolver);
