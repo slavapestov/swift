@@ -1531,8 +1531,25 @@ Type TypeBase::getSuperclass(LazyResolver *resolver) {
     if (auto dynamicSelfTy = getAs<DynamicSelfType>())
       return dynamicSelfTy->getSelfType();
 
+    if (auto compositionTy = getAs<ProtocolCompositionType>()) {
+      for (auto memberTy : compositionTy->getProtocols()) {
+        // If a protocol composition type has a class member, the
+        // superclass of the protocol composition is that member.
+        auto nominalDecl = memberTy->getAnyNominal();
+        if (nominalDecl && isa<ClassDecl>(nominalDecl))
+          return memberTy;
+
+        // If a protocol composition type has another protocol
+        // composition as a member, check if the inner type has a
+        // superclass.
+        if (memberTy->isExistentialType())
+          if (auto superclassTy = memberTy->getSuperclass(nullptr))
+            return superclassTy;
+      }
+    }
+
     // No other types have superclasses.
-    return nullptr;
+    return Type();
   }
 
   // We have a class, so get the superclass type.
@@ -2707,45 +2724,70 @@ bool ProtocolType::requiresClass() const {
 
 bool ProtocolCompositionType::requiresClass() const {
   for (Type t : getProtocols()) {
-    if (const ProtocolType *proto = t->getAs<ProtocolType>()) {
-      if (proto->requiresClass())
+    if (auto *protoTy = t->getAs<ProtocolType>()) {
+      if (protoTy->requiresClass())
         return true;
-    } else {
-      if (t->castTo<ProtocolCompositionType>()->requiresClass())
-        return true;
+      continue;
     }
+
+    if (auto *compositionTy = t->getAs<ProtocolCompositionType>()) {
+      if (compositionTy->requiresClass())
+        return true;
+      continue;
+    }
+
+    assert(isa<ClassDecl>(t->getAnyNominal()));
+    return true;
   }
   return false;
 }
 
 Type ProtocolCompositionType::get(const ASTContext &C,
-                                  ArrayRef<Type> ProtocolTypes) {
-  for (Type t : ProtocolTypes) {
+                                  ArrayRef<Type> MemberTypes) {
+  for (Type t : MemberTypes) {
     if (!t->isCanonical())
-      return build(C, ProtocolTypes);
+      return build(C, MemberTypes);
   }
     
+  Type Superclass;
+  auto addSuperclass = [&](Type t) {
+    assert(!Superclass && "Should have diagnosed multiple "
+           "superclasses by now");
+    Superclass = t;
+  };
+
   SmallVector<ProtocolDecl *, 4> Protocols;
-  for (Type t : ProtocolTypes)
+  for (Type t : MemberTypes) {
+    auto *nominalDecl = t->getAnyNominal();
+    if (nominalDecl && isa<ClassDecl>(nominalDecl))
+      addSuperclass(t);
+
+    if (auto *compositionTy = t->getAs<ProtocolCompositionType>())
+      if (auto superclassTy = compositionTy->getSuperclass(nullptr))
+        addSuperclass(t);
+        
     addProtocols(t, Protocols);
+  }
   
   // Minimize the set of protocols composed together.
   ProtocolType::canonicalizeProtocols(Protocols);
 
   // If one protocol remains, its nominal type is the canonical type.
-  if (Protocols.size() == 1)
+  if (Protocols.size() == 1 && !Superclass)
     return Protocols.front()->getDeclaredType();
 
   // Form the set of canonical protocol types from the protocol
   // declarations, and use that to build the canonical composition type.
-  SmallVector<Type, 4> CanProtocolTypes;
+  SmallVector<Type, 4> CanTypes;
   std::transform(Protocols.begin(), Protocols.end(),
-                 std::back_inserter(CanProtocolTypes),
+                 std::back_inserter(CanTypes),
                  [](ProtocolDecl *Proto) {
                    return Proto->getDeclaredType();
                  });
+  if (Superclass)
+    CanTypes.push_back(Superclass->getCanonicalType());
 
-  return build(C, CanProtocolTypes);
+  return build(C, CanTypes);
 }
 
 FunctionType *
