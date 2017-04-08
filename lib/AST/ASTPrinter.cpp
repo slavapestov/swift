@@ -54,14 +54,14 @@ using namespace swift;
 
 struct SynthesizedExtensionAnalyzer::Implementation {
   static bool isMemberFavored(const NominalTypeDecl* Target, const Decl* D) {
-    DeclContext* DC = Target->getDeclContext();
+    DeclContext* DC = Target->getInnermostDeclContext();
     Type BaseTy = Target->getDeclaredTypeInContext();
     const FuncDecl *FD = dyn_cast<FuncDecl>(D);
     if (!FD)
       return true;
-    ResolveMemberResult Result = resolveValueMember(*DC, BaseTy,
+    ResolvedMemberResult Result = resolveValueMember(*DC, BaseTy,
                                                     FD->getEffectiveFullName());
-    return !(Result && Result.Favored != D);
+    return !(Result.hasBestOverload() && Result.getBestOverload() != D);
   }
 
   static bool isExtensionFavored(const NominalTypeDecl* Target,
@@ -337,6 +337,17 @@ struct SynthesizedExtensionAnalyzer::Implementation {
         }
       }
     };
+
+    auto handleExtension = [&](ExtensionDecl *E, bool Synthesized) {
+      if (shouldPrint(E, Options)) {
+        auto Pair = isApplicable(E, Synthesized);
+        if (Pair.first) {
+          InfoMap->insert({E, Pair.first});
+          MergeInfoMap.insert({E, Pair.second});
+        }
+      }
+    };
+
     for (auto TL : Target->getInherited()) {
       if (!isEnumRawType(Target, TL))
         addTypeLocNominal(TL);
@@ -345,13 +356,7 @@ struct SynthesizedExtensionAnalyzer::Implementation {
       NominalTypeDecl* Back = Unhandled.back();
       Unhandled.pop_back();
       for (ExtensionDecl *E : Back->getExtensions()) {
-        if (!shouldPrint(E, Options))
-          continue;
-        auto Pair = isApplicable(E, /*Synthesized*/true);
-        if (Pair.first) {
-          InfoMap->insert({E, Pair.first});
-          MergeInfoMap.insert({E, Pair.second});
-        }
+        handleExtension(E, true);
         for (auto TL : Back->getInherited()) {
           if (!isEnumRawType(Target, TL))
             addTypeLocNominal(TL);
@@ -361,12 +366,10 @@ struct SynthesizedExtensionAnalyzer::Implementation {
 
     // Merge with actual extensions.
     for (auto *E : Target->getExtensions()) {
-      if (!shouldPrint(E, Options))
-        continue;
-      auto Pair = isApplicable(E, /*Synthesized*/false);
-      if (Pair.first) {
-        InfoMap->insert({E, Pair.first});
-        MergeInfoMap.insert({E, Pair.second});
+      handleExtension(E, false);
+      for (auto *Conf : E->getLocalConformances()) {
+        for (auto E : Conf->getProtocol()->getExtensions())
+          handleExtension(E, true);
       }
     }
 
@@ -1646,9 +1649,10 @@ static bool shouldPrintAsFavorable(const Decl *D, PrintOptions &Options) {
   const FuncDecl *FD = dyn_cast<FuncDecl>(D);
   if (!FD)
     return true;
-  ResolveMemberResult Result = resolveValueMember(*Target->getDeclContext(),
-                                                  BaseTy, FD->getEffectiveFullName());
-  return !(Result && Result.Favored != D);
+  ResolvedMemberResult Result = resolveValueMember(*Target->getDeclContext(),
+                                                  BaseTy,
+                                                  FD->getEffectiveFullName());
+  return !(Result.hasBestOverload() && Result.getBestOverload() != D);
 }
 
 bool swift::shouldPrint(const Decl *D, PrintOptions &Options) {

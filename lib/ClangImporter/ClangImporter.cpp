@@ -74,12 +74,10 @@ using clang::CompilerInvocation;
 
 namespace {
   class HeaderImportCallbacks : public clang::PPCallbacks {
-    ClangImporter &Importer;
     ClangImporter::Implementation &Impl;
   public:
-    HeaderImportCallbacks(ClangImporter &importer,
-                          ClangImporter::Implementation &impl)
-      : Importer(importer), Impl(impl) {}
+    HeaderImportCallbacks(ClangImporter::Implementation &impl)
+      : Impl(impl) {}
 
     void handleImport(const clang::Module *imported) {
       if (!imported)
@@ -97,29 +95,12 @@ namespace {
                                     StringRef RelativePath,
                                     const clang::Module *Imported) override {
       handleImport(Imported);
-      if (!Imported && File)
-        Importer.addDependency(File->getName());
     }
 
     void moduleImport(clang::SourceLocation ImportLoc,
                               clang::ModuleIdPath Path,
                               const clang::Module *Imported) override {
       handleImport(Imported);
-    }
-  };
-
-  class ASTReaderCallbacks : public clang::ASTReaderListener {
-    ClangImporter &Importer;
-  public:
-    explicit ASTReaderCallbacks(ClangImporter &importer) : Importer(importer) {}
-
-    bool needsInputFileVisitation() override { return true; }
-
-    bool visitInputFile(StringRef file, bool isSystem,
-                        bool isOverridden, bool isExplicitModule) override {
-      if (!isOverridden)
-        Importer.addDependency(file);
-      return true;
     }
   };
 
@@ -164,27 +145,44 @@ namespace {
     ASTContext &Ctx;
     ClangImporter &Importer;
     ClangImporter::Implementation &Impl;
+    const ClangImporterOptions &ImporterOpts;
+    std::string SwiftPCHHash;
   public:
     explicit ParsingAction(ASTContext &ctx,
                            ClangImporter &importer,
-                           ClangImporter::Implementation &impl)
-      : Ctx(ctx), Importer(importer), Impl(impl) {}
+                           ClangImporter::Implementation &impl,
+                           const ClangImporterOptions &importerOpts,
+                           std::string swiftPCHHash)
+      : Ctx(ctx), Importer(importer), Impl(impl), ImporterOpts(importerOpts),
+        SwiftPCHHash(swiftPCHHash) {}
     std::unique_ptr<clang::ASTConsumer>
     CreateASTConsumer(clang::CompilerInstance &CI, StringRef InFile) override {
       return llvm::make_unique<HeaderParsingASTConsumer>(Impl);
     }
-    bool BeginSourceFileAction(CompilerInstance &CI,
+    bool BeginSourceFileAction(clang::CompilerInstance &CI,
                                StringRef Filename) override {
       // Prefer frameworks over plain headers.
       // We add search paths here instead of when building the initial invocation
       // so that (a) we use the same code as search paths for imported modules,
       // and (b) search paths are always added after -Xcc options.
       SearchPathOptions &searchPathOpts = Ctx.SearchPathOpts;
-      for (const auto &framepath : searchPathOpts.FrameworkSearchPaths)
+      for (const auto &framepath : searchPathOpts.FrameworkSearchPaths) {
         Importer.addSearchPath(framepath.Path, /*isFramework*/true,
                                framepath.IsSystem);
-      for (auto path : searchPathOpts.ImportSearchPaths)
+      }
+
+      for (auto path : searchPathOpts.ImportSearchPaths) {
         Importer.addSearchPath(path, /*isFramework*/false, /*isSystem=*/false);
+      }
+
+      auto PCH = Importer.getOrCreatePCH(ImporterOpts, SwiftPCHHash);
+      if (PCH.hasValue()) {
+        Impl.getClangInstance()->getPreprocessorOpts().ImplicitPCHInclude =
+            PCH.getValue();
+        Impl.IsReadingBridgingPCH = true;
+        Impl.setSinglePCHImport(PCH.getValue());
+      }
+
       return true;
     }
   };
@@ -313,7 +311,50 @@ private:
     Impl.BridgeHeaderMacros.push_back(MacroNameTok.getIdentifierInfo());
   }
 };
+
+class ClangImporterDependencyCollector : public clang::DependencyCollector
+{
+  llvm::StringSet<> ExcludedPaths;
+public:
+  ClangImporterDependencyCollector() = default;
+
+  void excludePath(StringRef filename) {
+    ExcludedPaths.insert(filename);
+  }
+
+  bool isClangImporterSpecialName(StringRef Filename) {
+    using ImporterImpl = ClangImporter::Implementation;
+    return (Filename == ImporterImpl::moduleImportBufferName
+            || Filename == ImporterImpl::bridgingHeaderBufferName);
+  }
+
+  // Currently preserving older ClangImporter behaviour of ignoring system
+  // dependencies, but possibly revisit?
+  bool needSystemDependencies() override { return false; }
+
+  bool sawDependency(StringRef Filename, bool FromClangModule,
+                     bool IsSystem, bool IsClangModuleFile,
+                     bool IsMissing) override {
+    if (!clang::DependencyCollector::sawDependency(Filename, FromClangModule,
+                                                   IsSystem, IsClangModuleFile,
+                                                   IsMissing))
+      return false;
+    // Currently preserving older ClangImporter behaviour of ignoring .pcm
+    // file dependencies, but possibly revisit?
+    if (IsClangModuleFile
+        || isClangImporterSpecialName(Filename)
+        || ExcludedPaths.count(Filename))
+      return false;
+    return true;
+  }
+};
 } // end anonymous namespace
+
+std::shared_ptr<clang::DependencyCollector>
+ClangImporter::createDependencyCollector()
+{
+  return std::make_shared<ClangImporterDependencyCollector>();
+}
 
 void ClangImporter::Implementation::addBridgeHeaderTopLevelDecls(
     clang::Decl *D) {
@@ -668,11 +709,73 @@ addCommonInvocationArguments(std::vector<std::string> &invocationArgStrs,
     llvm::itostr(ctx.LangOpts.EffectiveLanguageVersion[0]));
 }
 
+bool ClangImporter::canReadPCH(StringRef PCHFilename) {
+  return clang::ASTReader::isAcceptableASTFile(PCHFilename,
+    Impl.Instance->getFileManager(),
+    Impl.Instance->getPCHContainerReader(),
+    Impl.Instance->getLangOpts(),
+    Impl.Instance->getTargetOpts(),
+    Impl.Instance->getPreprocessorOpts(),
+    Impl.Instance->getSpecificModuleCachePath());
+}
+
+Optional<std::string>
+ClangImporter::getPCHFilename(const ClangImporterOptions &ImporterOptions,
+                              const std::string &SwiftPCHHash) {
+  if (llvm::sys::path::extension(ImporterOptions.BridgingHeader)
+        .endswith(PCH_EXTENSION)) {
+    return ImporterOptions.BridgingHeader;
+  }
+
+  const auto &BridgingHeader = ImporterOptions.BridgingHeader;
+  const auto &PCHOutputDir = ImporterOptions.PrecompiledHeaderOutputDir;
+  if (SwiftPCHHash.empty() || BridgingHeader.empty() || PCHOutputDir.empty()) {
+    return None;
+  }
+
+  SmallString<256> PCHBasename { llvm::sys::path::filename(BridgingHeader) };
+  llvm::sys::path::replace_extension(PCHBasename, "");
+  PCHBasename.append("-swift_");
+  PCHBasename.append(SwiftPCHHash);
+  PCHBasename.append("-clang_");
+  PCHBasename.append(getClangModuleHash());
+  llvm::sys::path::replace_extension(PCHBasename, ".pch");
+  SmallString<256> PCHFilename { PCHOutputDir };
+  llvm::sys::path::append(PCHFilename, PCHBasename);
+  return PCHFilename.str().str();
+}
+
+
+Optional<std::string>
+ClangImporter::getOrCreatePCH(const ClangImporterOptions &ImporterOptions,
+                              const std::string &SwiftPCHHash) {
+  auto PCHFilename = getPCHFilename(ImporterOptions, SwiftPCHHash);
+  if (!PCHFilename.hasValue()) {
+    return None;
+  }
+  if (!canReadPCH(PCHFilename.getValue())) {
+    SmallString<256> Message;
+    llvm::raw_svector_ostream OS(Message);
+    auto Diags = new clang::TextDiagnosticPrinter {
+      llvm::errs(),
+      &Impl.Instance->getDiagnosticOpts()
+    };
+    auto FailedToEmit = emitBridgingPCH(ImporterOptions.BridgingHeader,
+                                        PCHFilename.getValue(),
+                                        Diags);
+    if (FailedToEmit) {
+      return None;
+    }
+  }
+
+  return PCHFilename.getValue();
+}
+
 std::unique_ptr<ClangImporter>
 ClangImporter::create(ASTContext &ctx,
                       const ClangImporterOptions &importerOpts,
+                      std::string swiftPCHHash,
                       DependencyTracker *tracker) {
-
   std::unique_ptr<ClangImporter> importer{
     new ClangImporter(ctx, importerOpts, tracker)
   };
@@ -694,7 +797,7 @@ ClangImporter::create(ASTContext &ctx,
   addCommonInvocationArguments(invocationArgStrs, ctx, importerOpts);
 
   if (importerOpts.DumpClangDiagnostics) {
-    llvm::errs() << "clang '";
+    llvm::errs() << "'";
     interleave(invocationArgStrs,
                [](StringRef arg) { llvm::errs() << arg; },
                [] { llvm::errs() << "' '"; });
@@ -707,7 +810,16 @@ ClangImporter::create(ASTContext &ctx,
 
   if (llvm::sys::path::extension(importerOpts.BridgingHeader).endswith(
         PCH_EXTENSION)) {
+    importer->Impl.setSinglePCHImport(importerOpts.BridgingHeader);
     importer->Impl.IsReadingBridgingPCH = true;
+    if (tracker) {
+      // Currently ignoring dependency on bridging .pch files because they are
+      // temporaries; if and when they are no longer temporaries, this condition
+      // should be removed.
+      auto &coll = static_cast<ClangImporterDependencyCollector &>(
+        *tracker->getClangCollector());
+      coll.excludePath(importerOpts.BridgingHeader);
+    }
   }
 
   // FIXME: These can't be controlled from the command line.
@@ -719,8 +831,9 @@ ClangImporter::create(ASTContext &ctx,
     new ClangDiagnosticConsumer(importer->Impl, *diagnosticOpts,
                                 importerOpts.DumpClangDiagnostics)
   };
-  auto clangDiags = CompilerInstance::createDiagnostics(diagnosticOpts.get(),
-                                                        diagClient.release());
+  auto clangDiags =
+      clang::CompilerInstance::createDiagnostics(diagnosticOpts.get(),
+                                                 diagClient.release());
 
   // Create a new Clang compiler invocation.
   importer->Impl.Invocation =
@@ -762,14 +875,20 @@ ClangImporter::create(ASTContext &ctx,
       llvm::make_unique<clang::ObjectFilePCHContainerWriter>());
   PCHContainerOperations->registerReader(
       llvm::make_unique<clang::ObjectFilePCHContainerReader>());
-  importer->Impl.Instance.reset(new CompilerInstance(PCHContainerOperations));
+  importer->Impl.Instance.reset(
+      new clang::CompilerInstance(PCHContainerOperations));
   auto &instance = *importer->Impl.Instance;
+  if (tracker)
+    instance.addDependencyCollector(tracker->getClangCollector());
+
   instance.setDiagnostics(&*clangDiags);
   instance.setInvocation(importer->Impl.Invocation);
 
   // Create the associated action.
   importer->Impl.Action.reset(new ParsingAction(ctx, *importer,
-                                                importer->Impl));
+                                                importer->Impl,
+                                                importerOpts,
+                                                swiftPCHHash));
   auto *action = importer->Impl.Action.get();
 
   // Execute the action. We effectively inline most of
@@ -808,9 +927,6 @@ ClangImporter::create(ASTContext &ctx,
   clangPP.addPPCallbacks(std::move(ppTracker));
 
   instance.createModuleManager();
-  instance.getModuleManager()->addListener(
-         std::unique_ptr<clang::ASTReaderListener>(
-                 new ASTReaderCallbacks(*importer)));
 
   // Manually run the action, so that the TU stays open for additional parsing.
   instance.createSema(action->getTranslationUnitKind(), nullptr);
@@ -840,7 +956,7 @@ ClangImporter::create(ASTContext &ctx,
   }
 
   // FIXME: This is missing implicit includes.
-  auto *CB = new HeaderImportCallbacks(*importer, importer->Impl);
+  auto *CB = new HeaderImportCallbacks(importer->Impl);
   clangPP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(CB));
 
   // Create the selectors we'll be looking for.
@@ -902,6 +1018,7 @@ bool ClangImporter::Implementation::importHeader(
     bool trackParsedSymbols,
     std::unique_ptr<llvm::MemoryBuffer> sourceBuffer,
     bool implicitImport) {
+
   // Don't even try to load the bridging header if the Clang AST is in a bad
   // state. It could cause a crash.
   auto &clangDiags = getClangASTContext().getDiagnostics();
@@ -1029,6 +1146,11 @@ bool ClangImporter::importHeader(StringRef header, ModuleDecl *adapter,
     return importBridgingHeader(header, adapter, diagLoc, false, true);
   }
 
+  // If we've made it to here, this is some header other than the bridging
+  // header, which means we can no longer rely on one file's modification time
+  // to invalid code completion caches. :-(
+  Impl.setSinglePCHImport(None);
+
   if (!cachedContents.empty() && cachedContents.back() == '\0')
     cachedContents = cachedContents.drop_back();
   std::unique_ptr<llvm::MemoryBuffer> sourceBuffer{
@@ -1050,6 +1172,7 @@ bool ClangImporter::importBridgingHeader(StringRef header, ModuleDecl *adapter,
     Impl.handleDeferredImports();
     return false;
   }
+
   clang::FileManager &fileManager = Impl.Instance->getFileManager();
   const clang::FileEntry *headerFile = fileManager.getFile(header,
                                                            /*OpenFile=*/true);
@@ -1120,7 +1243,8 @@ std::string ClangImporter::getBridgingHeaderContents(StringRef headerPath,
 
 bool
 ClangImporter::emitBridgingPCH(StringRef headerPath,
-                               StringRef outputPCHPath) {
+                               StringRef outputPCHPath,
+                               clang::DiagnosticConsumer *Diags) {
   auto invocation = std::make_shared<clang::CompilerInvocation>
     (clang::CompilerInvocation(*Impl.Invocation));
   invocation->getFrontendOpts().DisableFree = false;
@@ -1133,8 +1257,12 @@ ClangImporter::emitBridgingPCH(StringRef headerPath,
   clang::CompilerInstance emitInstance(
     Impl.Instance->getPCHContainerOperations());
   emitInstance.setInvocation(std::move(invocation));
-  emitInstance.createDiagnostics(&Impl.Instance->getDiagnosticClient(),
-                                 false);
+
+  auto ReusingDiags = Diags == nullptr;
+  if (ReusingDiags) {
+    Diags = &Impl.Instance->getDiagnosticClient();
+  }
+  emitInstance.createDiagnostics(Diags, /*ShouldOwnDiags=*/!ReusingDiags);
 
   clang::FileManager &fileManager = Impl.Instance->getFileManager();
   emitInstance.setFileManager(&fileManager);
@@ -2414,8 +2542,13 @@ void ClangModuleUnit::collectLinkLibraries(
 }
 
 StringRef ClangModuleUnit::getFilename() const {
-  if (!clangModule)
-    return "<imports>";
+  if (!clangModule) {
+    StringRef SinglePCH = owner.getSinglePCHImport();
+    if (SinglePCH.empty())
+      return "<imports>";
+    else
+      return SinglePCH;
+  }
   if (const clang::FileEntry *F = clangModule->getASTFile())
     if (!F->getName().empty())
       return F->getName();

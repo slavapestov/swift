@@ -33,6 +33,7 @@
 #include "swift/AST/TypeCheckerDebugConsumer.h"
 #include "llvm/ADT/ilist.h"
 #include "llvm/ADT/PointerUnion.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -2360,8 +2361,19 @@ private:
   /// \param expr The expression to find reductions for.
   void shrink(Expr *expr);
 
- public:
+  void gatherNeighboringApplicableFunctionConstraints(
+      Constraint *applicableFn,
+      SmallVectorImpl<Constraint *> &otherApplicableFn);
+  bool simplifyForConstraintPropagation();
+  bool isBindOverloadConsistent(Constraint *bindConstraint,
+                                Constraint *applicableFn,
+                                llvm::SetVector<Constraint *> &workList,
+                                bool topLevel);
+  bool isApplicableFunctionConsistent(Constraint *applicableFn,
+                                      llvm::SetVector<Constraint *> &workList,
+                                      bool topLevel);
 
+public:
   /// \brief Solve the system of constraints generated from provided expression.
   ///
   /// \param expr The expression to generate constraints from.

@@ -187,6 +187,11 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   Opts.DebugTimeExpressionTypeChecking |=
     Args.hasArg(OPT_debug_time_expression_type_checking);
   Opts.DebugTimeCompilation |= Args.hasArg(OPT_debug_time_compilation);
+  if (const Arg *A = Args.getLastArg(OPT_stats_output_dir)) {
+    Opts.StatsOutputDir = A->getValue();
+  }
+
+  Opts.ValidateTBDAgainstIR |= Args.hasArg(OPT_validate_tbd_against_ir);
 
   if (const Arg *A = Args.getLastArg(OPT_warn_long_function_bodies)) {
     unsigned attempt;
@@ -267,6 +272,8 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Action = FrontendOptions::EmitPCH;
     } else if (Opt.matches(OPT_emit_imported_modules)) {
       Action = FrontendOptions::EmitImportedModules;
+    } else if (Opt.matches(OPT_emit_tbd)) {
+      Action = FrontendOptions::EmitTBD;
     } else if (Opt.matches(OPT_parse)) {
       Action = FrontendOptions::Parse;
     } else if (Opt.matches(OPT_typecheck)) {
@@ -552,6 +559,13 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       else
         Suffix = "importedmodules";
       break;
+
+    case FrontendOptions::EmitTBD:
+      if (Opts.OutputFilenames.empty())
+        Opts.setSingleOutputFilename("-");
+      else
+        Suffix = "tbd";
+      break;
     }
 
     if (!Suffix.empty()) {
@@ -707,6 +721,7 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
     case FrontendOptions::EmitAssembly:
     case FrontendOptions::EmitObject:
     case FrontendOptions::EmitImportedModules:
+    case FrontendOptions::EmitTBD:
       break;
     }
   }
@@ -737,6 +752,7 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
     case FrontendOptions::EmitAssembly:
     case FrontendOptions::EmitObject:
     case FrontendOptions::EmitImportedModules:
+    case FrontendOptions::EmitTBD:
       break;
     }
   }
@@ -771,6 +787,7 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
     case FrontendOptions::EmitAssembly:
     case FrontendOptions::EmitObject:
     case FrontendOptions::EmitImportedModules:
+    case FrontendOptions::EmitTBD:
       break;
     }
   }
@@ -941,6 +958,12 @@ static bool ParseLangArgs(LangOptions &Opts, ArgList &Args,
   }
 
   Opts.EnableAppExtensionRestrictions |= Args.hasArg(OPT_enable_app_extension);
+  Opts.WarnSwift3ObjCInference |= Args.hasArg(OPT_warn_swift3_objc_inference);
+
+  Opts.EnableSwift3ObjCInference =
+    Args.hasFlag(OPT_enable_swift3_objc_inference,
+                 OPT_disable_swift3_objc_inference,
+                 Opts.isSwiftVersion3());
 
   llvm::Triple Target = Opts.Target;
   StringRef TargetArg;
@@ -1135,6 +1158,34 @@ static void PrintArg(raw_ostream &OS, const char *Arg, bool Quote) {
   OS << '"';
 }
 
+/// Parse -enforce-exclusivity=... options
+void parseExclusivityEnforcementOptions(const llvm::opt::Arg *A,
+                                        SILOptions &Opts,
+                                        DiagnosticEngine &Diags) {
+  StringRef Argument = A->getValue();
+  if (Argument == "unchecked") {
+    // This option is analogous to the -Ounchecked optimization setting.
+    // It will disable dynamic checking but still diagnose statically.
+    Opts.EnforceExclusivityStatic = true;
+    Opts.EnforceExclusivityDynamic = false;
+  } else if (Argument == "checked") {
+    Opts.EnforceExclusivityStatic = true;
+    Opts.EnforceExclusivityDynamic = true;
+  } else if (Argument == "dynamic-only") {
+    // This option is intended for staging purposes. The intent is that
+    // it will eventually be removed.
+    Opts.EnforceExclusivityStatic = false;
+    Opts.EnforceExclusivityDynamic = true;
+  } else if (Argument == "none") {
+    // This option is for staging purposes.
+    Opts.EnforceExclusivityStatic = false;
+    Opts.EnforceExclusivityDynamic = false;
+  } else {
+    Diags.diagnose(SourceLoc(), diag::error_unsupported_option_argument,
+        A->getOption().getPrefixedName(), A->getValue());
+  }
+}
+
 static bool ParseSILArgs(SILOptions &Opts, ArgList &Args,
                          IRGenOptions &IRGenOpts,
                          FrontendOptions &FEOpts,
@@ -1166,6 +1217,9 @@ static bool ParseSILArgs(SILOptions &Opts, ArgList &Args,
     else
       llvm_unreachable("Unknown SIL linking option!");
   }
+
+  if (Args.hasArg(OPT_sil_merge_partial_modules))
+    Opts.MergePartialModules = true;
 
   // Parse the optimization level.
   if (const Arg *A = Args.getLastArg(OPT_O_Group)) {
@@ -1242,6 +1296,8 @@ static bool ParseSILArgs(SILOptions &Opts, ArgList &Args,
   Opts.EnableSILOwnership |= Args.hasArg(OPT_enable_sil_ownership);
   Opts.AssumeUnqualifiedOwnershipWhenParsing
     |= Args.hasArg(OPT_assume_parsing_unqualified_ownership_sil);
+  Opts.EnableMandatorySemanticARCOpts |=
+      !Args.hasArg(OPT_disable_mandatory_semantic_arc_opts);
 
   if (Args.hasArg(OPT_debug_on_sil)) {
     // Derive the name of the SIL file for debugging from
@@ -1257,6 +1313,10 @@ static bool ParseSILArgs(SILOptions &Opts, ArgList &Args,
   if (const Arg *A = Args.getLastArg(options::OPT_sanitize_EQ)) {
     Opts.Sanitize = parseSanitizerArgValues(A, Triple, Diags);
     IRGenOpts.Sanitize = Opts.Sanitize;
+  }
+
+  if (const Arg *A = Args.getLastArg(options::OPT_enforce_exclusivity_EQ)) {
+    parseExclusivityEnforcementOptions(A, Opts, Diags);
   }
 
   /// Should we use the copy-on-write implementation of opaque existentials.
@@ -1524,7 +1584,6 @@ bool CompilerInvocation::parseArgs(ArrayRef<const char *> Args,
 
   return false;
 }
-
 
 serialization::Status
 CompilerInvocation::loadFromSerializedAST(StringRef data) {

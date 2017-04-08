@@ -250,6 +250,9 @@ def emit_pch : Flag<["-"], "emit-pch">,
 def enable_sil_ownership : Flag<["-"], "enable-sil-ownership">,
   HelpText<"Enable the SIL Ownership Model">;
 
+def disable_mandatory_semantic_arc_opts : Flag<["-"], "disable-mandatory-semantic-arc-opts">,
+  HelpText<"Disable the mandatory semantic arc optimizer">;
+
 def assume_parsing_unqualified_ownership_sil : Flag<["-"], "assume-parsing-unqualified-ownership-sil">,
   HelpText<"Assume unqualified SIL ownership when parsing SIL">;
 
@@ -274,6 +277,15 @@ def disable_tsan_inout_instrumentation : Flag<["-"],
 def enable_infer_import_as_member :
   Flag<["-"], "enable-infer-import-as-member">,
   HelpText<"Infer when a global could be imported as a member">;
+
+def enable_swift3_objc_inference : Flag<["-"], "enable-swift3-objc-inference">,
+  Flags<[FrontendOption, HelpHidden]>,
+HelpText<"Enable Swift 3's @objc inference rules for NSObject-derived classes and 'dynamic' members (emulates Swift 3 behavior)">;
+
+def disable_swift3_objc_inference :
+  Flag<["-"], "disable-swift3-objc-inference">,
+  Flags<[FrontendOption, HelpHidden]>,
+  HelpText<"Disable Swift 3's @objc inference rules for NSObject-derived classes and 'dynamic' members (emulates Swift 4 behavior)">;
 
 def warn_long_function_bodies : Separate<["-"], "warn-long-function-bodies">,
   MetaVarName<"<n>">,
@@ -311,6 +323,9 @@ def use_jit : Flag<["-"], "use-jit">,
 def sil_inline_threshold : Separate<["-"], "sil-inline-threshold">,
   MetaVarName<"<50>">,
   HelpText<"Controls the aggressiveness of performance inlining">;
+
+def sil_merge_partial_modules : Flag<["-"], "sil-merge-partial-modules">,
+  HelpText<"Merge SIL from all partial swiftmodules into the final module">;
 
 def sil_link_all : Flag<["-"], "sil-link-all">,
   HelpText<"Link all SIL functions">;
@@ -378,5 +393,8 @@ def group_info_path : Separate<["-"], "group-info-path">,
 
 def diagnostics_editor_mode : Flag<["-"], "diagnostics-editor-mode">,
 HelpText<"Diagnostics will be used in editor">;
+
+def validate_tbd_against_ir: Flag<["-"], "validate-tbd-against-ir">,
+    HelpText<"Compare the symbols in the IR against the TBD file that would be generated.">;
 
 } // end let Flags = [FrontendOption, NoDriverOption, HelpHidden]

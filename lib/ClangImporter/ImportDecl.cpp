@@ -30,9 +30,11 @@
 #include "swift/AST/NameLookup.h"
 #include "swift/AST/ParameterList.h"
 #include "swift/AST/Pattern.h"
+#include "swift/AST/PrettyStackTrace.h"
 #include "swift/AST/ProtocolConformance.h"
 #include "swift/AST/Stmt.h"
 #include "swift/AST/Types.h"
+#include "swift/Basic/PrettyStackTrace.h"
 #include "swift/ClangImporter/ClangModule.h"
 #include "swift/Parse/Lexer.h"
 #include "swift/Config.h"
@@ -996,7 +998,7 @@ makeBitFieldAccessors(ClangImporter::Implementation &Impl,
                                                        clang::VK_RValue,
                                                        clang::OK_Ordinary,
                                                        clang::SourceLocation(),
-                                                       /*fpContractable=*/ false);
+                                                       clang::FPOptions());
     
     cSetterDecl->setBody(cSetterExpr);
 
@@ -1711,16 +1713,35 @@ getAccessorPropertyType(const clang::FunctionDecl *accessor, bool isSetter,
 /// Whether we should suppress importing the Objective-C generic type params
 /// of this class as Swift generic type params.
 static bool
-shouldSuppressGenericParamsImport(const clang::ObjCInterfaceDecl *decl) {
-  while (decl) {
-    StringRef name = decl->getName();
-    if (name == "NSArray" || name == "NSDictionary" || name == "NSSet" ||
-        name == "NSOrderedSet" || name == "NSEnumerator" ||
-        name == "NSMeasurement") {
-      return true;
+shouldSuppressGenericParamsImport(const LangOptions &langOpts,
+                                  const clang::ObjCInterfaceDecl *decl) {
+  if (decl->hasAttr<clang::SwiftImportAsNonGenericAttr>())
+    return true;
+
+  // FIXME: This check is only necessary to keep things working even without
+  // the SwiftImportAsNonGeneric API note. Once we can guarantee that that
+  // attribute is present in all contexts, we can remove this check.
+  auto isFromFoundationModule = [](const clang::Decl *decl) -> bool {
+    Optional<clang::Module *> module = getClangSubmoduleForDecl(decl);
+    if (!module)
+      return false;
+    return module.getValue()->getTopLevelModuleName() == "Foundation";
+  };
+
+  if (langOpts.isSwiftVersion3() || isFromFoundationModule(decl)) {
+    // In Swift 3 we used a hardcoded list of declarations, and made all of
+    // their subclasses drop their generic parameters when imported.
+    while (decl) {
+      StringRef name = decl->getName();
+      if (name == "NSArray" || name == "NSDictionary" || name == "NSSet" ||
+          name == "NSOrderedSet" || name == "NSEnumerator" ||
+          name == "NSMeasurement") {
+        return true;
+      }
+      decl = decl->getSuperClass();
     }
-    decl = decl->getSuperClass();
   }
+
   return false;
 }
 
@@ -3063,10 +3084,12 @@ namespace {
 
     Decl *importGlobalAsInitializer(const clang::FunctionDecl *decl,
                                     DeclName name, DeclContext *dc,
-                                    CtorInitializerKind initKind);
+                                    CtorInitializerKind initKind,
+                                    Optional<ImportedName> correctSwiftName);
 
     Decl *importGlobalAsMethod(const clang::FunctionDecl *decl, DeclName name,
-                               DeclContext *dc, Optional<unsigned> selfIdx);
+                               DeclContext *dc, Optional<unsigned> selfIdx,
+                               Optional<ImportedName> correctSwiftName);
 
     /// Create an implicit property given the imported name of one of
     /// the accessors.
@@ -3116,16 +3139,16 @@ namespace {
 
       DeclName name = owningStorage ? DeclName() : importedName.getDeclName();
       if (importedName.importAsMember()) {
-        assert(!correctSwiftName && "Swift 2 didn't support import-as-member!");
-
         // Handle initializers.
         if (name.getBaseName() == Impl.SwiftContext.Id_init)
           return importGlobalAsInitializer(decl, name, dc,
-                                           importedName.getInitKind());
+                                           importedName.getInitKind(),
+                                           correctSwiftName);
 
         // Everything else is a method.
         return importGlobalAsMethod(decl, name, dc,
-                                    importedName.getSelfIndex());
+                                    importedName.getSelfIndex(),
+                                    correctSwiftName);
       }
 
       // Import the function type. If we have parameters, make sure their names
@@ -4323,32 +4346,44 @@ namespace {
       // Check whether there is a function with the same name as this
       // property. If so, suppress the property; the user will have to use
       // the methods directly, to avoid ambiguities.
-      auto containerTy = dc->getDeclaredTypeInContext();
-      VarDecl *overridden = nullptr;
-      SmallVector<ValueDecl *, 2> lookup;
-      dc->lookupQualified(containerTy, name,
-                          NL_QualifiedDefault | NL_KnownNoDependency,
-                          Impl.getTypeResolver(), lookup);
-      for (auto result : lookup) {
-        if (isa<FuncDecl>(result) &&
-            result->isInstanceMember() == decl->isInstanceProperty() &&
-            result->getFullName().getArgumentNames().empty())
-          return nullptr;
+      Type containerTy = dc->getDeclaredInterfaceType();
+      Type lookupContextTy = containerTy;
+      if (auto *classDecl = dyn_cast<ClassDecl>(dc)) {
+        // If we're importing into the primary @interface for something, as
+        // opposed to an extension, make sure we don't try to load any
+        // categories...by just looking into the super type.
+        lookupContextTy = classDecl->getSuperclass();
+      }
 
-        if (auto var = dyn_cast<VarDecl>(result)) {
-          // If the selectors of the getter match in Objective-C, we have an
-          // override.
-          if (var->isInstanceMember() == decl->isInstanceProperty() &&
-              var->getObjCGetterSelector() ==
-                Impl.importSelector(decl->getGetterName()))
-            overridden = var;
+      VarDecl *overridden = nullptr;
+      if (lookupContextTy) {
+        SmallVector<ValueDecl *, 2> lookup;
+        dc->lookupQualified(lookupContextTy, name,
+                            NL_QualifiedDefault | NL_KnownNoDependency,
+                            Impl.getTypeResolver(), lookup);
+        for (auto result : lookup) {
+          if (isa<FuncDecl>(result) &&
+              result->isInstanceMember() == decl->isInstanceProperty() &&
+              result->getFullName().getArgumentNames().empty())
+            return nullptr;
+
+          if (auto var = dyn_cast<VarDecl>(result)) {
+            // If the selectors of the getter match in Objective-C, we have an
+            // override.
+            if (var->isInstanceMember() == decl->isInstanceProperty() &&
+                var->getObjCGetterSelector() ==
+                  Impl.importSelector(decl->getGetterName()))
+              overridden = var;
+          }
         }
       }
 
       if (overridden) {
         const DeclContext *overrideContext = overridden->getDeclContext();
-        if (overrideContext != dc &&
-            overrideContext->getDeclaredTypeInContext()->isEqual(containerTy)) {
+        // It's okay to compare interface types directly because Objective-C
+        // does not have constrained extensions.
+        if (overrideContext != dc && overridden->hasClangNode() &&
+            overrideContext->getDeclaredInterfaceType()->isEqual(containerTy)) {
           // We've encountered a redeclaration of the property.
           // HACK: Just update the original declaration instead of importing a
           // second property.
@@ -4672,12 +4707,8 @@ Decl *SwiftDeclConverter::importCompatibilityTypeAlias(
     }
   }
 
-  // Import the declaration context where this name will go. Note that
-  // this is the "natural" context for the declaration, without
-  // import-as-member inference or swift_name tricks.
-  EffectiveClangContext effectiveContext(
-      decl->getDeclContext()->getRedeclContext());
-  auto dc = Impl.importDeclContextOf(decl, effectiveContext);
+  auto dc = Impl.importDeclContextOf(decl,
+                                     compatibilityName.getEffectiveContext());
   if (!dc)
     return nullptr;
 
@@ -4693,6 +4724,53 @@ Decl *SwiftDeclConverter::importCompatibilityTypeAlias(
   Impl.ImportedDecls[{decl->getCanonicalDecl(), getVersion()}] = alias;
   markAsVariant(alias, correctSwiftName);
   return alias;
+}
+
+static bool inheritanceListContainsProtocol(ArrayRef<TypeLoc> inherited,
+                                            const ProtocolDecl *proto) {
+  return llvm::any_of(inherited, [proto](TypeLoc type) -> bool {
+    if (!type.getType()->isExistentialType())
+      return false;
+    SmallVector<ProtocolDecl *, 8> protos;
+    type.getType()->getExistentialTypeProtocols(protos);
+    return ProtocolType::visitAllProtocols(protos,
+                                           [proto](const ProtocolDecl *next) {
+      return next == proto;
+    });
+  });
+}
+
+static bool conformsToProtocolInOriginalModule(NominalTypeDecl *nominal,
+                                               const ProtocolDecl *proto,
+                                               ModuleDecl *foundationModule,
+                                               LazyResolver *resolver) {
+  if (resolver)
+    resolver->resolveInheritanceClause(nominal);
+  if (inheritanceListContainsProtocol(nominal->getInherited(), proto))
+    return true;
+
+  // Only consider extensions from the original module...or from an overlay
+  // or the Swift half of a mixed-source framework.
+  const DeclContext *containingFile = nominal->getModuleScopeContext();
+  ModuleDecl *originalModule = containingFile->getParentModule();
+
+  ModuleDecl *adapterModule = nullptr;
+  if (auto *clangUnit = dyn_cast<ClangModuleUnit>(containingFile))
+    adapterModule = clangUnit->getAdapterModule();
+
+  for (ExtensionDecl *extension : nominal->getExtensions()) {
+    ModuleDecl *extensionModule = extension->getParentModule();
+    if (extensionModule != originalModule && extensionModule != adapterModule &&
+        extensionModule != foundationModule) {
+      continue;
+    }
+    if (resolver)
+      resolver->resolveInheritanceClause(extension);
+    if (inheritanceListContainsProtocol(extension->getInherited(), proto))
+      return true;
+  }
+
+  return false;
 }
 
 Decl *
@@ -4779,9 +4857,11 @@ SwiftDeclConverter::importSwiftNewtype(const clang::TypedefNameDecl *decl,
     if (!proto)
       return;
 
-    SmallVector<ProtocolConformance *, 1> conformances;
-    if (computedNominal->lookupConformance(computedNominal->getParentModule(),
-                                           proto, conformances)) {
+    // Break circularity by only looking for declared conformances in the
+    // original module, or possibly its adapter.
+    if (conformsToProtocolInOriginalModule(computedNominal, proto,
+                                           Impl.tryLoadFoundationModule(),
+                                           Impl.getTypeResolver())) {
       protocols.push_back(proto);
       synthesizedProtocols.push_back(kind);
     }
@@ -4972,10 +5052,12 @@ SwiftDeclConverter::importAsOptionSetType(DeclContext *dc, Identifier name,
   return structDecl;
 }
 
-Decl *
-SwiftDeclConverter::importGlobalAsInitializer(const clang::FunctionDecl *decl,
-                                               DeclName name, DeclContext *dc,
-                                               CtorInitializerKind initKind) {
+Decl *SwiftDeclConverter::importGlobalAsInitializer(
+    const clang::FunctionDecl *decl,
+    DeclName name,
+    DeclContext *dc,
+    CtorInitializerKind initKind,
+    Optional<ImportedName> correctSwiftName) {
   // TODO: Should this be an error? How can this come up?
   assert(dc->isTypeContext() && "cannot import as member onto non-type");
 
@@ -5042,12 +5124,17 @@ SwiftDeclConverter::importGlobalAsInitializer(const clang::FunctionDecl *decl,
   result->setInterfaceType(allocType);
 
   finishFuncDecl(decl, result);
+  if (correctSwiftName)
+    markAsVariant(result, *correctSwiftName);
   return result;
 }
 
-Decl *SwiftDeclConverter::importGlobalAsMethod(const clang::FunctionDecl *decl,
-                                                DeclName name, DeclContext *dc,
-                                                Optional<unsigned> selfIdx) {
+Decl *SwiftDeclConverter::importGlobalAsMethod(
+    const clang::FunctionDecl *decl,
+    DeclName name,
+    DeclContext *dc,
+    Optional<unsigned> selfIdx,
+    Optional<ImportedName> correctSwiftName) {
   if (dc->getAsProtocolOrProtocolExtensionContext() && !selfIdx) {
     // FIXME: source location...
     Impl.SwiftContext.Diags.diagnose({}, diag::swift_name_protocol_static,
@@ -5124,6 +5211,8 @@ Decl *SwiftDeclConverter::importGlobalAsMethod(const clang::FunctionDecl *decl,
     result->getAttrs().add(new (C) FinalAttr(/*IsImplicit=*/true));
 
   finishFuncDecl(decl, result);
+  if (correctSwiftName)
+    markAsVariant(result, *correctSwiftName);
   return result;
 }
 
@@ -5529,7 +5618,9 @@ ConstructorDecl *SwiftDeclConverter::importConstructor(
                             ->getResult()
                             ->castTo<AnyFunctionType>()
                             ->getInput();
-  for (auto other : ownerNominal->lookupDirect(importedName.getDeclName())) {
+  bool ignoreNewExtensions = isa<ClassDecl>(dc);
+  for (auto other : ownerNominal->lookupDirect(importedName.getDeclName(),
+                                               ignoreNewExtensions)) {
     auto ctor = dyn_cast<ConstructorDecl>(other);
     if (!ctor || ctor->isInvalid() ||
         ctor->getAttrs().isUnavailable(Impl.SwiftContext) ||
@@ -6133,7 +6224,7 @@ Optional<GenericParamList *> SwiftDeclConverter::importObjCGenericParams(
   if (!typeParamList) {
     return nullptr;
   }
-  if (shouldSuppressGenericParamsImport(decl)) {
+  if (shouldSuppressGenericParamsImport(Impl.SwiftContext.LangOpts, decl)) {
     return nullptr;
   }
   assert(typeParamList->size() > 0);
@@ -6698,12 +6789,28 @@ void ClangImporter::Implementation::importAttributes(
   if (AnyUnavailable)
     return;
 
-  // Ban NSInvocation.
   if (auto ID = dyn_cast<clang::ObjCInterfaceDecl>(ClangDecl)) {
+    // Ban NSInvocation.
     if (ID->getName() == "NSInvocation") {
       auto attr = AvailableAttr::createPlatformAgnostic(C, "");
       MappedDecl->getAttrs().add(attr);
       return;
+    }
+
+    // Map Clang's swift_objc_members attribute to @objcMembers.
+    if (ID->hasAttr<clang::SwiftObjCMembersAttr>()) {
+      if (!MappedDecl->getAttrs().hasAttribute<ObjCMembersAttr>()) {
+        auto attr = new (C) ObjCMembersAttr(/*implicit=*/true);
+        MappedDecl->getAttrs().add(attr);
+      }
+    }
+
+    // Infer @objcMembers on XCTestCase.
+    if (ID->getName() == "XCTestCase") {
+      if (!MappedDecl->getAttrs().hasAttribute<ObjCMembersAttr>()) {
+        auto attr = new (C) ObjCMembersAttr(/*implicit=*/true);
+        MappedDecl->getAttrs().add(attr);
+      }
     }
   }
 
@@ -6977,8 +7084,6 @@ void ClangImporter::Implementation::finishProtocolConformance(
                                                      /*resolver=*/nullptr);
     assert(inheritedConformance && inheritedConformance->isConcrete() &&
            "inherited conformance not found");
-    conformance->setInheritedConformance(inherited,
-                                         inheritedConformance->getConcrete());
   }
 
   // Collect conformances for the requirement signature.
@@ -7495,6 +7600,15 @@ ClangImporter::Implementation::loadAllMembers(Decl *D, uint64_t extra) {
     auto table = findLookupTable(topLevelModule);
     if (!table) return;
 
+    StringRef traceName;
+    if (topLevelModule)
+      traceName = topLevelModule->getTopLevelModuleName();
+    else
+      traceName = "(bridging header)";
+    PrettyStackTraceStringAction trace("loading import-as-members from",
+                                       traceName);
+    PrettyStackTraceDecl trace2("...for", nominal);
+
     // Dig out the effective Clang context for this nominal type.
     auto effectiveClangContext = getEffectiveClangContext(nominal);
     if (!effectiveClangContext) return;
@@ -7560,6 +7674,23 @@ ClangImporter::Implementation::loadAllMembers(Decl *D, uint64_t extra) {
     auto ext = cast<ExtensionDecl>(D);
     DC = ext;
     IDC = ext;
+
+
+    // If the base is also imported from Clang, load its members first.
+    const NominalTypeDecl *base = ext->getExtendedType()->getAnyNominal();
+    if (auto *clangBase = base->getClangDecl()) {
+      base->loadAllMembers();
+
+      // Sanity check: make sure we don't jump over to a category /while/
+      // loading the original class's members. Right now we only check if this
+      // happens on the first member.
+      if (auto *clangContainer = dyn_cast<clang::ObjCContainerDecl>(clangBase)){
+        if (!clangContainer->decls_empty()) {
+          assert(!base->getMembers().empty() &&
+                 "can't load extension members before base has finished");
+        }
+      }
+    }
   }
 
   ImportingEntityRAII Importing(*this);

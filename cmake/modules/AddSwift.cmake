@@ -265,6 +265,10 @@ function(_add_variant_c_compile_flags)
         "-I${SWIFT_ANDROID_NDK_PATH}/sources/android/support/include")
   endif()
 
+  if(SWIFT_RUNTIME_ENABLE_COW_EXISTENTIALS)
+    list(APPEND result "-DSWIFT_RUNTIME_ENABLE_COW_EXISTENTIALS=1")
+  endif()
+
   set("${CFLAGS_RESULT_VAR_NAME}" "${result}" PARENT_SCOPE)
 endfunction()
 
@@ -1542,6 +1546,11 @@ function(add_swift_library name)
           elseif(SWIFTLIB_STATIC)
             list(APPEND swiftlib_swift_compile_flags_all -D_LIB)
           endif()
+        endif()
+
+        # Add PrivateFrameworks, rdar://28466433
+        if(SWIFTLIB_IS_SDK_OVERLAY)
+          list(APPEND swiftlib_swift_compile_flags_all "-Fsystem" "${SWIFT_SDK_${sdk}_PATH}/System/Library/PrivateFrameworks/")
         endif()
 
         # Add this library variant.

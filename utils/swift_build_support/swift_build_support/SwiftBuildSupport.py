@@ -18,12 +18,8 @@ except ImportError:
     import configparser as ConfigParser
 
 import os
-import sys
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'swift_build_support'))
-
-# E402 means module level import not at top of file
-from swift_build_support import diagnostics  # noqa (E402)
+import diagnostics
 
 
 HOME = os.environ.get("HOME", "/")
@@ -35,8 +31,9 @@ def _get_default_source_root():
     # Are we in a Swift checkout? Start from this file and check its parent
     # directories.
     #
-    # $SWIFT_SOURCE_ROOT/swift/utils/SwiftBuildSupport.py
-    (swift_path, parent_dirname) = os.path.split(os.path.dirname(__file__))
+    # $SWIFT_SOURCE_ROOT/swift/utils/swift_build_support/swift_build_support/SwiftBuildSupport.py
+    utils_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    (swift_path, parent_dirname) = os.path.split(utils_path)
     if parent_dirname != "utils":
         return result
     if not os.path.exists(os.path.join(swift_path, 'CMakeLists.txt')):
@@ -46,7 +43,7 @@ def _get_default_source_root():
     # Are we in an LLVM checkout? Start from the Swift checkout and check /its/
     # parent directories.
     #
-    # $SWIFT_SOURCE_ROOT/llvm/tools/swift/utils/SwiftBuildSupport.py
+    # $SWIFT_SOURCE_ROOT/llvm/tools/swift/utils/swift_build_support/swift_build_support/SwiftBuildSupport.py
     (llvm_path, parent_dirname) = os.path.split(result)
     if parent_dirname != "tools":
         return result
@@ -66,6 +63,29 @@ SWIFT_SOURCE_ROOT = os.environ.get(
 # for each build configuration
 SWIFT_BUILD_ROOT = os.environ.get(
     "SWIFT_BUILD_ROOT", os.path.join(SWIFT_SOURCE_ROOT, "build"))
+
+
+def _get_default_swift_repo_name():
+    result = ""
+
+    # Are we in a Swift checkout? Start from this file and check its parent
+    # directories.
+    #
+    # $SWIFT_SOURCE_ROOT/$SWIFT_REPO_NAME/utils/swift_build_support/swift_build_support/SwiftBuildSupport.py
+    utils_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    (swift_path, parent_dirname) = os.path.split(utils_path)
+    if parent_dirname != "utils":
+        return result
+    if not os.path.exists(os.path.join(swift_path, 'CMakeLists.txt')):
+        return result
+    (_, swift_repo_name) = os.path.split(swift_path)
+    return swift_repo_name
+
+
+# Set SWIFT_REPO_NAME in your environment to control the name of the swift
+# directory name that is used.
+SWIFT_REPO_NAME = os.environ.get(
+    "SWIFT_REPO_NAME", _get_default_swift_repo_name())
 
 
 def _load_preset_files_impl(preset_file_names, substitutions={}):
@@ -154,7 +174,8 @@ def get_preset_options(substitutions, preset_file_names, preset_name):
         sdks_to_configure = swift_sdks_opt.split("=")[1].split(";")
         tgts = []
         # Expand SDKs in to their deployment targets
-        from swift_build_support.targets import StdlibDeploymentTarget
+        from swift_build_support.swift_build_support.targets \
+            import StdlibDeploymentTarget
         for sdk in sdks_to_configure:
             if sdk == "OSX":
                 tgts += StdlibDeploymentTarget.OSX.targets

@@ -14,6 +14,7 @@
 #define SWIFT_FRONTEND_FRONTENDOPTIONS_H
 
 #include "swift/AST/Module.h"
+#include "llvm/ADT/Hashing.h"
 
 #include <string>
 #include <vector>
@@ -149,6 +150,7 @@ public:
     /// Parse, type-check, and dump type refinement context hierarchy
     DumpTypeRefinementContexts,
 
+    EmitTBD, ///< Emit a TBD file for this module
     EmitImportedModules, ///< Emit the modules that this one imports
     EmitPCH, ///< Emit PCH of imported bridging header
 
@@ -190,6 +192,9 @@ public:
   ///
   /// \sa swift::SharedTimer
   bool DebugTimeCompilation = false;
+
+  /// The path to which we should output statistics files.
+  std::string StatsOutputDir;
 
   /// Indicates whether function body parsing should be delayed
   /// until the end of all files.
@@ -263,6 +268,9 @@ public:
   /// variables by name when we print it out. This eases diffing of SIL files.
   bool EmitSortedSIL = false;
 
+  /// Compare the symbols in the IR against the TBD file we would generate.
+  bool ValidateTBDAgainstIR = false;
+
   /// An enum with different modes for automatically crashing at defined times.
   enum class DebugCrashMode {
     None, ///< Don't automatically crash.
@@ -297,6 +305,12 @@ public:
   void setSingleOutputFilename(const std::string &FileName) {
     OutputFilenames.clear();
     OutputFilenames.push_back(FileName);
+  }
+
+  /// Return a hash code of any components from these options that should
+  /// contribute to a Swift Bridging PCH hash.
+  llvm::hash_code getPCHHashComponents() const {
+    return llvm::hash_value(0);
   }
 };
 

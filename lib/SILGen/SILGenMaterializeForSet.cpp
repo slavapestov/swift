@@ -359,7 +359,7 @@ public:
          emitter.WitnessStorage->hasAddressors()))
       emitter.TheAccessSemantics = AccessSemantics::DirectToStorage;
     else if (emitter.WitnessStorage->hasClangNode() ||
-             emitter.WitnessStorage->getAttrs().hasAttribute<NSManagedAttr>())
+             emitter.WitnessStorage->isDynamic())
       emitter.TheAccessSemantics = AccessSemantics::Ordinary;
     else
       emitter.TheAccessSemantics = AccessSemantics::DirectToAccessor;
@@ -433,12 +433,13 @@ public:
       else {
         if (!self.isLValue())
           self = ManagedValue::forLValue(self.getValue());
-        return LValue::forAddress(self, selfPattern, SubstSelfType);
+        return LValue::forAddress(self, None, selfPattern, SubstSelfType);
       }
     }
 
     CanType witnessSelfType =
-      Witness->computeInterfaceSelfType()->getCanonicalType();
+      Witness->computeInterfaceSelfType()->getCanonicalType(
+        GenericSig, *SGM.M.getSwiftModule());
     witnessSelfType = getSubstWitnessInterfaceType(witnessSelfType);
     witnessSelfType = witnessSelfType->getInOutObjectType()
       ->getCanonicalType();
@@ -646,7 +647,9 @@ collectIndicesFromParameters(SILGenFunction &gen, SILLocation loc,
                              ArrayRef<ManagedValue> sourceIndices) {
   auto witnessSubscript = cast<SubscriptDecl>(WitnessStorage);
   CanType witnessIndicesType =
-    witnessSubscript->getIndicesInterfaceType()->getCanonicalType();
+    witnessSubscript->getIndicesInterfaceType()
+      ->getCanonicalType(GenericSig,
+                         *SGM.M.getSwiftModule());
   CanType substIndicesType =
     getSubstWitnessInterfaceType(witnessIndicesType);
 
@@ -679,7 +682,7 @@ SILFunction *MaterializeForSetEmitter::createCallback(SILFunction &F,
   auto callback =
     SGM.M.createFunction(Linkage, CallbackName, callbackType,
                          genericEnv, SILLocation(Witness),
-                         IsBare, F.isTransparent(), F.isFragile(),
+                         IsBare, F.isTransparent(), F.isSerialized(),
                          IsNotThunk,
                          /*classVisibility=*/SILFunction::NotRelevant,
                          /*inlineStrategy=*/InlineDefault,

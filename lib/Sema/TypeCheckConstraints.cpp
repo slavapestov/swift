@@ -1962,6 +1962,10 @@ bool TypeChecker::typeCheckBinding(Pattern *&pattern, Expr *&initializer,
                                      contextualPurpose,
                                      flags,
                                      &listener);
+  
+  if (hadError && !initializer->getType()) {
+    initializer->setType(ErrorType::get(Context));
+  }
 
   if (hadError && !pattern->hasType()) {
     pattern->setType(ErrorType::get(Context));
@@ -2487,8 +2491,9 @@ bool TypeChecker::isSubstitutableFor(Type type, ArchetypeType *archetype,
 }
 
 Expr *TypeChecker::coerceToMaterializable(Expr *expr) {
+  // If expr has no type, just assume it's the right expr.
   // If the type is already materializable, then we're already done.
-  if (expr->getType()->isMaterializable())
+  if (!expr->getType() || expr->getType()->isMaterializable())
     return expr;
   
   // Load lvalues.
@@ -3319,10 +3324,8 @@ CheckedCastKind TypeChecker::typeCheckCheckedCast(Type fromType,
 
   bool toArchetype = toType->is<ArchetypeType>();
   bool fromArchetype = fromType->is<ArchetypeType>();
-  SmallVector<ProtocolDecl*, 2> toProtocols;
-  bool toExistential = toType->isExistentialType(toProtocols);
-  SmallVector<ProtocolDecl*, 2> fromProtocols;
-  bool fromExistential = fromType->isExistentialType(fromProtocols);
+  bool toExistential = toType->isExistentialType();
+  bool fromExistential = fromType->isExistentialType();
   
   // If we're doing a metatype cast, it can only be existential if we're
   // casting to/from the existential metatype. 'T.self as P.Protocol'

@@ -1,11 +1,16 @@
 // RUN: %target-sil-opt -enable-sil-ownership -ownership-model-eliminator %s | %FileCheck %s
 
-sil_stage canonical
+sil_stage raw
 
 import Builtin
 
 sil @use_native_object : $@convention(thin) (@owned Builtin.NativeObject) -> ()
 sil @use_int32 : $@convention(thin) (Builtin.Int32) -> ()
+
+enum Either<T, R> {
+case left(T)
+case some(R)
+}
 
 class C {}
 
@@ -193,3 +198,63 @@ bb0(%0 : @guaranteed $Builtin.NativeObject):
   return %1 : $Builtin.NativeObject
 }
 
+// CHECK-LABEL: sil @switch_enum_default_case : $@convention(thin) (@owned Either<Builtin.NativeObject, Builtin.UnknownObject>) -> () {
+// CHECK: bb0([[ARG:%.*]] : @owned $Either<Builtin.NativeObject, Builtin.UnknownObject>):
+// CHECK:   switch_enum [[ARG]] : $Either<Builtin.NativeObject, Builtin.UnknownObject>, case #Either.left!enumelt.1: [[SUCC_BB:bb[0-9]+]], default [[DEFAULT_BB:bb[0-9]+]]
+//
+// CHECK: [[SUCC_BB]]([[LHS:%.*]] : @owned $Builtin.NativeObject
+// CHECK:   strong_release [[LHS]]
+// CHECK:   br [[EPILOG_BB:bb[0-9]+]]
+//
+// CHECK: [[DEFAULT_BB]]:
+// CHECK:   release_value [[ARG]]
+// CHECK:   br [[EPILOG_BB]]
+//
+// CHECK: [[EPILOG_BB]]:
+// CHECK:   return
+// CHECK: } // end sil function 'switch_enum_default_case'
+sil @switch_enum_default_case : $@convention(thin) (@owned Either<Builtin.NativeObject, Builtin.UnknownObject>) -> () {
+bb0(%0 : @owned $Either<Builtin.NativeObject, Builtin.UnknownObject>):
+  switch_enum %0 : $Either<Builtin.NativeObject, Builtin.UnknownObject>, case #Either.left!enumelt.1: bb1, default bb2
+
+bb1(%1 : @owned $Builtin.NativeObject):
+  destroy_value %1 : $Builtin.NativeObject
+  br bb3
+
+bb2(%2 : @owned $Either<Builtin.NativeObject, Builtin.UnknownObject>):
+  destroy_value %2 : $Either<Builtin.NativeObject, Builtin.UnknownObject>
+  br bb3
+
+bb3:
+  %9999 = tuple()
+  return %9999 : $()
+}
+
+// CHECK-LABEL: sil @mark_uninitialized_project_box : $@convention(thin) () -> () {
+// CHECK: [[BOX:%.*]] = alloc_box
+// CHECK: [[PB_BOX:%.*]] = project_box [[BOX]]
+// CHECK: [[MUI:%.*]] = mark_uninitialized [var] [[PB_BOX]]
+// CHECK: store {{%.*}} to [[MUI]]
+// CHECK: load [[MUI]]
+// CHECK: load [[MUI]]
+// CHECK: strong_release [[BOX]]
+// CHECK: } // end sil function 'mark_uninitialized_project_box'
+sil @mark_uninitialized_project_box : $@convention(thin) () -> () {
+bb0:
+  %0 = alloc_box $<τ_0_0> { var τ_0_0 } <Builtin.Int32>
+  %1 = project_box %0 : $<τ_0_0> { var τ_0_0 } <Builtin.Int32>, 0
+  %2 = mark_uninitialized [var] %1 : $*Builtin.Int32
+  %3 = integer_literal $Builtin.Int32, 0
+  store %3 to [trivial] %2 : $*Builtin.Int32
+
+  %4 = project_box %0 : $<τ_0_0> { var τ_0_0 } <Builtin.Int32>, 0
+  %5 = load [trivial] %4 : $*Builtin.Int32
+
+  %6 = copy_value %0 : $<τ_0_0> { var τ_0_0 } <Builtin.Int32>
+  %7 = project_box %0 : $<τ_0_0> { var τ_0_0 } <Builtin.Int32>, 0
+  %8 = load [trivial] %7 : $*Builtin.Int32
+  destroy_value %6 : $<τ_0_0> { var τ_0_0 } <Builtin.Int32>
+  destroy_value %0 : $<τ_0_0> { var τ_0_0 } <Builtin.Int32>
+  %9999 = tuple()
+  return %9999 : $()
+}

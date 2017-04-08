@@ -24,7 +24,7 @@ using namespace swift;
 
 /// Set to true to enable the support for partial specialization.
 llvm::cl::opt<bool> EnablePartialSpecialization(
-    "sil-partial-specialization", llvm::cl::init(false),
+    "sil-partial-specialization", llvm::cl::init(true),
     llvm::cl::desc("Enable partial specialization of generics"));
 
 /// If set, then generic specialization tries to specialize using
@@ -50,7 +50,7 @@ static const unsigned TypeWidthThreshold = 2000;
 // Compute the width and the depth of a type.
 // We compute both, because some pathological test-cases result in very
 // wide types and some others result in very deep types. It is important
-// to bail as soon as we hit the threshold on any of both dimentions to
+// to bail as soon as we hit the threshold on any of both dimensions to
 // prevent compiler hangs and crashes.
 static std::pair<unsigned, unsigned> getTypeDepthAndWidth(Type t) {
   unsigned Depth = 0;
@@ -269,6 +269,11 @@ bool ReabstractionInfo::prepareAndCheck(ApplySite Apply, SILFunction *Callee,
   }
 
   if (HasUnboundGenericParams) {
+    // Bail if we cannot specialize generic substitutions, but all substitutions
+    // were generic.
+    if (!HasConcreteGenericParams && !SpecializeGenericSubstitutions)
+      return false;
+
     if (!HasNonArchetypeGenericParams && !HasConcreteGenericParams) {
       DEBUG(llvm::dbgs() << "    Partial specialization is not supported if "
                             "all substitutions are archetypes.\n");
@@ -648,6 +653,10 @@ ReabstractionInfo::ReabstractionInfo(SILFunction *OrigF,
   OriginalF = OrigF;
   ConvertIndirectToDirect = true;
 
+  // FIXME: All of the below initialization is then redone by
+  // specializeConcreteSubstitutions(), but there are still a
+  // couple of callers that aren't using the new API.
+
   SILModule &M = OrigF->getModule();
   auto &Ctx = M.getASTContext();
 
@@ -713,11 +722,7 @@ static void verifySubstitutionList(SubstitutionList Subs, StringRef Name) {
 // according to the partial substitution. This way, the signature
 // has exactly the same generic parameter types, just with more
 // requirements.
-// Current issues:
-// - If Sig2 = GenericSignatureBuilder(Sig2 + Req), then GenericSignatureBuilder(Sig2) != Sig2
-// - The set of requirements is not really minimized.
-// - Some requirements are lost, when you add a same type parameter to the builder.
-
+//
 // Initialize SpecializedType if and only if the specialization is allowed.
 void ReabstractionInfo::specializeConcreteSubstitutions(
     ApplySite Apply, SILFunction *Callee, ArrayRef<Substitution> ParamSubs) {
@@ -730,11 +735,8 @@ void ReabstractionInfo::specializeConcreteSubstitutions(
   auto OrigGenericSig = Callee->getLoweredFunctionType()->getGenericSignature();
   auto OrigGenericEnv = Callee->getGenericEnvironment();
 
-  SubstitutionMap InterfaceSubs;
   // Get the original substitution map.
-  if (Callee->getLoweredFunctionType()->getGenericSignature())
-    InterfaceSubs = Callee->getLoweredFunctionType()->getGenericSignature()
-      ->getSubstitutionMap(ParamSubs);
+  auto InterfaceSubs = OrigGenericSig->getSubstitutionMap(ParamSubs);
 
   // This is a workaround for the rdar://30610428
   if (!EnablePartialSpecialization) {
@@ -749,7 +751,7 @@ void ReabstractionInfo::specializeConcreteSubstitutions(
   // Build a set of requirements.
   SmallVector<Requirement, 4> Requirements;
 
-  for (auto DP : OrigGenericSig->getGenericParams()) {
+  for (auto DP : OrigGenericSig->getSubstitutableParams()) {
     auto Replacement = Type(DP).subst(InterfaceSubs);
     if (Replacement->hasArchetype())
       continue;
@@ -762,10 +764,6 @@ void ReabstractionInfo::specializeConcreteSubstitutions(
       getSignatureWithRequirements(OrigGenericSig, OrigGenericEnv,
                                    Requirements, M);
   HasUnboundGenericParams = !SpecializedGenericSig->areAllParamsConcrete();
-
-  // No partial specializations!
-  //if (HasUnboundGenericParams)
-  //  return;
 
   {
     SmallVector<Substitution, 4> List;
@@ -886,7 +884,7 @@ static void remapRequirements(GenericSignature *GenSig,
     DEBUG(llvm::dbgs() << "\n\nRe-mapping the requirement:\n"; reqReq.dump());
 
     auto first = reqReq.getFirstType();
-    // Is this generic generic type equivalent to a concrete type?
+    // Is this generic type equivalent to a concrete type?
     if (first->hasTypeParameter() &&
         !GenSig->getCanonicalTypeInContext(first, *SM)->hasTypeParameter())
       continue;
@@ -1382,7 +1380,7 @@ FunctionSignaturePartialSpecializer::createSpecializedGenericSignature(
   computeCallerInterfaceToSpecializedInterfaceMap(CallerGenericSig);
 
   // Add generic parameters that will come from the callee.
-  // Introduce a new generic parameter in the new new generic signature
+  // Introduce a new generic parameter in the new generic signature
   // for each generic parameter from the callee.
   createGenericParamsForCalleeGenericParams(CalleeGenericSig, CallerGenericEnv);
 
@@ -1405,13 +1403,13 @@ FunctionSignaturePartialSpecializer::createSpecializedGenericSignature(
 // - For all other substitutions that are considered for partial specialization,
 // it collects first the archetypes used in the replacements. Then for each such
 // archetype A a new generic parameter T' introduced.
-// - If there is a substitution for type T and this substitution is execluded
+// - If there is a substitution for type T and this substitution is excluded
 // from partial specialization (e.g. because it is impossible or would result
 // in a less efficient code), then a new generic parameter T' is introduced,
 // which does not get any additional, more specific requirements based on the
 // substitutions.
 //
-// After all generic parameters are added accoriding to the rules above,
+// After all generic parameters are added according to the rules above,
 // the requirements of the callee's signature are re-mapped by re-formulating
 // them in terms of the newly introduced generic parameters. In case a remapped
 // requirement does not contain any generic types, it can be omitted, because
@@ -1438,7 +1436,7 @@ void ReabstractionInfo::specializeConcreteAndGenericSubstitutions(
   auto CalleeGenericSig = CalleeFnTy->getGenericSignature();
 
   // Used naming convention:
-  // Caller - the function containg the provided apply instruction.
+  // Caller - the function containing the provided apply instruction.
   // Callee - the callee of the provided apply instruction.
   // Specialized - the specialized callee which is being created.
 
@@ -1449,7 +1447,7 @@ void ReabstractionInfo::specializeConcreteAndGenericSubstitutions(
 
   FunctionSignaturePartialSpecializer FSPS(M);
 
-  // Get the parially specialized generic signature and generic environment.
+  // Get the partially specialized generic signature and generic environment.
   auto GenPair = FSPS.createSpecializedGenericSignature(
       CallerGenericSig, CallerGenericEnv, CalleeGenericSig, ParamSubs);
 
@@ -1503,12 +1501,12 @@ void ReabstractionInfo::specializeConcreteAndGenericSubstitutions(
 
 GenericFuncSpecializer::GenericFuncSpecializer(SILFunction *GenericFunc,
                                                SubstitutionList ParamSubs,
-                                               IsFragile_t Fragile,
+                                               IsSerialized_t Serialized,
                                                const ReabstractionInfo &ReInfo)
     : M(GenericFunc->getModule()),
       GenericFunc(GenericFunc),
       ParamSubs(ParamSubs),
-      Fragile(Fragile),
+      Serialized(Serialized),
       ReInfo(ReInfo) {
 
   assert(GenericFunc->isDefinition() && "Expected definition to specialize!");
@@ -1516,11 +1514,11 @@ GenericFuncSpecializer::GenericFuncSpecializer(SILFunction *GenericFunc,
 
   if (ReInfo.isPartialSpecialization()) {
     Mangle::PartialSpecializationMangler Mangler(
-        GenericFunc, FnTy, Fragile, /*isReAbstracted*/ true);
+        GenericFunc, FnTy, Serialized, /*isReAbstracted*/ true);
     ClonedName = Mangler.mangle();
   } else {
     Mangle::GenericSpecializationMangler Mangler(
-        GenericFunc, ParamSubs, Fragile, /*isReAbstracted*/ true);
+        GenericFunc, ParamSubs, Serialized, /*isReAbstracted*/ true);
     ClonedName = Mangler.mangle();
   }
   DEBUG(llvm::dbgs() << "    Specialized function " << ClonedName << '\n');
@@ -1565,7 +1563,7 @@ SILFunction *GenericFuncSpecializer::tryCreateSpecialization() {
 
   // Create a new function.
   SILFunction *SpecializedF = GenericCloner::cloneFunction(
-      GenericFunc, Fragile, ReInfo,
+      GenericFunc, Serialized, ReInfo,
       // Use these substitutions inside the new specialized function being
       // created.
       ReInfo.getClonerParamSubstitutions(),
@@ -1648,17 +1646,7 @@ static CanSILFunctionType
 getCalleeSubstFunctionType(SILValue Callee, SubstitutionList Subs) {
   // Create a substituted callee type.
   auto CanFnTy = Callee->getType().castTo<SILFunctionType>();
-  auto CalleeSubstFnTy = CanFnTy;
-
-  if (CanFnTy->isPolymorphic() && !Subs.empty()) {
-    CalleeSubstFnTy = CanFnTy->substGenericArgs(*Callee->getModule(), Subs);
-    assert(!CalleeSubstFnTy->isPolymorphic() &&
-           "Substituted callee type should not be polymorphic");
-    assert(!CalleeSubstFnTy->hasTypeParameter() &&
-           "Substituted callee type should not have type parameters");
-  }
-
-  return CalleeSubstFnTy;
+  return CanFnTy->substGenericArgs(*Callee->getModule(), Subs);
 }
 
 // Create a new apply based on an old one, but with a different
@@ -1759,7 +1747,7 @@ class ReabstractionThunkGenerator {
   const ReabstractionInfo &ReInfo;
   PartialApplyInst *OrigPAI;
 
-  IsFragile_t Fragile = IsNotFragile;
+  IsSerialized_t Serialized = IsNotSerialized;
   std::string ThunkName;
   RegularLocation Loc;
   SmallVector<SILValue, 4> Arguments;
@@ -1771,19 +1759,19 @@ public:
       : OrigF(OrigPAI->getCalleeFunction()), M(OrigF->getModule()),
         SpecializedFunc(SpecializedFunc), ReInfo(ReInfo), OrigPAI(OrigPAI),
         Loc(RegularLocation::getAutoGeneratedLocation()) {
-    if (OrigF->isFragile() && OrigPAI->getFunction()->isFragile())
-      Fragile = IsFragile;
+    if (OrigF->isSerialized() && OrigPAI->getFunction()->isSerialized())
+      Serialized = IsSerializable;
 
     {
       if (!ReInfo.isPartialSpecialization()) {
         Mangle::GenericSpecializationMangler Mangler(
-            OrigF, ReInfo.getOriginalParamSubstitutions(), Fragile,
+            OrigF, ReInfo.getOriginalParamSubstitutions(), Serialized,
             /*isReAbstracted*/ false);
 
         ThunkName = Mangler.mangle();
       } else {
         Mangle::PartialSpecializationMangler Mangler(
-            OrigF, ReInfo.getSpecializedType(), Fragile,
+            OrigF, ReInfo.getSpecializedType(), Serialized,
             /*isReAbstracted*/ false);
 
         ThunkName = Mangler.mangle();
@@ -1802,7 +1790,7 @@ protected:
 SILFunction *ReabstractionThunkGenerator::createThunk() {
   SILFunction *Thunk =
       M.getOrCreateSharedFunction(Loc, ThunkName, ReInfo.getSubstitutedType(),
-                                  IsBare, IsTransparent, Fragile, IsThunk);
+                                  IsBare, IsTransparent, Serialized, IsThunk);
   // Re-use an existing thunk.
   if (!Thunk->empty())
     return Thunk;
@@ -1977,7 +1965,7 @@ void swift::trySpecializeApplyOfGeneric(
   // not have an external entry point, Since the callee is not
   // fragile we cannot serialize the body of the specialized
   // callee either.
-  if (F->isFragile() && !RefF->hasValidLinkageForFragileInline())
+  if (F->isSerialized() && !RefF->hasValidLinkageForFragileInline())
       return;
 
   if (shouldNotSpecializeCallee(RefF))
@@ -1986,9 +1974,9 @@ void swift::trySpecializeApplyOfGeneric(
   // If the caller and callee are both fragile, preserve the fragility when
   // cloning the callee. Otherwise, strip it off so that we can optimize
   // the body more.
-  IsFragile_t Fragile = IsNotFragile;
-  if (F->isFragile() && RefF->isFragile())
-    Fragile = IsFragile;
+  IsSerialized_t Serialized = IsNotSerialized;
+  if (F->isSerialized() && RefF->isSerialized())
+    Serialized = IsSerializable;
 
   ReabstractionInfo ReInfo(Apply, RefF, Apply.getSubstitutions());
   if (!ReInfo.canBeSpecialized())
@@ -2034,7 +2022,7 @@ void swift::trySpecializeApplyOfGeneric(
   }
 
   GenericFuncSpecializer FuncSpecializer(RefF, Apply.getSubstitutions(),
-                                         Fragile, ReInfo);
+                                         Serialized, ReInfo);
   SILFunction *SpecializedF = FuncSpecializer.lookupSpecialization();
   if (SpecializedF) {
     // Even if the pre-specialization exists already, try to preserve it
@@ -2058,7 +2046,7 @@ void swift::trySpecializeApplyOfGeneric(
 
   // FIXME: Replace pre-specialization's "keep as public" hack with something
   // more principled
-  assert((Fragile == SpecializedF->isFragile() ||
+  assert((Serialized == SpecializedF->isSerialized() ||
           SpecializedF->isKeepAsPublic()) &&
          "Previously specialized function does not match expected "
          "resilience level.");
