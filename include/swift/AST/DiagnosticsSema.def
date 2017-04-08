@@ -1549,9 +1549,12 @@ WARNING(protocol_composition_with_postfix,none,
         "protocol-constrained type with postfix '%0' is ambiguous "
         "and will be rejected in future version of Swift", (StringRef))
 
-ERROR(protocol_composition_not_protocol,none,
+ERROR(invalid_protocol_composition_member,none,
       "non-protocol, non-class type %0 cannot be used within a "
       "protocol-constrained type", (Type))
+ERROR(protocol_composition_one_class,none,
+      "protocol-constrained type cannot contain class %0 because it already "
+      "contains class %1", (Type, Type))
 
 ERROR(requires_conformance_nonprotocol,none,
       "type %0 constrained to non-protocol type %1", (TypeLoc, TypeLoc))
