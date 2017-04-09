@@ -1570,22 +1570,8 @@ Type TypeBase::getSuperclass(LazyResolver *resolver) {
     if (auto dynamicSelfTy = getAs<DynamicSelfType>())
       return dynamicSelfTy->getSelfType();
 
-    if (auto compositionTy = getAs<ProtocolCompositionType>()) {
-      for (auto memberTy : compositionTy->getProtocols()) {
-        // If a protocol composition type has a class member, the
-        // superclass of the protocol composition is that member.
-        auto nominalDecl = memberTy->getAnyNominal();
-        if (nominalDecl && isa<ClassDecl>(nominalDecl))
-          return memberTy;
-
-        // If a protocol composition type has another protocol
-        // composition as a member, check if the inner type has a
-        // superclass.
-        if (memberTy->isExistentialType())
-          if (auto superclassTy = memberTy->getSuperclass(nullptr))
-            return superclassTy;
-      }
-    }
+    if (auto compositionTy = getAs<ProtocolCompositionType>())
+      return compositionTy->getExistentialLayout().superclass;
 
     // No other types have superclasses.
     return Type();
