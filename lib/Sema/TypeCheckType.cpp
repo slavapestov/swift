@@ -235,15 +235,6 @@ void TypeChecker::forceExternalDeclMembers(NominalTypeDecl *nominalDecl) {
 //
 // Returns a tuple of the following:
 //
-// - DeclContext: an ancestor of fromDC in which typeDecl is visible via
-//   qualified lookup.
-//
-//   If typeDecl is not nested inside another type, this will be the
-//   context that defines typeDecl.
-//
-//   In the nested type case, typeDecl might not be defined in the same
-//   context, but instead come from a conforming protocol or superclass.
-//
 // - Type: the empty type if the typeDecl is not defined inside another
 //   type. Otherwise, the base type to use for computing the substituted
 //   type of typeDecl.
@@ -252,7 +243,7 @@ void TypeChecker::forceExternalDeclMembers(NominalTypeDecl *nominalDecl) {
 //   can be found, or a concrete type that contains typeDecl.
 //
 // - bool: valid: false if the lookup failed.
-static std::tuple<DeclContext *, Type, bool>
+static std::tuple<Type, bool>
 findDeclContextForType(TypeChecker &TC,
                        TypeDecl *typeDecl,
                        DeclContext *fromDC,
@@ -264,13 +255,13 @@ findDeclContextForType(TypeChecker &TC,
   // If the type is declared at the top level, there's nothing we can learn from
   // walking our parent contexts.
   if (ownerDC->isModuleScopeContext())
-    return std::make_tuple(ownerDC, Type(), true);
+    return std::make_tuple(Type(), true);
 
   // Workaround for issue where generic typealias generic parameters are
   // looked up with the wrong 'fromDC'.
   if (isa<TypeAliasDecl>(ownerDC)) {
     assert(isa<GenericTypeParamDecl>(typeDecl));
-    return std::make_tuple(ownerDC, Type(), true);
+    return std::make_tuple(Type(), true);
   }
 
   bool needsBaseType = (ownerDC->isTypeContext() &&
@@ -282,7 +273,7 @@ findDeclContextForType(TypeChecker &TC,
   //
   // FIXME: How did UnqualifiedLookup find the decl then?
   if (needsBaseType && ownerNominal == nullptr)
-    return std::make_tuple(nullptr, Type(), false);
+    return std::make_tuple(Type(), false);
 
   auto getSelfType = [&](DeclContext *DC) -> Type {
     if (!needsBaseType)
@@ -308,13 +299,13 @@ findDeclContextForType(TypeChecker &TC,
 
     // If this type is defined in this exact context, we are done.
     if (ownerDC == parentDC)
-      return std::make_tuple(parentDC, getSelfType(parentDC), true);
+      return std::make_tuple(getSelfType(parentDC), true);
 
     // If we're inside a nominal type context and the member type
     // is defined in a different extension, we are done.
     if (parentNominal &&
         parentNominal == ownerNominal)
-      return std::make_tuple(parentDC, getSelfType(parentDC), true);
+      return std::make_tuple(getSelfType(parentDC), true);
 
     // An unqualified reference to the extended type from within
     // an extension.
@@ -328,7 +319,7 @@ findDeclContextForType(TypeChecker &TC,
     //
     if (isa<ExtensionDecl>(parentDC) && typeDecl == parentNominal) {
       assert(parentDC->getParent()->isModuleScopeContext());
-      return std::make_tuple(parentDC, getSelfType(parentDC), true);
+      return std::make_tuple(getSelfType(parentDC), true);
     }
 
     // We're going to check the next parent context.
@@ -336,14 +327,14 @@ findDeclContextForType(TypeChecker &TC,
     // FIXME: Horrible hack. Don't allow us to reference a generic parameter
     // from a context outside a ProtocolDecl.
     if (isa<ProtocolDecl>(parentDC) && isa<GenericTypeParamDecl>(typeDecl))
-      return std::make_tuple(nullptr, nullptr, false);
+      return std::make_tuple(Type(), false);
   }
 
   // If we didn't find the member in an immediate parent context and
   // there is no base type, something went wrong.
   if (!needsBaseType) {
     assert(false && "Should have found non-type context by now");
-    return std::make_tuple(nullptr, nullptr, false);
+    return std::make_tuple(Type(), false);
   }
 
   // Now, search the supertypes or refined protocols of each parent
@@ -364,37 +355,46 @@ findDeclContextForType(TypeChecker &TC,
         protocols.push_back(protocol);
     };
 
-    // If we are in a protocol extension there might be other type aliases and
-    // nominal types brought into the context through requirements on Self,
-    // for example:
+    auto pushRefined = [&](ProtocolDecl *protocol) -> void {
+      for (auto *refined : protocol->getInheritedProtocols())
+        pushProtocol(refined);
+    };
+
+    // If we are in a protocol or protocol extension there might be other
+    // type aliases and nominal types brought into the context through
+    // requirements on Self, for example:
     //
     // extension MyProtocol where Self : YourProtocol { ... }
-    if (auto *proto = parentDC->getAsProtocolExtensionContext()) {
-      pushProtocol(proto);
+    //
+    // FIXME: If we want to support protocols inheriting classes, we need
+    // to walk the protocol requirement signature here.
+    if (auto *proto = parentDC->getAsProtocolOrProtocolExtensionContext()) {
+      pushRefined(proto);
 
-      auto ED = cast<ExtensionDecl>(parentDC);
-      if (auto genericSig = ED->getGenericSignature()) {
-        for (auto req : genericSig->getRequirements()) {
-          if (!req.getFirstType()->isEqual(ED->getSelfInterfaceType()))
-            continue;
+      if (auto ED = dyn_cast<ExtensionDecl>(parentDC)) {
+        if (auto genericSig = ED->getGenericSignature()) {
+          for (auto req : genericSig->getRequirements()) {
+            if (!req.getFirstType()->isEqual(ED->getSelfInterfaceType()))
+              continue;
 
-          switch (req.getKind()) {
-          case RequirementKind::Conformance:
-            pushProtocol(req.getSecondType()->castTo<ProtocolType>()->getDecl());
-            break;
-          case RequirementKind::Superclass: {
-            auto *classDecl = req.getSecondType()->getClassOrBoundGenericClass();
+            switch (req.getKind()) {
+            case RequirementKind::Conformance:
+              pushProtocol(req.getSecondType()->castTo<ProtocolType>()->getDecl());
+              break;
+            case RequirementKind::Superclass: {
+              auto *classDecl = req.getSecondType()->getClassOrBoundGenericClass();
 
-            if (!options.contains(TR_InheritanceClause))
-              for (auto conforms : classDecl->getAllProtocols())
-                pushProtocol(conforms);
+              if (!options.contains(TR_InheritanceClause))
+                for (auto conforms : classDecl->getAllProtocols())
+                  pushProtocol(conforms);
 
-            assert(!superclass);
-            superclass = req.getSecondType();
-            break;
-          }
-          default:
-            break;
+              assert(!superclass);
+              superclass = req.getSecondType();
+              break;
+            }
+            default:
+              break;
+            }
           }
         }
       }
@@ -406,7 +406,7 @@ findDeclContextForType(TypeChecker &TC,
       // Start with the type of the current context.
       auto fromNominal = parentDC->getAsNominalTypeOrNominalTypeExtensionContext();
       if (!fromNominal)
-        return std::make_tuple(nullptr, nullptr, false);
+        return std::make_tuple(Type(), false);
 
       // Add any protocols this nominal conforms to -- there's no need to do
       // this for any superclasses that we visit, because this list will
@@ -423,7 +423,7 @@ findDeclContextForType(TypeChecker &TC,
         break;
 
       if (superclassDecl == ownerNominal)
-        return std::make_tuple(parentDC, superclass, true);
+        return std::make_tuple(superclass, true);
 
       superclass = superclass->getSuperclass(nullptr);
     }
@@ -434,23 +434,22 @@ findDeclContextForType(TypeChecker &TC,
 
       // Check if we found the right context.
       if (protoDecl == ownerNominal)
-        return std::make_tuple(parentDC, getSelfType(parentDC), true);
+        return std::make_tuple(getSelfType(parentDC), true);
 
       protocols.pop_back();
 
       // If not, walk into the refined protocols, if any.
-      for (auto *refined : protoDecl->getInheritedProtocols())
-        pushProtocol(refined);
+      pushRefined(protoDecl);
     }
 
     // FIXME: Horrible hack. Don't allow us to reference a generic parameter
     // or associated type from a context outside a ProtocolDecl.
     if (isa<ProtocolDecl>(parentDC) && isa<AbstractTypeParamDecl>(typeDecl))
-      return std::make_tuple(nullptr, nullptr, false);
+      return std::make_tuple(Type(), false);
   }
 
   assert(false && "Should have found context by now");
-  return std::make_tuple(nullptr, nullptr, false);
+  return std::make_tuple(Type(), false);
 }
 
 Type TypeChecker::resolveTypeInContext(
@@ -463,17 +462,14 @@ Type TypeChecker::resolveTypeInContext(
   if (!resolver)
     resolver = &defaultResolver;
 
-  // FIXME: foundDC and foundNominal should come from UnqualifiedLookup
-  DeclContext *foundDC;
+  // FIXME: selfType should come from UnqualifiedLookup
   Type selfType;
   bool valid;
-  std::tie(foundDC, selfType, valid) =
+  std::tie(selfType, valid) =
       findDeclContextForType(*this, typeDecl, fromDC, options, resolver);
 
   if (!valid)
     return ErrorType::get(Context);
-
-  assert(foundDC && "Should have found DeclContext by now");
 
   // If we are referring to a type within its own context, and we have either
   // a generic type with no generic arguments or a non-generic type, use the
