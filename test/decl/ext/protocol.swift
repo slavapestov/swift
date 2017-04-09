@@ -249,11 +249,10 @@ protocol ExtendedProtocol {
 extension ExtendedProtocol where Self : DerivedWithAlias {
   func f0(x: T) {} // expected-error {{use of undeclared type 'T'}}
 
-  // FIXME
-  /*func f1(x: ConcreteAlias) {
+  func f1(x: ConcreteAlias) {
     let _: Int = x
     baseMethod(x)
-  }*/
+  }
 
   func f2(x: ConcreteConformanceAlias) {
     let _: DerivedWithAlias = x
