@@ -297,12 +297,23 @@ findDeclContextForType(TypeChecker &TC,
     if (!fromNominal)
       return std::make_tuple(nullptr, nullptr, false);
 
+    // Check if we found the right context.
+    if (fromNominal == ownerNominal)
+      return std::make_tuple(parentDC, fromNominal, true);
+
     // Break circularity.
     auto pushDecl = [&](NominalTypeDecl *nominal) -> void {
       if (visited.insert(nominal).second)
         stack.push_back(nominal);
     };
     pushDecl(fromNominal);
+
+    // Add any protocols this nominal conforms to -- there's no need to do
+    // this for any superclasses that we visit, because this list will
+    // already include protocols from the superclass.
+    if (!options.contains(TR_InheritanceClause))
+      for (auto conforms : fromNominal->getAllProtocols())
+        pushDecl(conforms);
 
     // If we are in a protocol extension there might be other type aliases and
     // nominal types brought into the context through requirements on Self,
@@ -313,11 +324,25 @@ findDeclContextForType(TypeChecker &TC,
       auto ED = cast<ExtensionDecl>(parentDC);
       if (auto genericSig = ED->getGenericSignature()) {
         for (auto req : genericSig->getRequirements()) {
-          if (req.getKind() == RequirementKind::Conformance ||
-              req.getKind() == RequirementKind::Superclass) {
-            if (req.getFirstType()->isEqual(ED->getSelfInterfaceType()))
-              if (auto *nominal = req.getSecondType()->getAnyNominal())
-                pushDecl(nominal);
+          if (!req.getFirstType()->isEqual(ED->getSelfInterfaceType()))
+            continue;
+
+          switch (req.getKind()) {
+          case RequirementKind::Conformance:
+            pushDecl(req.getSecondType()->castTo<ProtocolType>()->getDecl());
+            break;
+          case RequirementKind::Superclass: {
+            auto *classDecl = req.getSecondType()->getClassOrBoundGenericClass();
+
+            if (!options.contains(TR_InheritanceClause))
+              for (auto conforms : classDecl->getAllProtocols())
+                pushDecl(conforms);
+
+            pushDecl(classDecl);
+            break;
+          }
+          default:
+            break;
           }
         }
       }
@@ -326,11 +351,11 @@ findDeclContextForType(TypeChecker &TC,
     while (!stack.empty()) {
       auto parentNominal = stack.back();
 
-      stack.pop_back();
-
       // Check if we found the right context.
       if (parentNominal == ownerNominal)
         return std::make_tuple(parentDC, parentNominal, true);
+
+      stack.pop_back();
 
       // If not, walk into the superclass and inherited protocols, if any.
       if (auto *protoDecl = dyn_cast<ProtocolDecl>(parentNominal)) {
@@ -341,12 +366,6 @@ findDeclContextForType(TypeChecker &TC,
           if (auto superclassTy = classDecl->getSuperclass())
             if (auto superclassDecl = superclassTy->getClassOrBoundGenericClass())
               pushDecl(superclassDecl);
-        if (!options.contains(TR_InheritanceClause)) {
-          // FIXME: wrong nominal decl
-          for (auto conforms : fromNominal->getAllProtocols()) {
-            pushDecl(conforms);
-          }
-        }
       }
     }
 
@@ -437,10 +456,13 @@ Type TypeChecker::resolveTypeInContext(
   // of the substitution.
   if (foundDC->getAsProtocolExtensionContext() &&
       !isa<ProtocolDecl>(foundNominal))
-    selfType = foundNominal->getDeclaredType();
-  // Otherwise, just use the type of the context we're looking at.
+    selfType = resolver->resolveTypeOfDecl(foundNominal);
+  // Nominal type members of protocols use the protocol existential as
+  // a base, not protocol 'Self'.
   else if (isa<NominalTypeDecl>(typeDecl))
     selfType = resolver->resolveTypeOfDecl(foundNominal);
+  // Otherwise, use the type of protocol 'Self' if we're coming from
+  // a protocol.
   else
     selfType = resolver->resolveTypeOfContext(foundDC);
 
@@ -450,7 +472,6 @@ Type TypeChecker::resolveTypeInContext(
   // If we started from a protocol and found an associated type member
   // of a (possibly inherited) protocol, resolve it via the resolver.
   if (auto *assocType = dyn_cast<AssociatedTypeDecl>(typeDecl)) {
-    // Odd special case, ask Doug to explain it over pizza one day
     if (selfType->isTypeParameter())
       return resolver->resolveSelfAssociatedType(
           selfType, assocType);
