@@ -1416,14 +1416,13 @@ bool DeclContext::lookupQualified(Type type,
   }
   // Handle protocol compositions.
   else if (auto compositionTy = type->getAs<ProtocolCompositionType>()) {
-    ExistentialLayout layout;
-    compositionTy->getExistentialLayout(layout);
+    auto layout = compositionTy->getExistentialLayout();
 
     if (layout.isAnyObject() &&
         (options & NL_DynamicLookup))
       wantLookupInAllClasses = true;
 
-    for (auto proto : layout.protocols) {
+    for (auto proto : layout.getProtocols()) {
       auto *protoDecl = proto->getDecl();
       if (visited.insert(protoDecl).second)
         stack.push_back(protoDecl);

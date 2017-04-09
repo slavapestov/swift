@@ -585,7 +585,7 @@ public:
   void getAnyExistentialTypeProtocols(SmallVectorImpl<ProtocolDecl *> &protocols);
 
   /// Break an existential down into a set of constraints.
-  void getExistentialLayout(ExistentialLayout &result);
+  ExistentialLayout getExistentialLayout();
 
   /// Determines the element type of a known *UnsafeMutablePointer
   /// variant, or returns null if the type is not a pointer.
@@ -3605,7 +3605,7 @@ public:
   }
 
   /// True if only classes may conform to the protocol.
-  bool requiresClass() const;
+  bool requiresClass();
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const TypeBase *T) {
@@ -3681,7 +3681,7 @@ public:
   static void Profile(llvm::FoldingSetNodeID &ID, ArrayRef<Type> Protocols);
 
   /// True if one or more of the protocols is class.
-  bool requiresClass() const;
+  bool requiresClass();
   
   // Implement isa/cast/dyncast/etc.
   static bool classof(const TypeBase *T) {

@@ -419,7 +419,7 @@ public:
       SmallVectorImpl<ProtocolDecl *> &protocols);
 
   /// Break an existential down into a set of constraints.
-  void getExistentialLayout(ExistentialLayout &result);
+  ExistentialLayout getExistentialLayout();
 
   /// Is this an ObjC-compatible existential type?
   bool isObjCExistentialType() const {

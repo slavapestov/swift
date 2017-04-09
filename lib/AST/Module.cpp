@@ -613,8 +613,7 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
         !protocol->existentialTypeSupported(resolver))
       return None;
 
-    ExistentialLayout layout;
-    type->getExistentialLayout(layout);
+    auto layout = type->getExistentialLayout();
 
     // Due to an IRGen limitation, witness tables cannot be passed from an
     // existential to an archetype parameter, so for now we restrict this to
@@ -637,7 +636,7 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
     }
 
     // Otherwise, the existential might conform abstractly.
-    for (auto proto : layout.protocols) {
+    for (auto proto : layout.getProtocols()) {
       auto *protoDecl = proto->getDecl();
       if (protoDecl == protocol || protoDecl->inheritsFrom(protocol))
         return ProtocolConformanceRef(protocol);

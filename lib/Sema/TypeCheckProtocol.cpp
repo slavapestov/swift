@@ -5187,8 +5187,7 @@ Optional<ProtocolConformanceRef> TypeChecker::containsProtocol(
   // Existential types don't need to conform, i.e., they only need to
   // contain the protocol.
   if (T->isExistentialType()) {
-    ExistentialLayout layout;
-    T->getExistentialLayout(layout);
+    auto layout = T->getExistentialLayout();
 
     // First, any class-constrained existential semantically contains
     // AnyObject.
@@ -5209,7 +5208,7 @@ Optional<ProtocolConformanceRef> TypeChecker::containsProtocol(
     }
 
     // Finally, check if the existential contains the protocol in question.
-    for (auto P : layout.protocols) {
+    for (auto P : layout.getProtocols()) {
       auto *PD = P->getDecl();
       // If we found the protocol we're looking for, return an abstract
       // conformance to it.
@@ -5315,10 +5314,8 @@ TypeChecker::conformsToProtocol(Type T, ProtocolDecl *Proto, DeclContext *DC,
     }
 
     if (T->isExistentialType()) {
-      ExistentialLayout layout;
-      T->getExistentialLayout(layout);
       bool anyUnsatisfied = false;
-      for (auto *proto : layout.protocols) {
+      for (auto *proto : T->getExistentialLayout().getProtocols()) {
         auto *protoDecl = proto->getDecl();
         if ((*unsatisfiedDependency)(requestInheritedProtocols(protoDecl)))
           anyUnsatisfied = true;

@@ -221,9 +221,7 @@ void TypeBase::getAnyExistentialTypeProtocols(
 void CanType::getExistentialTypeProtocols(
                                    SmallVectorImpl<ProtocolDecl*> &protocols) {
   // FIXME: Remove this completely
-  ExistentialLayout layout;
-  getExistentialLayout(layout);
-  for (auto proto : layout.protocols)
+  for (auto proto : getExistentialLayout().getProtocols())
     protocols.push_back(proto->getDecl());
 }
 
@@ -237,46 +235,77 @@ void CanType::getAnyExistentialTypeProtocols(
   getExistentialTypeProtocols(protocols);
 }
 
-void TypeBase::getExistentialLayout(ExistentialLayout &result) {
-  getCanonicalType().getExistentialLayout(result);
+ExistentialLayout::ExistentialLayout(ProtocolType *type) {
+  assert(type->isCanonical());
+
+  auto *protoDecl = type->getDecl();
+
+  if (protoDecl->requiresClass()) {
+    requiresClass = true;
+    requiresClassImplied = true;
+  } else {
+    requiresClass = false;
+    requiresClassImplied = false;
+  }
+
+  containsNonObjCProtocol =
+    !(protoDecl->isSpecificProtocol(KnownProtocolKind::AnyObject) ||
+      protoDecl->isObjC());
+
+  singleProtocol = type;
 }
 
-void CanType::getExistentialLayout(ExistentialLayout &result) {
-  if (auto proto = dyn_cast<ProtocolType>(*this)) {
-    auto *protoDecl = proto->getDecl();
-    if (protoDecl->requiresClass()) {
-      result.requiresClass = true;
-      result.requiresClassImplied = true;
+ExistentialLayout::ExistentialLayout(ProtocolCompositionType *type) {
+  assert(type->isCanonical());
 
-      if (!protoDecl->isSpecificProtocol(KnownProtocolKind::AnyObject) &&
-          !protoDecl->isObjC())
-        result.containsNonObjCProtocol = true;
+  // FIXME: Eventually, there will be a requiresClass() bit in
+  // the ProtocolCompositionType
+  requiresClass = false;
+  requiresClassImplied = false;
+  containsNonObjCProtocol = false;
+
+  auto members = type->getProtocols();
+  if (!members.empty() &&
+      isa<ClassDecl>(members[0]->getAnyNominal())) {
+    superclass = members[0];
+    members = members.slice(1);
+  }
+
+  for (auto member : members) {
+    auto *protoDecl = member->castTo<ProtocolType>()->getDecl();
+    if (protoDecl->requiresClass()) {
+      requiresClass = true;
+      requiresClassImplied = true;
     }
 
-    result.protocols.push_back(proto);
-    return;
+    containsNonObjCProtocol |=
+      !(protoDecl->isSpecificProtocol(KnownProtocolKind::AnyObject) ||
+        protoDecl->isObjC());
   }
 
-  if (auto comp = dyn_cast<ProtocolCompositionType>(*this)) {
-    // The type is canonical, so the list of protocols is canonical
-    // and the superclass, if any, comes first.
-    auto members = comp.getProtocols();
-    for (auto member : members)
-      member.getExistentialLayout(result);
+  singleProtocol = nullptr;
+  multipleProtocols = {
+    reinterpret_cast<ProtocolType * const *>(members.data()),
+    members.size()
+  };
+}
 
-    // FIXME: Eventually, there will be a requiresClass() bit here
-    return;
-  }
 
-  assert(isa<ClassDecl>(getAnyNominal()) && "invalid existential member");
-  assert(!result.superclass && "multiple inheritance requires C++");
-  result.superclass = *this;
-  result.requiresClass = true;
-  result.requiresClassImplied = true;
+ExistentialLayout TypeBase::getExistentialLayout() {
+  return getCanonicalType().getExistentialLayout();
+}
+
+ExistentialLayout CanType::getExistentialLayout() {
+  if (auto proto = dyn_cast<ProtocolType>(*this))
+    return ExistentialLayout(proto);
+
+  auto comp = cast<ProtocolCompositionType>(*this);
+  return ExistentialLayout(comp);
 }
 
 bool ExistentialLayout::isAnyObject() const {
   // FIXME
+  auto protocols = getProtocols();
   return protocols.size() == 1 &&
     protocols[0]->getDecl()->isSpecificProtocol(KnownProtocolKind::AnyObject);
 }
@@ -286,11 +315,10 @@ bool TypeBase::isObjCExistentialType() {
 }
 
 bool CanType::isObjCExistentialTypeImpl(CanType type) {
-  if (!type.isExistentialType()) return false;
+  if (!type.isExistentialType())
+    return false;
 
-  ExistentialLayout layout;
-  type.getExistentialLayout(layout);
-  return layout.isObjC();
+  return type.getExistentialLayout().isObjC();
 }
 
 bool TypeBase::isSpecialized() {
@@ -562,18 +590,17 @@ LayoutConstraint CanType::getLayoutConstraint() const {
 bool TypeBase::isAnyObject() {
   auto canTy = getCanonicalType();
 
-  if (!canTy.isExistentialType()) return false;
+  if (!canTy.isExistentialType())
+    return false;
 
-  ExistentialLayout layout;
-  canTy.getExistentialLayout(layout);
-  return layout.isAnyObject();
+  return canTy.getExistentialLayout().isAnyObject();
 }
 
 bool ExistentialLayout::isExistentialWithError(ASTContext &ctx) const {
   auto errorProto = ctx.getProtocol(KnownProtocolKind::Error);
   if (!errorProto) return false;
 
-  for (auto proto : protocols) {
+  for (auto proto : getProtocols()) {
     auto *protoDecl = proto->getDecl();
     if (protoDecl == errorProto || protoDecl->inheritsFrom(errorProto))
       return true;
@@ -589,8 +616,7 @@ bool TypeBase::isExistentialWithError() {
 
   // FIXME: Compute this as a bit in TypeBase so this operation isn't
   // overly expensive.
-  ExistentialLayout layout;
-  canTy.getExistentialLayout(layout);
+  auto layout = canTy.getExistentialLayout();
   return layout.isExistentialWithError(getASTContext());
 }
 
@@ -2720,28 +2746,12 @@ void ProtocolCompositionType::Profile(llvm::FoldingSetNodeID &ID,
     ID.AddPointer(P.getPointer());
 }
 
-bool ProtocolType::requiresClass() const {
+bool ProtocolType::requiresClass() {
   return getDecl()->requiresClass();
 }
 
-bool ProtocolCompositionType::requiresClass() const {
-  for (Type t : getProtocols()) {
-    if (auto *protoTy = t->getAs<ProtocolType>()) {
-      if (protoTy->requiresClass())
-        return true;
-      continue;
-    }
-
-    if (auto *compositionTy = t->getAs<ProtocolCompositionType>()) {
-      if (compositionTy->requiresClass())
-        return true;
-      continue;
-    }
-
-    assert(isa<ClassDecl>(t->getAnyNominal()));
-    return true;
-  }
-  return false;
+bool ProtocolCompositionType::requiresClass() {
+  return getExistentialLayout().requiresClass;
 }
 
 Type ProtocolCompositionType::get(const ASTContext &C,

@@ -53,9 +53,7 @@ static bool isOpenedAnyObject(Type type) {
   if (!existential)
     return false;
 
-  ExistentialLayout layout;
-  existential->getExistentialLayout(layout);
-  return layout.isAnyObject();
+  return existential->isAnyObject();
 }
 
 void Solution::computeSubstitutions(
@@ -4600,11 +4598,10 @@ Expr *ExprRewriter::coerceScalarToTuple(Expr *expr, TupleType *toTuple,
 static ArrayRef<ProtocolConformanceRef>
 collectExistentialConformances(TypeChecker &tc, Type fromType, Type toType,
                                DeclContext *DC) {
-  ExistentialLayout layout;
-  toType->getExistentialLayout(layout);
+  auto layout = toType->getExistentialLayout();
 
   SmallVector<ProtocolConformanceRef, 4> conformances;
-  for (auto proto : layout.protocols) {
+  for (auto proto : layout.getProtocols()) {
     conformances.push_back(
       *tc.containsProtocol(fromType, proto->getDecl(), DC,
                            (ConformanceCheckFlags::InExpression|

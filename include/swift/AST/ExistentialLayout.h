@@ -23,19 +23,22 @@
 
 namespace swift {
   class ProtocolDecl;
+  class ProtocolType;
+  class ProtocolCompositionType;
 
 struct ExistentialLayout {
   ExistentialLayout() {
     requiresClass = false;
     requiresClassImplied = false;
     containsNonObjCProtocol = false;
+    singleProtocol = nullptr;
   }
+
+  ExistentialLayout(ProtocolType *type);
+  ExistentialLayout(ProtocolCompositionType *type);
 
   /// The superclass constraint, if any.
   Type superclass;
-
-  /// Zero or more protocol constraints.
-  SmallVector<ProtocolType *, 2> protocols;
 
   /// Whether the existential requires a class, either via an explicit
   /// '& AnyObject' member or because of a superclass or protocol constraint.
@@ -56,6 +59,20 @@ struct ExistentialLayout {
   }
 
   bool isExistentialWithError(ASTContext &ctx) const;
+
+  ArrayRef<ProtocolType *> getProtocols() const {
+    if (singleProtocol)
+      return ArrayRef<ProtocolType *>{&singleProtocol, 1};
+    return multipleProtocols;
+  }
+
+private:
+  // Inline storage for 'protocols' member above when computing
+  // layout of a single ProtocolType
+  ProtocolType *singleProtocol;
+
+  /// Zero or more protocol constraints.
+  ArrayRef<ProtocolType *> multipleProtocols;
 };
 
 }

@@ -3455,12 +3455,10 @@ CanArchetypeType ArchetypeType::getOpened(Type existential,
     knownID = UUID::fromTime();
   }
 
-  ExistentialLayout layout;
-  assert(existential->isExistentialType());
-  existential->getExistentialLayout(layout);
+  auto layout = existential->getExistentialLayout();
 
   SmallVector<ProtocolDecl *, 2> protos;
-  for (auto proto : layout.protocols)
+  for (auto proto : layout.getProtocols())
     protos.push_back(proto->getDecl());
 
   auto arena = AllocationArena::Permanent;
