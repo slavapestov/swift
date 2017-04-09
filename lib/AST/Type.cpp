@@ -890,13 +890,24 @@ Type TypeBase::getRValueInstanceType() {
 
 /// \brief Collect the protocols in the existential type T into the given
 /// vector.
-static void addProtocols(Type T, SmallVectorImpl<ProtocolDecl *> &Protocols) {
+static void addProtocols(Type T, SmallVectorImpl<ProtocolDecl *> &Protocols,
+                         Type &Superclass) {
   if (auto Proto = T->getAs<ProtocolType>()) {
     Protocols.push_back(Proto->getDecl());
-  } else if (auto PC = T->getAs<ProtocolCompositionType>()) {
-    for (auto P : PC->getProtocols())
-      addProtocols(P, Protocols);
+    return;
   }
+
+  if (auto PC = T->getAs<ProtocolCompositionType>()) {
+    for (auto P : PC->getProtocols())
+      addProtocols(P, Protocols, Superclass);
+    return;
+  }
+
+  assert(isa<ClassDecl>(T->getAnyNominal()) && "Non-class, non-protocol "
+         "member in protocol composition");
+  assert(!Superclass && "Should have diagnosed multiple "
+         "superclasses by now");
+  Superclass = T;
 }
 
 /// \brief Add the protocol (or protocols) in the type T to the stack of
@@ -2762,23 +2773,9 @@ Type ProtocolCompositionType::get(const ASTContext &C,
   }
     
   Type Superclass;
-  auto addSuperclass = [&](Type t) {
-    assert(!Superclass && "Should have diagnosed multiple "
-           "superclasses by now");
-    Superclass = t;
-  };
-
   SmallVector<ProtocolDecl *, 4> Protocols;
   for (Type t : MemberTypes) {
-    auto *nominalDecl = t->getAnyNominal();
-    if (nominalDecl && isa<ClassDecl>(nominalDecl))
-      addSuperclass(t);
-
-    if (auto *compositionTy = t->getAs<ProtocolCompositionType>())
-      if (auto superclassTy = compositionTy->getSuperclass(nullptr))
-        addSuperclass(t);
-        
-    addProtocols(t, Protocols);
+    addProtocols(t, Protocols, Superclass);
   }
   
   // Minimize the set of protocols composed together.
@@ -2791,13 +2788,13 @@ Type ProtocolCompositionType::get(const ASTContext &C,
   // Form the set of canonical protocol types from the protocol
   // declarations, and use that to build the canonical composition type.
   SmallVector<Type, 4> CanTypes;
+  if (Superclass)
+    CanTypes.push_back(Superclass->getCanonicalType());
   std::transform(Protocols.begin(), Protocols.end(),
                  std::back_inserter(CanTypes),
                  [](ProtocolDecl *Proto) {
                    return Proto->getDeclaredType();
                  });
-  if (Superclass)
-    CanTypes.push_back(Superclass->getCanonicalType());
 
   return build(C, CanTypes);
 }
