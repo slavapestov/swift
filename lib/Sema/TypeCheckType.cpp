@@ -306,8 +306,14 @@ findDeclContextForType(TypeChecker &TC,
     auto parentNominal =
         parentDC->getAsNominalTypeOrNominalTypeExtensionContext();
 
-    // If this type is defined in this context, we are done.
+    // If this type is defined in this exact context, we are done.
     if (ownerDC == parentDC)
+      return std::make_tuple(parentDC, getSelfType(parentDC), true);
+
+    // If we're inside a nominal type context and the member type
+    // is defined in a different extension, we are done.
+    if (parentNominal &&
+        parentNominal == ownerNominal)
       return std::make_tuple(parentDC, getSelfType(parentDC), true);
 
     // An unqualified reference to the extended type from within
@@ -333,6 +339,8 @@ findDeclContextForType(TypeChecker &TC,
       return std::make_tuple(nullptr, nullptr, false);
   }
 
+  // If we didn't find the member in an immediate parent context and
+  // there is no base type, something went wrong.
   if (!needsBaseType) {
     assert(false && "Should have found non-type context by now");
     return std::make_tuple(nullptr, nullptr, false);
@@ -493,8 +501,10 @@ Type TypeChecker::resolveTypeInContext(
   bool hasDependentType = typeDecl->getDeclaredInterfaceType()
     ->hasTypeParameter();
 
-  // Simple case -- the type is not nested inside of another type,
-  // so there is nothing to substitute.
+  // Simple case -- the type is not nested inside of another type.
+  // However, it might be nested inside another generic context, so
+  // we do want to write the type in terms of interface types or
+  // context archetypes, depending on the resolver given to us.
   if (!selfType) {
     if (auto *aliasDecl = dyn_cast<TypeAliasDecl>(typeDecl)) {
       // For a generic typealias, return the unbound generic form of the type.
