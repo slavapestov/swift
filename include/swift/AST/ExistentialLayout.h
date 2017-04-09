@@ -35,7 +35,7 @@ struct ExistentialLayout {
   Type superclass;
 
   /// Zero or more protocol constraints.
-  SmallVector<ProtocolDecl *, 2> protocols;
+  SmallVector<ProtocolType *, 2> protocols;
 
   /// Whether the existential requires a class, either via an explicit
   /// '& AnyObject' member or because of a superclass or protocol constraint.

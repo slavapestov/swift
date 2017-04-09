@@ -607,33 +607,26 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
   // existential's list of conformances and the existential conforms to
   // itself.
   if (type->isExistentialType()) {
-    ExistentialLayout layout;
-    type->getExistentialLayout(layout);
-
-    // Due to an IRGen limitation, witness tables cannot be passed from an
-    // existential to an archetype parameter, so for now we restrict this to
-    // @objc protocols.
-    for (auto proto : layout.protocols) {
-      if (!proto->isObjC() &&
-          !proto->isSpecificProtocol(KnownProtocolKind::AnyObject))
-        return None;
-    }
-
     // If the existential type cannot be represented or the protocol does not
     // conform to itself, there's no point in looking further.
     if (!protocol->existentialConformsToSelf() ||
         !protocol->existentialTypeSupported(resolver))
       return None;
 
+    ExistentialLayout layout;
+    type->getExistentialLayout(layout);
+
+    // Due to an IRGen limitation, witness tables cannot be passed from an
+    // existential to an archetype parameter, so for now we restrict this to
+    // @objc protocols.
+    if (!layout.isObjC())
+      return None;
+
     // Special-case AnyObject, which may not be in the list of conformances.
     //
     // FIXME: This is going away soon.
-    if (protocol->isSpecificProtocol(KnownProtocolKind::AnyObject)) {
-      if (layout.requiresClass)
-        return ProtocolConformanceRef(protocol);
-
-      return None;
-    }
+    if (protocol->isSpecificProtocol(KnownProtocolKind::AnyObject))
+      return ProtocolConformanceRef(protocol);
 
     // If the existential is class-constrained, the class might conform
     // concretely.
@@ -645,7 +638,8 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
 
     // Otherwise, the existential might conform abstractly.
     for (auto proto : layout.protocols) {
-      if (proto == protocol || proto->inheritsFrom(protocol))
+      auto *protoDecl = proto->getDecl();
+      if (protoDecl == protocol || protoDecl->inheritsFrom(protocol))
         return ProtocolConformanceRef(protocol);
     }
 

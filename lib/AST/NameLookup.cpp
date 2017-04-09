@@ -1423,12 +1423,14 @@ bool DeclContext::lookupQualified(Type type,
         (options & NL_DynamicLookup))
       wantLookupInAllClasses = true;
 
-    for (auto proto : layout.protocols)
-      if (visited.insert(proto).second)
-        stack.push_back(proto);
+    for (auto proto : layout.protocols) {
+      auto *protoDecl = proto->getDecl();
+      if (visited.insert(protoDecl).second)
+        stack.push_back(protoDecl);
+    }
 
     if (layout.superclass) {
-      auto nominalDecl = layout.superclass->getAnyNominal();
+      auto *nominalDecl = layout.superclass->getAnyNominal();
       if (visited.insert(nominalDecl).second)
         stack.push_back(nominalDecl);
     }

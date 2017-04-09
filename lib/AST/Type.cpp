@@ -224,7 +224,7 @@ void CanType::getExistentialTypeProtocols(
   ExistentialLayout layout;
   getExistentialLayout(layout);
   for (auto proto : layout.protocols)
-    protocols.push_back(proto);
+    protocols.push_back(proto->getDecl());
 }
 
 void CanType::getAnyExistentialTypeProtocols(
@@ -253,12 +253,13 @@ void CanType::getExistentialLayout(ExistentialLayout &result) {
         result.containsNonObjCProtocol = true;
     }
 
-    result.protocols.push_back(proto->getDecl());
+    result.protocols.push_back(proto);
     return;
   }
 
   if (auto comp = dyn_cast<ProtocolCompositionType>(*this)) {
-    // FIXME: This is silly.
+    // The type is canonical, so the list of protocols is canonical
+    // and the superclass, if any, comes first.
     auto members = comp.getProtocols();
     for (auto member : members)
       member.getExistentialLayout(result);
@@ -277,7 +278,7 @@ void CanType::getExistentialLayout(ExistentialLayout &result) {
 bool ExistentialLayout::isAnyObject() const {
   // FIXME
   return protocols.size() == 1 &&
-         protocols[0]->isSpecificProtocol(KnownProtocolKind::AnyObject);
+    protocols[0]->getDecl()->isSpecificProtocol(KnownProtocolKind::AnyObject);
 }
 
 bool TypeBase::isObjCExistentialType() {
@@ -573,7 +574,8 @@ bool ExistentialLayout::isExistentialWithError(ASTContext &ctx) const {
   if (!errorProto) return false;
 
   for (auto proto : protocols) {
-    if (proto == errorProto || proto->inheritsFrom(errorProto))
+    auto *protoDecl = proto->getDecl();
+    if (protoDecl == errorProto || protoDecl->inheritsFrom(errorProto))
       return true;
   }
 

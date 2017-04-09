@@ -4606,7 +4606,7 @@ collectExistentialConformances(TypeChecker &tc, Type fromType, Type toType,
   SmallVector<ProtocolConformanceRef, 4> conformances;
   for (auto proto : layout.protocols) {
     conformances.push_back(
-      *tc.containsProtocol(fromType, proto, DC,
+      *tc.containsProtocol(fromType, proto->getDecl(), DC,
                            (ConformanceCheckFlags::InExpression|
                             ConformanceCheckFlags::Used)));
   }

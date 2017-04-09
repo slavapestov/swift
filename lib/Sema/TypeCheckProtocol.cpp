@@ -5210,9 +5210,10 @@ Optional<ProtocolConformanceRef> TypeChecker::containsProtocol(
 
     // Finally, check if the existential contains the protocol in question.
     for (auto P : layout.protocols) {
+      auto *PD = P->getDecl();
       // If we found the protocol we're looking for, return an abstract
       // conformance to it.
-      if (P == Proto || P->inheritsFrom(Proto)) {
+      if (PD == Proto || PD->inheritsFrom(Proto)) {
         return ProtocolConformanceRef(Proto);
       }
     }
@@ -5318,7 +5319,8 @@ TypeChecker::conformsToProtocol(Type T, ProtocolDecl *Proto, DeclContext *DC,
       T->getExistentialLayout(layout);
       bool anyUnsatisfied = false;
       for (auto *proto : layout.protocols) {
-        if ((*unsatisfiedDependency)(requestInheritedProtocols(proto)))
+        auto *protoDecl = proto->getDecl();
+        if ((*unsatisfiedDependency)(requestInheritedProtocols(protoDecl)))
           anyUnsatisfied = true;
       }
       if (anyUnsatisfied)
