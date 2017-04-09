@@ -221,7 +221,11 @@ void TypeBase::getAnyExistentialTypeProtocols(
 void CanType::getExistentialTypeProtocols(
                                    SmallVectorImpl<ProtocolDecl*> &protocols) {
   // FIXME: Remove this completely
-  for (auto proto : getExistentialLayout().getProtocols())
+  auto layout = getExistentialLayout();
+  assert(!layout.superclass && "Subclass existentials not fully supported yet");
+  assert((!layout.requiresClass || layout.requiresClassImplied) &&
+         "Explicit AnyObject should not appear yet");
+  for (auto proto : layout.getProtocols())
     protocols.push_back(proto->getDecl());
 }
 
