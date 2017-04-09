@@ -468,7 +468,7 @@ Type TypeChecker::resolveTypeInContext(
   std::tie(selfType, valid) =
       findDeclContextForType(*this, typeDecl, fromDC, options, resolver);
 
-  if (!valid)
+  if (!valid || (selfType && selfType->hasError()))
     return ErrorType::get(Context);
 
   // If we are referring to a type within its own context, and we have either
@@ -501,7 +501,7 @@ Type TypeChecker::resolveTypeInContext(
   // However, it might be nested inside another generic context, so
   // we do want to write the type in terms of interface types or
   // context archetypes, depending on the resolver given to us.
-  if (!selfType) {
+  if (!selfType || !hasDependentType) {
     if (auto *aliasDecl = dyn_cast<TypeAliasDecl>(typeDecl)) {
       // For a generic typealias, return the unbound generic form of the type.
       if (aliasDecl->getGenericParams())
