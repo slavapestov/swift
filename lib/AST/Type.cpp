@@ -3135,19 +3135,10 @@ TypeBase::getContextSubstitutions(const DeclContext *dc,
     return substitutions;
   }
 
-  // If we found a member of a concrete type from a protocol extension,
-  // get the superclass out of the archetype.
-  if (auto *archetypeTy = baseTy->getAs<ArchetypeType>())
-    baseTy = archetypeTy->getSuperclass();
-
   // Extract the lazy resolver.
   LazyResolver *resolver = dc->getASTContext().getLazyResolver();
 
   // Find the superclass type with the context matching that of the member.
-  //
-  // FIXME: Do this in the caller?
-  assert(baseTy->getAnyNominal());
-
   auto *ownerNominal = dc->getAsNominalTypeOrNominalTypeExtensionContext();
   if (auto *ownerClass = dyn_cast<ClassDecl>(ownerNominal))
     baseTy = baseTy->getSuperclassForDecl(ownerClass, resolver);
