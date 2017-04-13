@@ -845,6 +845,9 @@ static PotentialBindings getPotentialBindings(ConstraintSystem &cs,
       result.InvolvesTypeVariables = true;
       continue;
 
+    case ConstraintKind::Layout:
+      continue;
+
     case ConstraintKind::ConformsTo:
     case ConstraintKind::SelfObjectOfProtocol:
       // Swift 3 allowed the use of default types for normal conformances
@@ -854,7 +857,6 @@ static PotentialBindings getPotentialBindings(ConstraintSystem &cs,
 
       LLVM_FALLTHROUGH;
         
-    case ConstraintKind::Layout:
     case ConstraintKind::LiteralConformsTo: {
       // If there is a 'nil' literal constraint, we might need optional
       // supertype bindings.
