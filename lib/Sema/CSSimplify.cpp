@@ -1183,8 +1183,19 @@ ConstraintSystem::matchExistentialTypes(Type type1, Type type2,
 
   auto layout = type2->getExistentialLayout();
 
-  assert((!layout.requiresClass || layout.requiresClassImplied) &&
-         "explicit AnyObject not yet supported");
+  if (auto layoutConstraint = layout.getLayoutConstraint()) {
+    if (layoutConstraint->isClass()) {
+      // Only @objc existentials conform to AnyObject.
+      //
+      // Among concrete types, only class references, class-constrained
+      // archetypes and dynamic Self conform to AnyObject.
+      if (!type1->isObjCExistentialType() &&
+          !type1->mayHaveSuperclass())
+        return SolutionKind::Error;
+
+      // Keep going.
+    }
+  }
 
   if (layout.superclass) {
     auto subKind = std::min(ConstraintKind::Subtype, kind);
