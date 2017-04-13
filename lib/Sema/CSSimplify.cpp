@@ -1185,13 +1185,26 @@ ConstraintSystem::matchExistentialTypes(Type type1, Type type2,
 
   if (auto layoutConstraint = layout.getLayoutConstraint()) {
     if (layoutConstraint->isClass()) {
-      // Only @objc existentials conform to AnyObject.
-      //
-      // Among concrete types, only class references, class-constrained
-      // archetypes and dynamic Self conform to AnyObject.
-      if (!type1->isObjCExistentialType() &&
-          !type1->mayHaveSuperclass())
-        return SolutionKind::Error;
+      if (kind == ConstraintKind::SelfObjectOfProtocol) {
+        if (!type1->isClassExistentialType() &&
+            !type1->mayHaveSuperclass()) {
+          llvm::errs() << "fail 1\n";
+          type1->dump();
+          
+          return SolutionKind::Error;
+        }
+      } else {
+        // Only @objc existentials conform to AnyObject.
+        //
+        // Among concrete types, only class references, class-constrained
+        // archetypes and dynamic Self conform to AnyObject.
+        if (!type1->isObjCExistentialType() &&
+            !type1->mayHaveSuperclass()) {
+          llvm::errs() << "fail 2\n";
+          type1->dump();
+          return SolutionKind::Error;
+        }
+      }
 
       // Keep going.
     }
@@ -4393,8 +4406,8 @@ ConstraintSystem::addConstraintImpl(ConstraintKind kind, Type first,
     return simplifyOpenedExistentialOfConstraint(first, second,
                                                  subflags, locator);
 
-  case ConstraintKind::ConformsTo:
   case ConstraintKind::Layout:
+  case ConstraintKind::ConformsTo:
   case ConstraintKind::LiteralConformsTo:
   case ConstraintKind::SelfObjectOfProtocol:
     return simplifyConformsToConstraint(first, second, kind, locator,

@@ -846,7 +846,7 @@ static PotentialBindings getPotentialBindings(ConstraintSystem &cs,
       continue;
 
     case ConstraintKind::Layout:
-      continue;
+      break;
 
     case ConstraintKind::ConformsTo:
     case ConstraintKind::SelfObjectOfProtocol:

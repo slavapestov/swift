@@ -3142,7 +3142,10 @@ bool FailureDiagnosis::diagnoseGeneralConversionFailure(Constraint *constraint){
       }
     }
   }
-  
+
+  fromType.dump();
+  toType.dump();
+  llvm::errs() << "convertible " << unsigned(constraint->getKind()) << "\n";
   diagnose(anchor->getLoc(), diag::types_not_convertible,
            constraint->getKind() == ConstraintKind::Subtype,
            fromType, toType)
