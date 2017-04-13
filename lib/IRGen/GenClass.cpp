@@ -1092,10 +1092,6 @@ namespace {
       for (ProtocolDecl *p : theProtocol->getInheritedProtocols()) {
         if (!p->isObjC())
           continue;
-        // Don't emit the magic AnyObject conformance.
-        if (auto known = p->getKnownProtocolKind())
-          if (*known == KnownProtocolKind::AnyObject)
-            continue;
         Protocols.push_back(p);
       }
 
@@ -1115,11 +1111,6 @@ namespace {
       }
 
       for (ProtocolDecl *proto : protocols) {
-        // Don't emit the magic AnyObject conformance.
-        if (auto known = proto->getKnownProtocolKind())
-          if (*known == KnownProtocolKind::AnyObject)
-            continue;
-
         Protocols.push_back(proto);
       }
     }
