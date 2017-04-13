@@ -357,6 +357,8 @@ protected:
 
 /// Type and lowering information about a constant function.
 struct SILConstantInfo {
+  CanAnyFunctionType FormalBaseType;
+
   /// The formal type of the constant, still curried.  For a normal
   /// function, this is just its declared type; for a getter or
   /// setter, computing this can be more involved.

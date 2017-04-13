@@ -14,6 +14,14 @@ func callMethodsOnOpaque<T, U>(o: Opaque<T>, t: T, u: U, tt: T.Type) {
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnStillOpaque<T, U>(o: StillOpaque<T>, t: T, u: U, tt: T.Type) {
@@ -25,6 +33,14 @@ func callMethodsOnStillOpaque<T, U>(o: StillOpaque<T>, t: T, u: U, tt: T.Type) {
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteValue<U>(o: ConcreteValue, t: S, u: U, tt: S.Type) {
@@ -36,6 +52,14 @@ func callMethodsOnConcreteValue<U>(o: ConcreteValue, t: S, u: U, tt: S.Type) {
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteClass<U>(o: ConcreteClass, t: C, u: U, tt: C.Type) {
@@ -47,6 +71,14 @@ func callMethodsOnConcreteClass<U>(o: ConcreteClass, t: C, u: U, tt: C.Type) {
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteClassVariance<U>(o: ConcreteClassVariance, b: B, c: C, u: U, tt: C.Type) {
@@ -58,6 +90,14 @@ func callMethodsOnConcreteClassVariance<U>(o: ConcreteClassVariance, b: B, c: C,
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (c, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnOpaqueTuple<T, U>(o: OpaqueTuple<T>, t: (T, T), u: U, tt: (T, T).Type) {
@@ -69,6 +109,14 @@ func callMethodsOnOpaqueTuple<T, U>(o: OpaqueTuple<T>, t: (T, T), u: U, tt: (T, 
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteTuple<U>(o: ConcreteTuple, t: (S, S), u: U, tt: (S, S).Type) {
@@ -80,6 +128,14 @@ func callMethodsOnConcreteTuple<U>(o: ConcreteTuple, t: (S, S), u: U, tt: (S, S)
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnOpaqueFunction<X, Y, U>(o: OpaqueFunction<X, Y>, t: @escaping (X) -> Y, u: U, tt: ((X) -> Y).Type) {
@@ -91,6 +147,14 @@ func callMethodsOnOpaqueFunction<X, Y, U>(o: OpaqueFunction<X, Y>, t: @escaping 
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteFunction<U>(o: ConcreteFunction, t: @escaping (S) -> S, u: U, tt: ((S) -> S).Type) {
@@ -102,6 +166,14 @@ func callMethodsOnConcreteFunction<U>(o: ConcreteFunction, t: @escaping (S) -> S
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnOpaqueMetatype<T, U>(o: OpaqueMetatype<T>, t: T.Type, u: U, tt: T.Type.Type) {
@@ -113,6 +185,14 @@ func callMethodsOnOpaqueMetatype<T, U>(o: OpaqueMetatype<T>, t: T.Type, u: U, tt
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteValueMetatype<U>(o: ConcreteValueMetatype, t: S.Type, u: U, tt: S.Type.Type) {
@@ -124,6 +204,14 @@ func callMethodsOnConcreteValueMetatype<U>(o: ConcreteValueMetatype, t: S.Type, 
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteClassMetatype<U>(o: ConcreteClassMetatype, t: C.Type, u: U, tt: C.Type.Type) {
@@ -135,6 +223,14 @@ func callMethodsOnConcreteClassMetatype<U>(o: ConcreteClassMetatype, t: C.Type, 
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 func callMethodsOnConcreteOptional<U>(o: ConcreteOptional, t: S?, u: U, tt: S?.Type) {
@@ -146,6 +242,14 @@ func callMethodsOnConcreteOptional<U>(o: ConcreteOptional, t: S?, u: U, tt: S?.T
   _ = o.variantOptionalityMetatypes(x: tt)
   _ = o.variantOptionalityFunctions(x: { $0 })
   _ = o.variantOptionalityTuples(x: (t, (tt, { $0 })))
+
+  _ = o.inAndOut
+  _ = o.inAndOutMetatypes
+  _ = o.inAndOutTuples
+  _ = o.variantOptionality
+  _ = o.variantOptionalityMetatypes
+  _ = o.variantOptionalityFunctions
+  _ = o.variantOptionalityTuples
 }
 
 class Opaque<T> {

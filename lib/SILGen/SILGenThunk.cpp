@@ -71,16 +71,19 @@ SILValue SILGenFunction::emitDynamicMethodRef(SILLocation loc,
   return B.createFunctionRef(loc, F);
 }
 
-static SILValue getNextUncurryLevelRef(SILGenFunction &gen,
-                                       SILLocation loc,
-                                       SILDeclRef next,
-                                       bool direct,
-                                       SILValue selfArg,
-                                       SubstitutionList curriedSubs) {
-  if (next.isForeign || next.isCurried || !next.hasDecl() || direct)
-    return gen.emitGlobalFunctionRef(loc, next.asForeign(false));
-
+static std::pair<SILValue, SILConstantInfo>
+getNextUncurryLevelRef(SILGenFunction &gen,
+                       SILLocation loc,
+                       SILDeclRef next,
+                       bool direct,
+                       SILValue selfArg,
+                       SubstitutionList curriedSubs) {
   auto constantInfo = gen.SGM.Types.getConstantInfo(next);
+
+  if (next.isForeign || next.isCurried || !next.hasDecl() || direct) {
+    auto ref = gen.emitGlobalFunctionRef(loc, next.asForeign(false));
+    return std::make_pair(ref, constantInfo);
+  }
 
   if (auto *func = dyn_cast<AbstractFunctionDecl>(next.getDecl())) {
     if (getMethodDispatch(cast<AbstractFunctionDecl>(next.getDecl()))
@@ -88,10 +91,14 @@ static SILValue getNextUncurryLevelRef(SILGenFunction &gen,
       // Use the dynamic thunk if dynamic.
       if (next.getDecl()->isDynamic()) {
         auto dynamicThunk = gen.SGM.getDynamicThunk(next, constantInfo);
-        return gen.B.createFunctionRef(loc, dynamicThunk);
+        auto ref = gen.B.createFunctionRef(loc, dynamicThunk);
+        return std::make_pair(ref, constantInfo);
       }
 
-      return gen.B.createClassMethod(loc, selfArg, next);
+      auto methodTy = gen.SGM.Types.getConstantOverrideType(next);
+      auto ref = gen.B.createClassMethod(loc, selfArg, next, methodTy);
+      auto overrideInfo = gen.SGM.Types.getConstantOverrideInfo(next);
+      return std::make_pair(ref, overrideInfo);
     }
 
     // If the fully-uncurried reference is to a generic method, look up the
@@ -108,14 +115,16 @@ static SILValue getNextUncurryLevelRef(SILGenFunction &gen,
       SILValue OpenedExistential;
       if (substSelfType->isOpenedExistential())
         OpenedExistential = selfArg;
-      return gen.B.createWitnessMethod(loc, substSelfType, *conformance, next,
-                                      constantInfo.getSILType(),
-                                      OpenedExistential);
+      auto ref = gen.B.createWitnessMethod(loc, substSelfType, *conformance,
+                                           next, constantInfo.getSILType(),
+                                           OpenedExistential);
+      return std::make_pair(ref, constantInfo);
     }
   }
 
   // Otherwise, emit a direct call.
-  return gen.emitGlobalFunctionRef(loc, next);
+  auto ref = gen.emitGlobalFunctionRef(loc, next);
+  return std::make_pair(ref, constantInfo);
 }
 
 void SILGenFunction::emitCurryThunk(ValueDecl *vd,
@@ -138,16 +147,12 @@ void SILGenFunction::emitCurryThunk(ValueDecl *vd,
   // Forward substitutions.
   auto subs = F.getForwardingSubstitutions();
 
-  SILValue toFn = getNextUncurryLevelRef(*this, vd, to, from.isDirectReference,
-                                         selfArg, subs);
+  SILValue toFn;
+  SILConstantInfo toInfo;
+  std::tie(toFn, toInfo) =
+    getNextUncurryLevelRef(*this, vd, to, from.isDirectReference,
+                           selfArg, subs);
 
-  // FIXME: Using the type from the ConstantInfo instead of looking at
-  // getConstantOverrideInfo() for methods looks suspect in the presence
-  // of covariant overrides and multiple vtable entries.
-  SILFunctionConventions fromConv(
-      SGM.Types.getConstantInfo(from).SILFnType, SGM.M);
-  SILType resultTy = fromConv.getSingleSILResultType();
-  resultTy = F.mapTypeIntoContext(resultTy);
   auto substTy = toFn->getType().substGenericArgs(SGM.M,  subs);
 
   // Partially apply the next uncurry level and return the result closure.
@@ -155,11 +160,41 @@ void SILGenFunction::emitCurryThunk(ValueDecl *vd,
     SILGenBuilder::getPartialApplyResultType(toFn->getType(), /*appliedParams=*/1,
                                              SGM.M, subs,
                                              ParameterConvention::Direct_Owned);
-  SILInstruction *toClosure =
-    B.createPartialApply(vd, toFn, substTy, subs, {selfArg}, closureTy);
-  if (resultTy != closureTy)
-    toClosure = B.createConvertFunction(vd, toClosure, resultTy);
-  B.createReturn(ImplicitReturnLocation::getImplicitReturnLoc(vd), toClosure);
+  auto result =
+    emitManagedRValueWithCleanup(
+      B.createPartialApply(vd, toFn, substTy, subs, {selfArg}, closureTy));
+
+  auto fromInfo = SGM.M.Types.getConstantInfo(from);
+
+  auto origInputTy =
+    AbstractionPattern(toInfo.FormalBaseType).getFunctionResultType();
+  auto substInputTy =
+    F.mapTypeIntoContext(
+      cast<AnyFunctionType>(toInfo.FormalInterfaceType).getResult())
+        ->getCanonicalType();
+
+  auto origOutputTy =
+    AbstractionPattern(fromInfo.FormalBaseType).getFunctionResultType();
+  auto substOutputTy =
+    F.mapTypeIntoContext(
+      cast<AnyFunctionType>(fromInfo.FormalInterfaceType).getResult())
+        ->getCanonicalType();
+
+llvm::errs() << "=====\n";
+  origInputTy.dump();
+  substInputTy.dump();
+  origOutputTy.dump();
+  substOutputTy.dump();
+
+  result = emitTransformedValue(vd,
+                                result,
+                                origInputTy,
+                                substInputTy,
+                                origOutputTy,
+                                substOutputTy);
+
+  B.createReturn(ImplicitReturnLocation::getImplicitReturnLoc(vd),
+                 result.forward(*this));
 }
 
 void SILGenModule::emitCurryThunk(ValueDecl *fd,

@@ -1749,6 +1749,7 @@ SILConstantInfo TypeConverter::getConstantInfo(SILDeclRef constant) {
 
   SILConstantInfo result = {
     formalInterfaceType,
+    formalInterfaceType,
     loweredInterfaceType,
     silFnType,
     genericEnv
@@ -2021,6 +2022,7 @@ SILConstantInfo TypeConverter::getConstantOverrideInfo(SILDeclRef derived,
 
   // If the derived method is ABI-compatible with the base method, give the
   // vtable thunk the same signature as the derived method.
+  auto baseFormalPattern = baseInfo.FormalInterfaceType;
   auto basePattern = AbstractionPattern(baseInfo.LoweredInterfaceType);
 
   auto baseInterfaceTy = baseInfo.FormalInterfaceType;
@@ -2058,6 +2060,12 @@ SILConstantInfo TypeConverter::getConstantOverrideInfo(SILDeclRef derived,
         *this,
         derivedInfo.LoweredInterfaceType,
         baseInfo.LoweredInterfaceType));
+    baseFormalPattern =
+      cast<AnyFunctionType>(
+        copyOptionalityFromDerivedToBase(
+          *this,
+          derivedInfo.FormalInterfaceType,
+          baseInfo.FormalInterfaceType));
     overrideLoweredInterfaceTy = derivedInfo.LoweredInterfaceType;
   }
 
@@ -2069,6 +2077,9 @@ SILConstantInfo TypeConverter::getConstantOverrideInfo(SILDeclRef derived,
 
   // Build the SILConstantInfo and cache it.
   SILConstantInfo overrideInfo;
+  overrideInfo.FormalBaseType = baseFormalPattern;
+  overrideInfo.FormalInterfaceType = cast<AnyFunctionType>(
+    overrideInterfaceTy->getCanonicalType());
   overrideInfo.LoweredInterfaceType = overrideLoweredInterfaceTy;
   overrideInfo.SILFnType = fnTy;
   overrideInfo.GenericEnv = derivedInfo.GenericEnv;
