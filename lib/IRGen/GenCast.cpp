@@ -486,15 +486,8 @@ void irgen::emitScalarExistentialDowncast(IRGenFunction &IGF,
     // If the protocol introduces a class constraint, track whether we need
     // to check for it independent of protocol witnesses.
     if (proto->requiresClass()) {
+      // FIXME FIXME FIXME
       hasClassConstraint = true;
-      if (proto->getKnownProtocolKind()
-          && *proto->getKnownProtocolKind() == KnownProtocolKind::AnyObject) {
-        // AnyObject only requires that the type be a class.
-        continue;
-      }
-      
-      // If this protocol is class-constrained but not AnyObject, checking its
-      // conformance will check the class constraint too.
       hasClassConstraintByProtocol = true;
     }
 

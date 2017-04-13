@@ -350,10 +350,6 @@ clang::CanQualType GenClangType::visitTupleType(CanTupleType type) {
 clang::CanQualType GenClangType::visitProtocolType(CanProtocolType type) {
   auto proto = type->getDecl();
 
-  // AnyObject -> id.
-  if (proto->isSpecificProtocol(KnownProtocolKind::AnyObject))
-    return getClangIdType(getClangASTContext());
-
   // Single protocol -> id<Proto>
   if (proto->isObjC()) {
     auto &clangCtx = getClangASTContext();
@@ -602,6 +598,11 @@ clang::CanQualType GenClangType::visitProtocolCompositionType(
   // FIXME. Eventually, this will have its own helper routine.
   SmallVector<const clang::ObjCProtocolDecl *, 4> Protocols;
   auto layout = type.getExistentialLayout();
+
+  // AnyObject -> id.
+  if (layout.isAnyObject())
+    return getClangIdType(getClangASTContext());
+
   assert(layout.requiresClass && "Cannot represent opaque existential in Clang");
   assert(!layout.superclass && "Subclass existentials not supported here yet");
   for (Type t : layout.getProtocols()) {

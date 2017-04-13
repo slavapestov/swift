@@ -252,10 +252,7 @@ ExistentialLayout::ExistentialLayout(ProtocolType *type) {
     requiresClassImplied = false;
   }
 
-  containsNonObjCProtocol =
-    !(protoDecl->isSpecificProtocol(KnownProtocolKind::AnyObject) ||
-      protoDecl->isObjC());
-
+  containsNonObjCProtocol = !protoDecl->isObjC();
   singleProtocol = type;
 }
 
@@ -282,9 +279,7 @@ ExistentialLayout::ExistentialLayout(ProtocolCompositionType *type) {
       requiresClassImplied = true;
     }
 
-    containsNonObjCProtocol |=
-      !(protoDecl->isSpecificProtocol(KnownProtocolKind::AnyObject) ||
-        protoDecl->isObjC());
+    containsNonObjCProtocol |= !protoDecl->isObjC();
   }
 
   singleProtocol = nullptr;
@@ -308,14 +303,8 @@ ExistentialLayout CanType::getExistentialLayout() {
 }
 
 bool ExistentialLayout::isAnyObject() const {
-  // New implementation
   auto protocols = getProtocols();
-  if (requiresClass && !requiresClassImplied && protocols.empty())
-    return true;
-
-  // Old implementation -- FIXME: remove this
-  return protocols.size() == 1 &&
-    protocols[0]->getDecl()->isSpecificProtocol(KnownProtocolKind::AnyObject);
+  return (requiresClass && !requiresClassImplied && protocols.empty());
 }
 
 bool TypeBase::isObjCExistentialType() {

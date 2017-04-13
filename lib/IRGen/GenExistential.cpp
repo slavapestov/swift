@@ -1367,7 +1367,6 @@ static const TypeInfo *createExistentialTypeInfo(IRGenModule &IGM, CanType T,
       // Error has a special runtime representation.
       return createErrorExistentialTypeInfo(IGM, protocols);
     // Other existentials have standard representations.
-    case SpecialProtocol::AnyObject:
     case SpecialProtocol::None:
       break;
     }
@@ -1807,7 +1806,6 @@ void irgen::emitClassExistentialContainer(IRGenFunction &IGF,
         return;
       }
 
-      case SpecialProtocol::AnyObject:
       case SpecialProtocol::None:
         break;
       }

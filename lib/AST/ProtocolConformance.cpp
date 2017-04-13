@@ -123,36 +123,6 @@ ProtocolConformanceRef::subst(Type origType,
     }
   }
 
-  // If that didn't find anything, we can still synthesize AnyObject
-  // conformances from thin air.  FIXME: this is going away soon.
-  if (proto->isSpecificProtocol(KnownProtocolKind::AnyObject)) {
-    if (substType->isExistentialType())
-      return *this;
-
-    ClassDecl *classDecl = nullptr;
-    auto archetype = substType->getAs<ArchetypeType>();
-
-    if (archetype) {
-      if (archetype->getSuperclass())
-        classDecl = archetype->getSuperclass()->getClassOrBoundGenericClass();
-
-      // A class-constrained archetype without a superclass constraint
-      // conforms to AnyObject abstractly.
-      if (!classDecl && archetype->requiresClass())
-        return ProtocolConformanceRef(proto);
-    } else {
-      classDecl = substType->getClassOrBoundGenericClass();
-    }
-
-    assert(classDecl);
-
-    // Create a concrete conformance based on the conforming class.
-    SmallVector<ProtocolConformance *, 1> lookupResults;
-    classDecl->lookupConformance(classDecl->getParentModule(), proto,
-                                 lookupResults);
-    return ProtocolConformanceRef(lookupResults.front());
-  }
-
   // FIXME: Rip this out once ConformanceAccessPaths are plumbed through
   auto *M = proto->getParentModule();
   return *M->lookupConformance(substType, proto, nullptr);
@@ -776,13 +746,7 @@ void NominalTypeDecl::prepareConformanceTable() const {
     return;
 
   // Add any synthesized conformances.
-  if (isa<ClassDecl>(this)) {
-    // FIXME: This is going away soon.
-    if (auto anyObject = getASTContext().getProtocol(
-                           KnownProtocolKind::AnyObject)) {
-      ConformanceTable->addSynthesizedConformance(mutableThis, anyObject);
-    }
-  } else if (auto theEnum = dyn_cast<EnumDecl>(mutableThis)) {
+  if (auto theEnum = dyn_cast<EnumDecl>(mutableThis)) {
     if (theEnum->hasCases() && theEnum->hasOnlyCasesWithoutAssociatedValues()) {
       // Simple enumerations conform to Equatable.
       if (auto equatable = ctx.getProtocol(KnownProtocolKind::Equatable)) {
