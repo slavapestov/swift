@@ -65,25 +65,44 @@ class Myclass2 {
     arr1.append(1)
 // FIXME: missing append()
 // CHECK: dref: FAILURE	for 'append' usr=s:Sa6appendyxF
-// CHECK: type: (@lvalue Array<Int>) -> (Int) -> ()
+// CHECK: type: (inout Array<Int>) -> (Int) -> ()
 
     var arr2 : [Mystruct1]
 // CHECK: decl: var arr2: [Mystruct1]
 // CHECK: type: Array<Mystruct1>
 
     arr2.append(Mystruct1())
-// CHECK: type: (@lvalue Array<Mystruct1>) -> (Mystruct1) -> ()
+// CHECK: type: (inout Array<Mystruct1>) -> (Mystruct1) -> ()
 
     var arr3 : [Myclass1]
 // CHECK: decl: var arr3: [Myclass1]
 // CHECK: type: Array<Myclass1>
 
     arr3.append(Myclass1())
-// CHECK: type: (@lvalue Array<Myclass1>) -> (Myclass1) -> ()
+// CHECK: type: (inout Array<Myclass1>) -> (Myclass1) -> ()
 
     _ = Myclass2.init()
 // CHECK: dref: init()
   }
+}
+
+enum MyEnum {
+  case ravioli
+  case pasta
+
+  func method() -> Int { return 0 }
+
+  func compare(_: MyEnum) -> Int { return 0 }
+
+  mutating func mutatingMethod() {}
+}
+
+func f2() {
+  var e = MyEnum.pasta
+
+  e.method()
+  e.compare(e)
+  e.mutatingMethod()
 }
 
 struct MyGenStruct1<T, U: ExpressibleByStringLiteral, V: Sequence> {
@@ -109,6 +128,11 @@ struct MyGenStruct1<T, U: ExpressibleByStringLiteral, V: Sequence> {
     _ = z
 // CHECK: type: V
   }
+
+  // CHECK: decl: func takesT(_ t: T)
+  func takesT(_ t: T) {
+    // CHECK: decl: let t: T
+  }
 }
 
 let genstruct1 = MyGenStruct1<Int, String, [Float]>(x: 1, y: "", z: [1.0])
@@ -129,6 +153,8 @@ func test001() {
 // CHECK: type: String
   _ = genstruct2.z
 // CHECK: type: Dictionary<Int, Int>
+
+  genstruct2.takesT(123)
 }
 
 protocol P1 {}
@@ -136,3 +162,26 @@ func foo1(p : P1) {}
 // CHECK: decl: protocol P1  for 'P1' usr=s:14swift_ide_test2P1P
 // CHECK: decl: func foo1(p: P1)  for 'foo1' usr=s:14swift_ide_test4foo1yAA2P1_p1p_tF
 // CHECK: decl: let p: P1 for 'p' usr=s:14swift_ide_test4foo1yAA2P1_p1p_tFADL_AaC_pv
+/*
+struct Outer {
+  struct Inner {
+    let x: Int
+  }
+
+  struct GenericInner<T> {
+    let t: T
+  }
+}
+
+struct GenericOuter<T> {
+  struct Inner {
+    let t: T
+    let x: Int
+  }
+
+  struct GenericInner<U> {
+    let t: T
+    let u: U
+  }
+}
+*/
