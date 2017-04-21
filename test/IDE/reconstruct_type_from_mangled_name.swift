@@ -227,3 +227,13 @@ func takesGeneric(_ t: GenericOuter<Int>.Inner) {
 func takesGeneric(_ t: GenericOuter<Int>.GenericInner<String>) {
   takesGeneric(t)
 }
+
+func hasLocalDecls() {
+  func localFunction() {}
+
+  struct LocalType {}
+}
+
+fileprivate struct VeryPrivateData {}
+
+fileprivate func privateFunction(_ d: VeryPrivateData) {}
