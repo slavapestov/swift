@@ -65,43 +65,58 @@ class Myclass2 {
     arr1.append(1)
 // FIXME: missing append()
 // CHECK: dref: FAILURE	for 'append' usr=s:Sa6appendyxF
-// CHECK: type: (inout Array<Int>) -> (Int) -> ()
+// CHECK: type: (@lvalue Array<Int>) -> (Int) -> ()
 
     var arr2 : [Mystruct1]
 // CHECK: decl: var arr2: [Mystruct1]
 // CHECK: type: Array<Mystruct1>
 
     arr2.append(Mystruct1())
-// CHECK: type: (inout Array<Mystruct1>) -> (Mystruct1) -> ()
+// CHECK: type: (@lvalue Array<Mystruct1>) -> (Mystruct1) -> ()
 
     var arr3 : [Myclass1]
 // CHECK: decl: var arr3: [Myclass1]
 // CHECK: type: Array<Myclass1>
 
     arr3.append(Myclass1())
-// CHECK: type: (inout Array<Myclass1>) -> (Myclass1) -> ()
+// CHECK: type: (@lvalue Array<Myclass1>) -> (Myclass1) -> ()
 
     _ = Myclass2.init()
 // CHECK: dref: init()
   }
 }
 
+// CHECK: decl: enum MyEnum
 enum MyEnum {
+// FIXME
+// CHECK: decl:   for 'ravioli'
   case ravioli
+// CHECK: decl:   for 'pasta'
   case pasta
 
+// CHECK: decl: func method() -> Int
   func method() -> Int { return 0 }
 
-  func compare(_: MyEnum) -> Int { return 0 }
+// CHECK: decl: func compare(_ other: MyEnum) -> Int
+  func compare(_ other: MyEnum) -> Int {
+    // CHECK: decl: let other: MyEnum
+    return 0
+  }
 
+// CHECK: decl: mutating func mutatingMethod()
   mutating func mutatingMethod() {}
 }
 
+// CHECK: decl: func f2()
 func f2() {
+// CHECK: type: (MyEnum.Type) -> MyEnum
   var e = MyEnum.pasta
 
+// CHECK: type: (MyEnum) -> () -> Int
   e.method()
+// CHECK: (MyEnum) -> (MyEnum) -> Int
   e.compare(e)
+// CHECK: (@lvalue MyEnum) -> () -> ()
   e.mutatingMethod()
 }
 
@@ -162,26 +177,53 @@ func foo1(p : P1) {}
 // CHECK: decl: protocol P1  for 'P1' usr=s:14swift_ide_test2P1P
 // CHECK: decl: func foo1(p: P1)  for 'foo1' usr=s:14swift_ide_test4foo1yAA2P1_p1p_tF
 // CHECK: decl: let p: P1 for 'p' usr=s:14swift_ide_test4foo1yAA2P1_p1p_tFADL_AaC_pv
-/*
+
+func genericFunction<T : AnyObject>(t: T) {
+// CHECK: decl: FAILURE for 'T' usr=s:14swift_ide_test15genericFunctionyx1t_ts9AnyObjectRzlF1TL_xmfp
+// CHECK: dref: FAILURE for 'AnyObject' usr=c:objc(pl)AnyObject
+  genericFunction(t: t)
+}
+
+// CHECK: decl: func takesInOut(fn: (inout Int) -> ())
+// CHECK: decl: let fn: (inout Int) -> () for 'fn'
+func takesInOut(fn: (inout Int) -> ()) {}
+
 struct Outer {
   struct Inner {
     let x: Int
   }
 
   struct GenericInner<T> {
+    // CHECK: decl: FAILURE for 'T' usr=s:14swift_ide_test5OuterV12GenericInnerV1Txmfp
     let t: T
   }
 }
 
 struct GenericOuter<T> {
+  // CHECK: decl: FAILURE for 'T' usr=s:14swift_ide_test12GenericOuterV1Txmfp
   struct Inner {
     let t: T
     let x: Int
   }
 
   struct GenericInner<U> {
+    // CHECK: decl: FAILURE for 'U' usr=s:14swift_ide_test12GenericOuterV0D5InnerV1Uqd__mfp
     let t: T
     let u: U
   }
 }
-*/
+
+// CHECK: decl: func takesGeneric(_ t: Outer.GenericInner<Int>) 
+func takesGeneric(_ t: Outer.GenericInner<Int>) {
+  takesGeneric(t)
+}
+
+// CHECK: decl: func takesGeneric(_ t: GenericOuter<Int>.Inner)
+func takesGeneric(_ t: GenericOuter<Int>.Inner) {
+  takesGeneric(t)
+}
+
+// CHECK: decl: func takesGeneric(_ t: GenericOuter<Int>.GenericInner<String>)
+func takesGeneric(_ t: GenericOuter<Int>.GenericInner<String>) {
+  takesGeneric(t)
+}
