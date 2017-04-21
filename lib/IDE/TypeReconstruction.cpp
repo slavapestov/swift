@@ -1527,9 +1527,9 @@ static void VisitNodeSetterGetter(
 
 static void VisitNodeIdentifier(
     ASTContext *ast,
+    Demangle::NodePointer parent_node,
     Demangle::NodePointer cur_node, VisitNodeResult &result,
     const VisitNodeResult &generic_context) { // set by GenericType case
-  Demangle::NodePointer parent_node = nodes[nodes.size() - 2];
   DeclKind decl_kind = GetKindAsDeclKind(parent_node->getKind());
 
   if (!FindFirstNamedDeclWithKind(ast, cur_node->getText(), decl_kind,
@@ -1543,9 +1543,9 @@ static void VisitNodeIdentifier(
 
 static void VisitNodeLocalDeclName(
     ASTContext *ast,
+    Demangle::NodePointer parent_node,
     Demangle::NodePointer cur_node, VisitNodeResult &result,
     const VisitNodeResult &generic_context) { // set by GenericType case
-  Demangle::NodePointer parent_node = nodes[nodes.size() - 2];
   std::string remangledNode = Demangle::mangleNode(parent_node);
   TypeDecl *decl = result._module.lookupLocalType(remangledNode);
   if (!decl)
@@ -1569,9 +1569,9 @@ static void VisitNodeLocalDeclName(
 
 static void VisitNodePrivateDeclName(
     ASTContext *ast,
+    Demangle::NodePointer parent_node,
     Demangle::NodePointer cur_node, VisitNodeResult &result,
     const VisitNodeResult &generic_context) { // set by GenericType case
-  Demangle::NodePointer parent_node = nodes[nodes.size() - 2];
   DeclKind decl_kind = GetKindAsDeclKind(parent_node->getKind());
 
   if (cur_node->getNumChildren() != 2) {
@@ -1598,6 +1598,31 @@ static void VisitNodePrivateDeclName(
           "unable to find Node::Kind::PrivateDeclName '%s' in '%s'",
           id_node->getText().str().c_str(),
           priv_decl_id_node->getText().str().c_str());
+  }
+}
+
+static void VisitNodeNominal(
+    ASTContext *ast,
+    Demangle::NodePointer cur_node, VisitNodeResult &result,
+    const VisitNodeResult &generic_context) { // set by GenericType case
+  Demangle::Node::iterator child_end = cur_node->end();
+  for (Demangle::Node::iterator child_pos = cur_node->begin();
+       child_pos != child_end; ++child_pos) {
+    auto child = *child_pos;
+    switch(child->getKind()) {
+    case Demangle::Node::Kind::Identifier:
+      VisitNodeIdentifier(ast, cur_node, child, result, generic_context);
+      break;
+    case Demangle::Node::Kind::LocalDeclName:
+      VisitNodeLocalDeclName(ast, cur_node, child, result, generic_context);
+      break;
+    case Demangle::Node::Kind::PrivateDeclName:
+      VisitNodePrivateDeclName(ast, cur_node, child, result, generic_context);
+      break;
+    default:
+      VisitNode(ast, *child_pos, result, generic_context);
+      break;
+    }
   }
 }
 
@@ -1939,13 +1964,16 @@ static void visitNodeImpl(
   case Demangle::Node::Kind::Structure:
   case Demangle::Node::Kind::Class:
   case Demangle::Node::Kind::Enum:
+  case Demangle::Node::Kind::Protocol:
+    VisitNodeNominal(ast, node, result, genericContext);
+    break;
+
   case Demangle::Node::Kind::Global:
   case Demangle::Node::Kind::Static:
   case Demangle::Node::Kind::TypeAlias:
   case Demangle::Node::Kind::Type:
   case Demangle::Node::Kind::TypeMangling:
   case Demangle::Node::Kind::ReturnType:
-  case Demangle::Node::Kind::Protocol:
     VisitAllChildNodes(ast, node, result, genericContext);
     break;
 
@@ -1996,14 +2024,6 @@ static void visitNodeImpl(
     VisitNodeSetterGetter(ast, node, result, genericContext);
     break;
 
-  case Demangle::Node::Kind::LocalDeclName:
-    VisitNodeLocalDeclName(ast, node, result, genericContext);
-    break;
-
-  case Demangle::Node::Kind::Identifier:
-    VisitNodeIdentifier(ast, node, result, genericContext);
-    break;
-
   case Demangle::Node::Kind::InOut:
     VisitNodeInOut(ast, node, result, genericContext);
     break;
@@ -2018,10 +2038,6 @@ static void visitNodeImpl(
 
   case Demangle::Node::Kind::Tuple:
     VisitNodeTuple(ast, node, result, genericContext);
-    break;
-
-  case Demangle::Node::Kind::PrivateDeclName:
-    VisitNodePrivateDeclName(ast, node, result, genericContext);
     break;
 
   case Demangle::Node::Kind::ProtocolList:
@@ -2051,6 +2067,12 @@ static void visitNodeImpl(
   case Demangle::Node::Kind::Weak:
     VisitNodeWeak(ast, node, result, genericContext);
     break;
+
+  case Demangle::Node::Kind::LocalDeclName:
+  case Demangle::Node::Kind::Identifier:
+  case Demangle::Node::Kind::PrivateDeclName:
+    llvm_unreachable("Must handle these as part of another node");
+
   default:
     break;
   }
