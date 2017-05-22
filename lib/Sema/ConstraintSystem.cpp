@@ -1053,19 +1053,6 @@ ConstraintSystem::getTypeOfMemberReference(
     }
   }
 
-  // Handle associated type lookup as a special case, horribly.
-  // FIXME: This is an awful hack.
-  if (isa<AssociatedTypeDecl>(value)) {
-    // Refer to a member of the archetype directly.
-    auto archetype = baseObjTy->castTo<ArchetypeType>();
-    Type memberTy = archetype->getNestedType(value->getName());
-    if (!isTypeReference)
-      memberTy = MetatypeType::get(memberTy);
-
-    auto openedType = FunctionType::get(baseObjTy, memberTy);
-    return { openedType, memberTy };
-  }
-
   // Figure out the declaration context to use when opening this type.
   DeclContext *innerDC = value->getInnermostDeclContext();
   DeclContext *outerDC = value->getDeclContext();
