@@ -519,7 +519,8 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
             // If we introduce a source break, we can make both find
             // instance members with:
             //
-            // selfDecl = selfParam;
+            if (!Ctx.isSwiftVersion3())
+              selfDecl = selfParam;
           }
 
           continue;
@@ -637,7 +638,7 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
 
         // If this declcontext is an initializer for a static property, then we're
         // implicitly doing a static lookup into the parent declcontext.
-        if (auto *PBI = dyn_cast<PatternBindingInitializer>(DC))
+        again:        if (auto *PBI = dyn_cast<PatternBindingInitializer>(DC)) {
           if (!DC->getParent()->isModuleScopeContext()) {
             if (auto *PBD = PBI->getBinding()) {
               if (auto *selfParam = PBI->getImplicitSelfDecl()) {
@@ -650,7 +651,11 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
                 // instance members with:
                 //
                 // BaseDecl = selfParam;
-
+                //if (!Ctx.isSwiftVersion3())
+                ExtendedType = DC->getParent()->getSelfTypeInContext();
+                BaseDecl = selfParam;
+                MetaBaseDecl = DC->getParent()->getAsNominalTypeOrNominalTypeExtensionContext();
+                
                 Consumer.foundDecl(selfParam,
                                    DeclVisibilityKind::FunctionParameter);
                 if (!Results.empty())
@@ -659,9 +664,21 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
 
               isTypeLookup = PBD->isStatic();
               DC = DC->getParent();
+
+              if (!PBI->getImplicitSelfDecl())
+                goto again;
+            } else {
+              DC = DC->getParent();
+              goto again;
             }
+          } else {
+            DC = DC->getParent();
+            goto again;
           }
-        
+          if (!isCascadingUse.hasValue())
+            isCascadingUse = DC->isCascadingContextForLookup(false);
+        }
+        else
         if (auto *AFD = dyn_cast<AbstractFunctionDecl>(DC)) {
           // Look for local variables; normally, the parser resolves these
           // for us, but it can't do the right thing inside local types.
