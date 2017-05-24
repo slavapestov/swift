@@ -22,6 +22,7 @@
 #include "swift/AST/Availability.h"
 #include "swift/AST/Expr.h"
 #include "swift/AST/GenericEnvironment.h"
+#include "swift/AST/Initializer.h"
 #include "swift/AST/ParameterList.h"
 #include "swift/AST/ProtocolConformance.h"
 #include "swift/Basic/Defer.h"
@@ -1064,6 +1065,47 @@ namespace {
     bool walkToDeclPre(Decl *) override { return false; }
     std::pair<bool, Stmt*> walkToStmtPre(Stmt *S) override { return {false,S}; }
   };
+
+  class RecontextualizeSelf : public ASTWalker {
+    ASTContext &Context;
+    ParamDecl *OldSelf;
+    ParamDecl *NewSelf;
+  public:
+    RecontextualizeSelf(ASTContext &Context, ParamDecl *OldSelf, ParamDecl *NewSelf)
+      : Context(Context), OldSelf(OldSelf), NewSelf(NewSelf) {}
+
+    std::pair<bool, Expr *> walkToExprPre(Expr *E) override {
+      /*// If we find a closure, update its declcontext and do *not* walk into it.
+      if (auto CE = dyn_cast<AbstractClosureExpr>(E)) {
+        CE->setParent(NewDC);
+        return { false, E };
+      }
+      
+      if (auto CLE = dyn_cast<CaptureListExpr>(E)) {
+        // Make sure to recontextualize any decls in the capture list as well.
+        for (auto &CLE : CLE->getCaptureList()) {
+          CLE.Var->setDeclContext(NewDC);
+          CLE.Init->setDeclContext(NewDC);
+        }
+        }*/
+
+      // FIXME: closures?
+      
+      if (auto DRE = dyn_cast<DeclRefExpr>(E)) {
+        if (DRE->getDecl() == OldSelf) {
+          DRE = new (Context) DeclRefExpr(NewSelf, DRE->getNameLoc(),
+                                          DRE->isImplicit(),
+                                          DRE->getAccessSemantics());
+          return { true, DRE };
+        }
+      }
+      return { true, E };
+    }
+
+    /// We don't want to recurse into declarations or statements.
+    //bool walkToDeclPre(Decl *) override { return false; }
+    //std::pair<bool, Stmt*> walkToStmtPre(Stmt *S) override { return {false,S}; }
+  };
 } // end anonymous namespace
 
 /// Synthesize the getter for a lazy property with the specified storage
@@ -1136,8 +1178,8 @@ static FuncDecl *completeLazyPropertyGetter(VarDecl *VD, VarDecl *Storage,
   // Take the initializer from the PatternBindingDecl for VD.
   // TODO: This doesn't work with complicated patterns like:
   //   lazy var (a,b) = foo()
-  auto *InitValue = VD->getParentInitializer();
   auto PBD = VD->getParentPatternBinding();
+  auto *InitValue = PBD->getPatternEntryForVarDecl(VD).getInitAsWritten();
   unsigned entryIndex = PBD->getPatternEntryIndexForVarDecl(VD);
   PBD->setInit(entryIndex, nullptr);
   PBD->setInitializerChecked(entryIndex);
@@ -1146,6 +1188,11 @@ static FuncDecl *completeLazyPropertyGetter(VarDecl *VD, VarDecl *Storage,
   // realize that they are in the getter function.
   InitValue->walk(RecontextualizeClosures(Get));
 
+  if (VD->getDeclContext()->isTypeContext()) {
+    InitValue->walk(RecontextualizeSelf(Ctx,
+                                        cast<PatternBindingInitializer>(PBD->getPatternList()[entryIndex].getInitContext())->getImplicitSelfDecl(),
+                                        Get->getImplicitSelfDecl()));
+  }
 
   Pattern *Tmp2PBDPattern = new (Ctx) NamedPattern(Tmp2VD, /*implicit*/true);
   Tmp2PBDPattern = new (Ctx) TypedPattern(Tmp2PBDPattern,
