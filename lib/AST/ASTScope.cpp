@@ -1904,26 +1904,20 @@ SmallVector<ValueDecl *, 4> ASTScope::getLocalBindings() const {
     break;
 
   case ASTScopeKind::PatternInitializer:
-    // FIXME: This causes recursion that we cannot yet handle.
-#if false
     // 'self' is available within the pattern initializer of a 'lazy' variable.
     if (auto singleVar = patternBinding.decl->getSingleVar()) {
       if (singleVar->getAttrs().hasAttribute<LazyAttr>() &&
           singleVar->getDeclContext()->isTypeContext()) {
-        // If there is no getter (yet), add them.
-        if (!singleVar->getGetter()) {
-          ASTContext &ctx = singleVar->getASTContext();
-          if (auto resolver = ctx.getLazyResolver())
-            resolver->introduceLazyVarAccessors(singleVar);
-        }
 
-        // Add the getter's 'self'.
-        if (auto getter = singleVar->getGetter())
-          if (auto self = getter->getImplicitSelfDecl())
-            result.push_back(self);
+        auto *initContext = cast_or_null<PatternBindingInitializer>(
+          patternBinding.decl->getPatternList()[0].getInitContext());
+        if (initContext) {
+          if (auto *selfParam = initContext->getImplicitSelfDecl())
+            result.push_back(selfParam);
+        }
       }
     }
-#endif
+
     break;
 
   case ASTScopeKind::Closure:

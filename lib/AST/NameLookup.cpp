@@ -510,29 +510,18 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
         // Pattern binding initializers are only interesting insofar as they
         // affect lookup in an enclosing nominal type or extension thereof.
         if (auto *bindingInit = dyn_cast<PatternBindingInitializer>(dc)) {
-          if (auto binding = bindingInit->getBinding()) {
-            // Look for 'self' for a lazy variable initializer.
-            if (auto singleVar = binding->getSingleVar())
-              // We only care about lazy variables.
-              if (singleVar->getAttrs().hasAttribute<LazyAttr>()) {
-
-              // 'self' will be listed in the local bindings.
-              for (auto local : localBindings) {
-                auto param = dyn_cast<ParamDecl>(local);
-                if (!param) continue;
-
-
-                // If we have a variable that's the implicit self of its enclosing
-                // context, mark it as 'self'.
-                if (auto func = dyn_cast<FuncDecl>(param->getDeclContext())) {
-                  if (param == func->getImplicitSelfDecl()) {
-                    selfDecl = param;
-                    break;
-                  }
-                }
-              }
-            }
+          if (auto *selfParam = bindingInit->getImplicitSelfDecl()) {
+            // FIXME: Lazy initializers have strange behavior in Swift.
+            //
+            // Unqualified lookup finds static members of the outer type,
+            // but qualified lookup on 'self.' finds instance members.
+            //
+            // If we introduce a source break, we can make both find
+            // instance members with:
+            //
+            // selfDecl = selfParam;
           }
+
           continue;
         }
 
@@ -651,6 +640,23 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
         if (auto *PBI = dyn_cast<PatternBindingInitializer>(DC))
           if (!DC->getParent()->isModuleScopeContext()) {
             if (auto *PBD = PBI->getBinding()) {
+              if (auto *selfParam = PBI->getImplicitSelfDecl()) {
+                // FIXME: Lazy initializers have strange behavior in Swift.
+                //
+                // Unqualified lookup finds static members of the outer type,
+                // but qualified lookup on 'self.' finds instance members.
+                //
+                // If we introduce a source break, we can make both find
+                // instance members with:
+                //
+                // BaseDecl = selfParam;
+
+                Consumer.foundDecl(selfParam,
+                                   DeclVisibilityKind::FunctionParameter);
+                if (!Results.empty())
+                  return;
+              }
+
               isTypeLookup = PBD->isStatic();
               DC = DC->getParent();
             }

@@ -986,6 +986,24 @@ PatternBindingDecl *PatternBindingDecl::createDeserialized(
   return PBD;
 }
 
+ParamDecl *PatternBindingInitializer::getImplicitSelfDecl() {
+  if (SelfParam)
+    return SelfParam;
+
+  if (auto singleVar = getBinding()->getSingleVar()) {
+    if (singleVar->getAttrs().hasAttribute<LazyAttr>() &&
+        singleVar->getDeclContext()->isTypeContext()) {
+      SelfParam = ParamDecl::createSelf(SourceLoc(),
+                                        singleVar->getDeclContext(),
+                                        singleVar->isStatic(),
+                                        /*isInOut=*/false);
+      SelfParam->setDeclContext(this);
+    }
+  }
+
+  return SelfParam;
+}
+
 static bool patternContainsVarDeclBinding(const Pattern *P, const VarDecl *VD) {
   bool Result = false;
   P->forEachVariable([&](VarDecl *FoundVD) {
