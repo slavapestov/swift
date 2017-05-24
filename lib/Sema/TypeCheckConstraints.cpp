@@ -1623,6 +1623,10 @@ bool ExprTypeCheckListener::builtConstraints(ConstraintSystem &cs, Expr *expr) {
   return false;
 }
 
+Expr *ExprTypeCheckListener::foundSolution(Solution &solution, Expr *expr) {
+  return expr;
+}
+
 Expr *ExprTypeCheckListener::appliedSolution(Solution &solution, Expr *expr) {
   return expr;
 }
@@ -1856,14 +1860,24 @@ bool TypeChecker::typeCheckExpression(Expr *&expr, DeclContext *dc,
     expr->setType(ErrorType::get(Context));
     return false;
   }
-  
-  // Apply the solution to the expression.
+
+  auto result = expr;
   auto &solution = viable[0];
+  if (listener) {
+    result = listener->foundSolution(solution, result);
+    if (!result)
+      return true;
+  }
+
+  if (options.contains(TypeCheckExprFlags::SkipApplyingSolution))
+    return false;
+
+  // Apply the solution to the expression.
   bool isDiscarded = options.contains(TypeCheckExprFlags::IsDiscarded);
   bool skipClosures = options.contains(TypeCheckExprFlags::SkipMultiStmtClosures);
-  auto result = cs.applySolution(solution, expr, convertType.getType(),
-                                 isDiscarded, suppressDiagnostics,
-                                 skipClosures);
+  result = cs.applySolution(solution, result, convertType.getType(),
+                            isDiscarded, suppressDiagnostics,
+                            skipClosures);
   if (!result) {
     // Failure already diagnosed, above, as part of applying the solution.
     return true;
@@ -2117,12 +2131,12 @@ bool TypeChecker::typeCheckBinding(Pattern *&pattern, Expr *&initializer,
 
     /// The type of the initializer.
     Type InitType;
-    
+
   public:
     explicit BindingListener(Pattern *&pattern, Expr *&initializer,
                              DeclContext *DC, bool skipClosures)
       : pattern(pattern), initializer(initializer), DC(DC),
-        skipClosures(skipClosures) { }
+        skipClosures(skipClosures), Locator(nullptr) { }
 
     bool builtConstraints(ConstraintSystem &cs, Expr *expr) override {
       // Save the locator we're using for the expression.
@@ -2142,11 +2156,30 @@ bool TypeChecker::typeCheckBinding(Pattern *&pattern, Expr *&initializer,
       return false;
     }
 
-    Expr *appliedSolution(Solution &solution, Expr *expr) override {
-      // Figure out what type the constraints decided on.
+    Expr *foundSolution(Solution &solution, Expr *expr) override {
       auto &cs = solution.getConstraintSystem();
       auto &tc = cs.getTypeChecker();
+
+      // Figure out what type the constraints decided on.
       InitType = solution.simplifyType(InitType);
+
+      // Apply the solution to the pattern as well.
+      TypeResolutionOptions options;
+      options |= TR_OverrideType;
+      options |= TR_InExpression;
+      if (isa<EditorPlaceholderExpr>(expr->getSemanticsProvidingExpr())) {
+        options |= TR_EditorPlaceholder;
+      }
+      if (tc.coercePatternToType(pattern, DC, InitType, options)) {
+        return nullptr;
+      }
+
+      return expr;
+    }
+
+    Expr *appliedSolution(Solution &solution, Expr *expr) override {
+      auto &cs = solution.getConstraintSystem();
+      auto &tc = cs.getTypeChecker();
 
       // Convert the initializer to the type of the pattern.
       // ignoreTopLevelInjection = Binding->isConditional()
@@ -2161,18 +2194,8 @@ bool TypeChecker::typeCheckBinding(Pattern *&pattern, Expr *&initializer,
       // FIXME: work this into the constraint system
       expr = tc.coerceToMaterializable(expr);
 
-      // Apply the solution to the pattern as well.
-      Type patternType = expr->getType();
+      assert(expr->getType()->isEqual(InitType));
 
-      TypeResolutionOptions options;
-      options |= TR_OverrideType;
-      options |= TR_InExpression;
-      if (isa<EditorPlaceholderExpr>(expr->getSemanticsProvidingExpr())) {
-        options |= TR_EditorPlaceholder;
-      }
-      if (tc.coercePatternToType(pattern, DC, patternType, options)) {
-        return nullptr;
-      }
       initializer = expr;
       return expr;
     }
