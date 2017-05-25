@@ -710,6 +710,7 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
                 AFD->getBodySourceRange().isValid() &&
                 !SM.rangeContainsTokenLoc(AFD->getBodySourceRange(), Loc)) {
               BaseDecl = MetaBaseDecl;
+              isTypeLookup = true;
             }
           }
 

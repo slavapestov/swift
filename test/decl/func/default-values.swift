@@ -1,4 +1,4 @@
-// RUN: %target-typecheck-verify-swift
+// RUN: %target-typecheck-verify-swift -swift-version 4
 
 var func5 : (_ fn : (Int,Int) -> ()) -> () 
 
@@ -86,13 +86,14 @@ _ = SomeDerivedClass3()
 
 // Tuple types with default arguments are not materializable
 func identity<T>(_ t: T) -> T { return t }
+// expected-note@-1 {{in call to function 'identity'}}
 func defaultArgTuplesNotMaterializable(_ x: Int, y: Int = 0) {}
 
 defaultArgTuplesNotMaterializable(identity(5))
 
 // <rdar://problem/22333090> QoI: Propagate contextual information in a call to operands
 defaultArgTuplesNotMaterializable(identity((5, y: 10)))
-// expected-error@-1 {{cannot convert value of type '(Int, y: Int)' to expected argument type 'Int'}}
+// expected-error@-1 {{generic parameter 'T' could not be inferred}}
 
 
 // rdar://problem/21799331
@@ -122,3 +123,11 @@ struct X<T> {
 
 let testXa: X<Int> = .foo(i: 0)
 let testXb: X<Int> = .bar
+
+// Name lookup quirk -- we weren't able to find defaultValue() in Swift 3 mode.
+// Make sure it works in Swift 4 mode, also.
+struct DefaultArgument {
+  func hasDefaultArgument(val: Int = defaultValue()) {}
+
+  static func defaultValue() -> Int { return 0 }
+}

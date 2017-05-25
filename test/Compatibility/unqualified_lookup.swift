@@ -19,3 +19,10 @@ extension Float {
     return abs(self - to) < epiValue
   }
 }
+
+// Name lookup quirk -- we weren't able to find defaultValue() in Swift 3 mode
+struct DefaultArgument {
+  func hasDefaultArgument(val: Int = defaultValue()) {}
+
+  static func defaultValue() -> Int { return 0 }
+}
