@@ -1876,8 +1876,12 @@ bool TypeChecker::typeCheckExpression(Expr *&expr, DeclContext *dc,
       return true;
   }
 
-  if (options.contains(TypeCheckExprFlags::SkipApplyingSolution))
+  if (options.contains(TypeCheckExprFlags::SkipApplyingSolution)) {
+    result->setType(cs.simplifyType(cs.getType(result)));
+    if (result->getType()->hasTypeVariable())
+      return true;
     return false;
+  }
 
   // Apply the solution to the expression.
   bool isDiscarded = options.contains(TypeCheckExprFlags::IsDiscarded);
