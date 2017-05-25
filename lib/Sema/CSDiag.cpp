@@ -8284,6 +8284,13 @@ diagnoseAmbiguousMultiStatementClosure(ClosureExpr *closure) {
         closureType->getResult()->hasTypeVariable()))
     return false;
 
+  for (auto param : *closure->getParameters()) {
+    if (param->getType()->hasTypeVariable())
+      param->setType(Type());
+    if (param->getInterfaceType()->hasTypeVariable())
+      param->setInterfaceType(Type());
+  }
+
   // Okay, we have a multi-statement closure expr that has no inferred result,
   // type, in the context of a larger expression.  The user probably expected
   // the compiler to infer the result type of the closure from the body of the
