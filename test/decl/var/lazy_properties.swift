@@ -124,12 +124,7 @@ class Constructor {
 
 
 // Problems with self references
-class BaseClass {
-  var baseInstanceProp = 42
-  static var baseStaticProp = 42
-}
-
-class ReferenceSelfInLazyProperty : BaseClass {
+class ReferenceSelfInLazyProperty {
   lazy var refs = (i, f())
   lazy var trefs: (Int, Int) = (i, f())
 
