@@ -1975,7 +1975,9 @@ enum TCCFlags {
     
   /// tell typeCheckExpression that it is ok to produce an ambiguous result,
   /// it can just fill in holes with UnresolvedType and we'll deal with it.
-  TCC_AllowUnresolvedTypeVariables = 0x04
+  TCC_AllowUnresolvedTypeVariables = 0x04,
+
+  TCC_SkipApplyingSolution = 0x08,
 };
 
 typedef OptionSet<TCCFlags> TCCOptions;
@@ -3334,6 +3336,9 @@ Expr *FailureDiagnosis::typeCheckChildIndependently(
     if (previousType && previousType->getOptionalObjectType().isNull())
       TCEOptions |= TypeCheckExprFlags::PreferForceUnwrapToOptional;
   }
+
+  if (options.contains(TCC_SkipApplyingSolution))
+    TCEOptions |= TypeCheckExprFlags::SkipApplyingSolution;
 
   // Ensure that the expression we're about to type-check doesn't have
   // anything that the type-checker doesn't expect to see.  This can happen
@@ -6216,7 +6221,7 @@ bool FailureDiagnosis::visitAssignExpr(AssignExpr *assignExpr) {
 
   // Type check the destination first, so we can coerce the source to it.
   auto destExpr = typeCheckChildIndependently(assignExpr->getDest(),
-                                              TCC_AllowLValue);
+                                              TCC_AllowLValue | TCC_SkipApplyingSolution);
   if (!destExpr) return true;
 
   auto destType = destExpr->getType();
@@ -6226,14 +6231,15 @@ bool FailureDiagnosis::visitAssignExpr(AssignExpr *assignExpr) {
     // better to diagnose destination (if possible) before moving on to
     // the source of the assignment.
     destExpr = typeCheckChildIndependently(
-        destExpr, TCC_AllowLValue | TCC_ForceRecheck, false);
+        destExpr, TCC_AllowLValue | TCC_ForceRecheck | TCC_SkipApplyingSolution, false);
     if (!destExpr)
       return true;
 
     // If re-checking destination didn't produce diagnostic, let's just type
     // check the source without contextual information.  If it succeeds, then we
     // win, but if it fails, we'll have to diagnose this another way.
-    return !typeCheckChildIndependently(assignExpr->getSrc());
+    return !typeCheckChildIndependently(assignExpr->getSrc(),
+                                        TCC_SkipApplyingSolution);
   }
 
   // If the result type is a non-lvalue, then we are failing because it is
@@ -6246,7 +6252,8 @@ bool FailureDiagnosis::visitAssignExpr(AssignExpr *assignExpr) {
   // If the source type is already an error type, we've already posted an error.
   auto srcExpr = typeCheckChildIndependently(assignExpr->getSrc(),
                                              destType->getRValueType(),
-                                             CTP_AssignSource);
+                                             CTP_AssignSource,
+                                             TCC_SkipApplyingSolution);
   if (!srcExpr) return true;
 
   // If we are assigning to _ and have unresolved types on the RHS, then we have
