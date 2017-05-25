@@ -6,5 +6,6 @@
 // See https://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
 
 // REQUIRES: asserts
-// RUN: not --crash %target-swift-frontend %s -emit-ir
-(_==_{return($0)u
+// RUN: not %target-swift-frontend %s -emit-ir
+[.s{return($0
+protocol r
