@@ -6970,12 +6970,6 @@ Expr *ExprRewriter::finishApply(ApplyExpr *apply, Type openedType,
   auto metaTy = cs.getType(fn)->castTo<AnyMetatypeType>();
   auto ty = metaTy->getInstanceType();
 
-  // If this is an UnresolvedType in the system, preserve it.
-  if (ty->is<UnresolvedType>()) {
-    cs.setType(apply, ty);
-    return apply;
-  }
-
   // If the metatype value isn't a type expression, the user should reference
   // '.init' explicitly, for clarity.
   if (!cs.isTypeReference(fn)) {
@@ -6988,6 +6982,12 @@ Expr *ExprRewriter::finishApply(ApplyExpr *apply, Type openedType,
   if (auto tupleTy = ty->getAs<TupleType>()) {
     // FIXME: Need an AST to represent this properly.
     return coerceToType(apply->getArg(), tupleTy, locator);
+  }
+
+  // If this is an UnresolvedType in the system, preserve it.
+  if (ty->hasUnresolvedType()) {
+    cs.setType(apply, ty);
+    return apply;
   }
 
   // We're constructing a value of nominal type. Look for the constructor or
