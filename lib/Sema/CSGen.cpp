@@ -2308,7 +2308,7 @@ namespace {
       //
       // where T is a fresh type variable.
       auto lvalue = CS.createTypeVariable(CS.getConstraintLocator(expr),
-                                          /*options=*/0);
+                                          TVO_MustBeMaterializable);
       auto bound = LValueType::get(lvalue);
       auto result = InOutType::get(lvalue);
       CS.addConstraint(ConstraintKind::Conversion,
@@ -2577,7 +2577,7 @@ namespace {
 
     Type visitDiscardAssignmentExpr(DiscardAssignmentExpr *expr) {
       auto locator = CS.getConstraintLocator(expr);
-      auto typeVar = CS.createTypeVariable(locator, /*options=*/0);
+      auto typeVar = CS.createTypeVariable(locator, TVO_MustBeMaterializable);
       return LValueType::get(typeVar);
     }
     
@@ -2591,9 +2591,9 @@ namespace {
       auto destTy = CS.computeAssignDestType(expr->getDest(), expr->getLoc());
       if (!destTy)
         return Type();
-      if (destTy->getRValueType()->is<UnresolvedType>()) {
+      if (destTy->is<UnresolvedType>()) {
         return CS.createTypeVariable(CS.getConstraintLocator(expr),
-                                     TVO_CanBindToLValue);
+                                     TVO_MustBeMaterializable);
       }
       
       // The source must be convertible to the destination.
