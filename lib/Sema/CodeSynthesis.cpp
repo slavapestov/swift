@@ -807,8 +807,6 @@ static bool doesStorageNeedSetter(AbstractStorageDecl *storage) {
 static void addTrivialAccessorsToStorage(AbstractStorageDecl *storage,
                                          TypeChecker &TC) {
   assert(!storage->hasAccessorFunctions() && "already has accessors?");
-  assert(!storage->getAttrs().hasAttribute<LazyAttr>());
-
   auto *DC = storage->getDeclContext();
 
   // Create the getter.
@@ -924,7 +922,10 @@ void TypeChecker::synthesizeWitnessAccessorsForStorage(
   // If the decl is stored, convert it to StoredWithTrivialAccessors
   // by synthesizing the full set of accessors.
   if (!storage->hasAccessorFunctions()) {
-    maybeAddAccessorsToVariable(cast<VarDecl>(storage), *this);
+    if (storage->getAttrs().hasAttribute<NSManagedAttr>())
+      convertNSManagedStoredVarToComputed(cast<VarDecl>(storage), *this);
+    else
+      addTrivialAccessorsToStorage(storage, *this);
 
     if (auto getter = storage->getGetter())
       validateDecl(getter);
