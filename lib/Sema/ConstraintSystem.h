@@ -2688,6 +2688,8 @@ class ExprCleaner {
   llvm::SmallDenseMap<Expr *, Type> Exprs;
   llvm::SmallDenseMap<TypeLoc *, Type> TypeLocs;
   llvm::SmallDenseMap<Pattern *, Type> Patterns;
+  llvm::SmallDenseMap<VarDecl*, Type> Vars;
+
 public:
 
   ExprCleaner(Expr *E) {
@@ -2708,6 +2710,12 @@ public:
       std::pair<bool, Pattern*> walkToPatternPre(Pattern *P) override {
         TS->Patterns.insert({ P, P->hasType() ? P->getType() : Type() });
         return { true, P };
+      }
+
+      bool walkToDeclPre(Decl *D) override {
+        if (auto VD = dyn_cast<VarDecl>(D))
+          TS->Vars.insert({ VD, VD->hasType() ? VD->getType() : Type() });
+        return true;
       }
 
       // Don't walk into statements.  This handles the BraceStmt in
@@ -2733,6 +2741,10 @@ public:
 
     for (auto P : Patterns) {
       P.getFirst()->setType(P.getSecond());
+    }
+
+    for (auto VD : Vars) {
+      VD.getFirst()->setType(VD.getSecond());
     }
   }
 };

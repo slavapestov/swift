@@ -1718,6 +1718,7 @@ namespace {
     llvm::SmallVector<Expr*,4> Exprs;
     llvm::SmallVector<TypeLoc*, 4> TypeLocs;
     llvm::SmallVector<Pattern*, 4> Patterns;
+    llvm::SmallVector<VarDecl*, 4> Vars;
   public:
 
     ExprCleanser(Expr *E) {
@@ -1738,6 +1739,12 @@ namespace {
         std::pair<bool, Pattern*> walkToPatternPre(Pattern *P) override {
           TS->Patterns.push_back(P);
           return { true, P };
+        }
+
+        bool walkToDeclPre(Decl *D) override {
+          if (auto VD = dyn_cast<VarDecl>(D))
+            TS->Vars.push_back(VD);
+          return true;
         }
 
         // Don't walk into statements.  This handles the BraceStmt in
@@ -1767,6 +1774,11 @@ namespace {
       for (auto P : Patterns) {
         if (P->hasType() && P->getType()->hasTypeVariable())
           P->setType(Type());
+      }
+
+      for (auto VD : Vars) {
+        if (VD->hasType() && VD->getType()->hasTypeVariable())
+          VD->markInvalid();
       }
     }
   };
