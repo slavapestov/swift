@@ -1880,6 +1880,7 @@ bool TypeChecker::typeCheckExpression(Expr *&expr, DeclContext *dc,
     result->setType(cs.simplifyType(cs.getType(result)));
     if (result->getType()->hasTypeVariable())
       return true;
+    cleanup.disable();
     return false;
   }
 

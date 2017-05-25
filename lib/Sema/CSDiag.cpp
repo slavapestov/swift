@@ -3337,8 +3337,8 @@ Expr *FailureDiagnosis::typeCheckChildIndependently(
       TCEOptions |= TypeCheckExprFlags::PreferForceUnwrapToOptional;
   }
 
-  if (options.contains(TCC_SkipApplyingSolution))
-    TCEOptions |= TypeCheckExprFlags::SkipApplyingSolution;
+  /*if (options.contains(TCC_SkipApplyingSolution))
+    TCEOptions |= TypeCheckExprFlags::SkipApplyingSolution;*/
 
   // Ensure that the expression we're about to type-check doesn't have
   // anything that the type-checker doesn't expect to see.  This can happen
