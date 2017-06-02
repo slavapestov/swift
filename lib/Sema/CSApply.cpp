@@ -5862,6 +5862,7 @@ Expr *ExprRewriter::buildCollectionUpcastExpr(Expr *expr, Type toType,
 Expr *ExprRewriter::buildObjCBridgeExpr(Expr *expr, Type toType,
                                         ConstraintLocatorBuilder locator) {
   Type fromType = cs.getType(expr);
+  auto &tc = cs.getTypeChecker();
 
   // Bridged collection casts always succeed, so we treat them as
   // collection "upcasts".
@@ -5882,6 +5883,13 @@ Expr *ExprRewriter::buildObjCBridgeExpr(Expr *expr, Type toType,
     Expr *objcExpr = bridgeToObjectiveC(expr);
     if (!objcExpr)
       return nullptr;
+
+    if (auto toClass = toType->getClassOrBoundGenericClass()) {
+      if (toClass->getForeignClassKind() == ClassDecl::ForeignKind::CFType) {
+        return cs.cacheType(new (tc.Context)
+                            ForeignObjectConversionExpr(objcExpr, toType));
+      }
+    }
 
     return coerceToType(objcExpr, toType, locator);
   }
