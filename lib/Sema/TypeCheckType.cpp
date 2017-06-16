@@ -426,18 +426,21 @@ Type TypeChecker::resolveTypeInContext(
       selfType = Type();
       valid = true;
     } else {
-      // When looking up a nominal type declaration inside of a
-      // protocol extension, always use the nominal type and
-      // not the protocol 'Self' type.
-      if (isa<NominalTypeDecl>(typeDecl))
+      if (isa<NominalTypeDecl>(typeDecl)) {
+        // When looking up a nominal type declaration inside of a
+        // protocol extension, always use the nominal type and
+        // not the protocol 'Self' type.
         selfType = resolver->mapTypeIntoContext(
           foundDC->getDeclaredInterfaceType());
+      } else {
+        // Otherwise, we want the protocol 'Self' type for
+        // substituting into alias types and associated types.
+        selfType = resolver->mapTypeIntoContext(
+          foundDC->getSelfInterfaceType());
+      }
 
-      // Otherwise, we want the protocol 'Self' type for
-      // substituting into alias types and associated types.
-      selfType = resolver->mapTypeIntoContext(
-        foundDC->getSelfInterfaceType());
-
+      //selfType->dump();
+      //typeDecl->dump();
       valid = true;
     }
   } else {
