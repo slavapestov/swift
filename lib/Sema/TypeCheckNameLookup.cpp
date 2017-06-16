@@ -208,11 +208,11 @@ LookupResult TypeChecker::lookupUnqualified(DeclContext *dc, DeclName name,
   return result;
 }
 
-SmallVector<TypeDecl *, 1>
+LookupResult
 TypeChecker::lookupUnqualifiedType(DeclContext *dc, DeclName name,
                                    SourceLoc loc,
                                    NameLookupOptions options) {
-  SmallVector<TypeDecl *, 1> decls;
+  LookupResult result;
 
   // Try lookup without ProtocolMembers first.
   UnqualifiedLookup lookup(
@@ -223,9 +223,9 @@ TypeChecker::lookupUnqualifiedType(DeclContext *dc, DeclName name,
       /*AllowProtocolMembers=*/false,
       options.contains(NameLookupFlags::IgnoreAccessibility));
   for (auto found : lookup.Results)
-    decls.push_back(cast<TypeDecl>(found.getValueDecl()));
+    result.add({found.getValueDecl(), found.getBaseDecl()});
 
-  if (decls.empty() &&
+  if (result.empty() &&
       options.contains(NameLookupFlags::ProtocolMembers)) {
     // Try again, this time with protocol members.
     //
@@ -241,10 +241,10 @@ TypeChecker::lookupUnqualifiedType(DeclContext *dc, DeclName name,
         options.contains(NameLookupFlags::IgnoreAccessibility));
 
     for (auto found : lookup.Results)
-      decls.push_back(cast<TypeDecl>(found.getValueDecl()));
+      result.add({found.getValueDecl(), found.getBaseDecl()});
   }
 
-  return decls;
+  return result;
 }
 
 LookupResult TypeChecker::lookupMember(DeclContext *dc,

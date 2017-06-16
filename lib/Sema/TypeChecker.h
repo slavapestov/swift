@@ -1957,10 +1957,10 @@ public:
   /// \param name The name of the entity to look for.
   /// \param loc The source location at which name lookup occurs.
   /// \param options Options that control name lookup.
-  SmallVector<TypeDecl *, 1>
-  lookupUnqualifiedType(DeclContext *dc, DeclName name, SourceLoc loc,
-                        NameLookupOptions options
-                          = defaultUnqualifiedLookupOptions);
+  LookupResult lookupUnqualifiedType(DeclContext *dc, DeclName name,
+                                     SourceLoc loc,
+                                     NameLookupOptions options
+                                       = defaultUnqualifiedLookupOptions);
 
   /// \brief Lookup a member in the given type.
   ///

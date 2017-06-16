@@ -1213,7 +1213,7 @@ void AttributeChecker::checkApplicationMainAttribute(DeclAttribute *attr,
                                            SourceLoc(),
                                            lookupOptions);
     if (lookup.size() == 1)
-      ApplicationDelegateProto = dyn_cast<ProtocolDecl>(lookup[0]);
+      ApplicationDelegateProto = dyn_cast<ProtocolDecl>(lookup[0].Decl);
   }
 
   if (!ApplicationDelegateProto ||

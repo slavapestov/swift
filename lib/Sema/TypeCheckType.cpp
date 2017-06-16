@@ -924,7 +924,7 @@ static Type diagnoseUnknownType(TypeChecker &tc, DeclContext *dc,
                                  relookupOptions);
     if (!inaccessibleResults.empty()) {
       // FIXME: What if the unviable candidates have different levels of access?
-      auto first = cast<TypeDecl>(inaccessibleResults.front());
+      auto first = cast<TypeDecl>(inaccessibleResults[0].Decl);
       tc.diagnose(comp->getIdLoc(), diag::candidate_inaccessible,
                   comp->getIdentifier(), first->getFormalAccess());
 
@@ -1226,7 +1226,8 @@ resolveTopLevelIdentTypeComponent(TypeChecker &TC, DeclContext *DC,
   Type current;
   TypeDecl *currentDecl = nullptr;
   bool isAmbiguous = false;
-  for (const auto &typeDecl : globals) {
+  for (auto found : globals) {
+    auto typeDecl = cast<TypeDecl>(found.Decl);
 
     // If necessary, add delayed members to the declaration.
     if (auto nomDecl = dyn_cast<NominalTypeDecl>(typeDecl)) {
