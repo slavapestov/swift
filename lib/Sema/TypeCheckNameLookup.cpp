@@ -231,7 +231,7 @@ TypeChecker::lookupUnqualifiedType(DeclContext *dc, DeclName name,
     //
     // FIXME: Fix the problem where if NominalTypeDecl::getAllProtocols()
     // is called too early, we start resolving extensions -- even those
-    // which do provide conformances.
+    // which do not provide conformances.
     UnqualifiedLookup lookup(
         name, dc, this,
         options.contains(NameLookupFlags::KnownPrivate),
