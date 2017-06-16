@@ -1228,6 +1228,7 @@ resolveTopLevelIdentTypeComponent(TypeChecker &TC, DeclContext *DC,
   // Process the names we found.
   Type current;
   TypeDecl *currentDecl = nullptr;
+  DeclContext *currentDC = nullptr;
   bool isAmbiguous = false;
   for (auto found : globals) {
     auto typeDecl = cast<TypeDecl>(found.Decl);
@@ -1237,8 +1238,17 @@ resolveTopLevelIdentTypeComponent(TypeChecker &TC, DeclContext *DC,
       TC.forceExternalDeclMembers(nomDecl);
     }
 
+    DeclContext *foundDC;
+    if (found.Base == nullptr) {
+      foundDC = nullptr;
+    } else if (auto baseParam = dyn_cast<ParamDecl>(found.Base)) {
+      foundDC = baseParam->getDeclContext()->getParent();
+    } else {
+      foundDC = cast<NominalTypeDecl>(found.Base);
+    }
+
     Type type = resolveTypeDecl(TC, typeDecl, comp->getIdLoc(),
-                                nullptr, DC,
+                                foundDC, DC,
                                 dyn_cast<GenericIdentTypeRepr>(comp), options,
                                 resolver, unsatisfiedDependency);
 
@@ -1252,6 +1262,7 @@ resolveTopLevelIdentTypeComponent(TypeChecker &TC, DeclContext *DC,
     if (current.isNull()) {
       current = type;
       currentDecl = typeDecl;
+      currentDC = foundDC;
       continue;
     }
 
