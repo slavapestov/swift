@@ -191,7 +191,7 @@ LookupResult TypeChecker::lookupUnqualified(DeclContext *dc, DeclName name,
     if (!found.getBaseDecl()) {
       // Not found within a type.
     } else {
-      DeclContext *baseDC = nullptr;
+      DeclContext *baseDC;
       if (auto baseParam = dyn_cast<ParamDecl>(found.getBaseDecl())) {
         baseDC = baseParam->getDeclContext()->getParent();
       } else {
