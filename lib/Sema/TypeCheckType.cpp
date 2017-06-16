@@ -407,6 +407,7 @@ findDeclContextForType(TypeChecker &TC,
 
 Type TypeChecker::resolveTypeInContext(
        TypeDecl *typeDecl,
+       DeclContext *foundDC,
        DeclContext *fromDC,
        TypeResolutionOptions options,
        bool isSpecialized,
@@ -418,8 +419,31 @@ Type TypeChecker::resolveTypeInContext(
   // FIXME: selfType should come from UnqualifiedLookup
   Type selfType;
   bool valid;
-  std::tie(selfType, valid) =
+
+  if (foundDC) {
+    if (!typeDecl->getDeclContext()->isTypeContext() ||
+        isa<GenericTypeParamDecl>(typeDecl)) {
+      selfType = Type();
+      valid = true;
+    } else {
+      // When looking up a nominal type declaration inside of a
+      // protocol extension, always use the nominal type and
+      // not the protocol 'Self' type.
+      if (isa<NominalTypeDecl>(typeDecl))
+        selfType = resolver->mapTypeIntoContext(
+          foundDC->getDeclaredInterfaceType());
+
+      // Otherwise, we want the protocol 'Self' type for
+      // substituting into alias types and associated types.
+      selfType = resolver->mapTypeIntoContext(
+        foundDC->getSelfInterfaceType());
+
+      valid = true;
+    }
+  } else {
+    std::tie(selfType, valid) =
       findDeclContextForType(*this, typeDecl, fromDC, options, resolver);
+  }
 
   if (!valid || (selfType && selfType->hasError()))
     return ErrorType::get(Context);
@@ -781,7 +805,7 @@ static Type resolveTypeDecl(TypeChecker &TC, TypeDecl *typeDecl, SourceLoc loc,
   // Resolve the type declaration to a specific type. How this occurs
   // depends on the current context and where the type was found.
   Type type =
-      TC.resolveTypeInContext(typeDecl, dc, options, generic, resolver);
+    TC.resolveTypeInContext(typeDecl, nullptr, dc, options, generic, resolver);
 
   if (type->is<UnboundGenericType>() && !generic &&
       !options.contains(TR_AllowUnboundGenerics) &&

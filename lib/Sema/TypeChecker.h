@@ -1013,7 +1013,9 @@ public:
   /// \param resolver The resolver for generic types.
   ///
   /// \returns the resolved type.
-  Type resolveTypeInContext(TypeDecl *typeDecl, DeclContext *fromDC,
+  Type resolveTypeInContext(TypeDecl *typeDecl,
+                            DeclContext *foundDC,
+                            DeclContext *fromDC,
                             TypeResolutionOptions options,
                             bool isSpecialized,
                             GenericTypeResolver *resolver = nullptr);
