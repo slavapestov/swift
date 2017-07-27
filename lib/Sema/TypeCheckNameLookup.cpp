@@ -16,6 +16,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "TypeChecker.h"
+#include "swift/AST/ExistentialLayout.h"
 #include "swift/AST/Initializer.h"
 #include "swift/AST/NameLookup.h"
 #include "swift/AST/ProtocolConformance.h"
@@ -121,24 +122,38 @@ namespace {
       if (!Options.contains(NameLookupFlags::ProtocolMembers) ||
           !isa<ProtocolDecl>(foundDC) ||
           isa<GenericTypeParamDecl>(found) ||
-          (isa<FuncDecl>(found) && cast<FuncDecl>(found)->isOperator()) ||
-          foundInType->isAnyExistentialType()) {
+          (isa<FuncDecl>(found) && cast<FuncDecl>(found)->isOperator())) {
         addResult(found);
         return;
       }
 
       assert(isa<ProtocolDecl>(foundDC));
 
+      if (foundInType->isExistentialType()) {
+        auto layout = foundInType->getExistentialLayout();
+        if (!layout.superclass) {
+          // FIXME: Should still work if this part is disabled?
+          addResult(found);
+          return;
+        }
+
+        foundInType = layout.superclass;
+      }
+
       // If we found something within the protocol itself, and our
       // search began somewhere that is not in a protocol or extension
       // thereof, remap this declaration to the witness.
+
+      // FIXME: try removing archetype check
+
+      // FIXME: try removing PerformConformanceCheck flag
       if (foundInType->is<ArchetypeType>() ||
           Options.contains(NameLookupFlags::PerformConformanceCheck)) {
         // Dig out the protocol conformance.
         auto conformance = TC.conformsToProtocol(foundInType, foundProto, DC,
                                                  conformanceOptions);
         if (!conformance) {
-          assert(false);
+          addResult(found);
           return;
         }
 
@@ -147,12 +162,6 @@ namespace {
           addResult(found);
           return;
         }
-
-        // If we're validating the protocol recursively, bail out.
-        #if 0
-        if (!foundProto->hasValidSignature())
-          return;
-        #endif
 
         // Dig out the witness.
         ValueDecl *witness = nullptr;
