@@ -131,13 +131,8 @@ namespace {
 
       if (foundInType->isExistentialType()) {
         auto layout = foundInType->getExistentialLayout();
-        if (!layout.superclass) {
-          // FIXME: Should still work if this part is disabled?
-          addResult(found);
-          return;
-        }
-
-        foundInType = layout.superclass;
+        if (layout.superclass)
+          foundInType = layout.superclass;
       }
 
       // If we found something within the protocol itself, and our
@@ -158,7 +153,8 @@ namespace {
         }
 
         if (conformance->isAbstract()) {
-          assert(foundInType->is<ArchetypeType>());
+          assert(foundInType->is<ArchetypeType>() ||
+                 foundInType->isExistentialType());
           addResult(found);
           return;
         }
