@@ -137,8 +137,10 @@ namespace {
         // Dig out the protocol conformance.
         auto conformance = TC.conformsToProtocol(foundInType, foundProto, DC,
                                                  conformanceOptions);
-        if (!conformance)
+        if (!conformance) {
+          assert(false);
           return;
+        }
 
         if (conformance->isAbstract()) {
           assert(foundInType->is<ArchetypeType>());
@@ -147,8 +149,10 @@ namespace {
         }
 
         // If we're validating the protocol recursively, bail out.
+        #if 0
         if (!foundProto->hasValidSignature())
           return;
+        #endif
 
         // Dig out the witness.
         ValueDecl *witness = nullptr;
