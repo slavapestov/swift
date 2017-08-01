@@ -2650,7 +2650,17 @@ namespace {
     }
 
     Expr *visitTupleExpr(TupleExpr *expr) {
-      return simplifyExprType(expr);
+      const TupleType *exprTy = cs.simplifyType(cs.getType(expr))->castTo<TupleType>();
+      for_each(exprTy->getElements().begin(), exprTy->getElements().end(),
+               expr->getElements().begin(),
+               [&](const TupleTypeElt &field, Expr *&elt) {
+        if (!field.getType()->isEqual(cs.simplifyType(cs.getType(elt)))) {
+          elt = coerceToType(elt, field.getType(),
+                             cs.getConstraintLocator(elt));
+        }
+      });
+
+      //return simplifyExprType(expr);
     }
 
     Expr *visitSubscriptExpr(SubscriptExpr *expr) {
