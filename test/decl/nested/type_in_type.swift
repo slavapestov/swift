@@ -387,6 +387,8 @@ func pets<T>(fur: T) -> Claws<Kitten>.Fangs<T> {
 
 func test() {
   let _: Claws<Kitten>.Fangs<Puppy> = pets(fur: Puppy())
+  let _: Claws.Fangs<Puppy> = pets(fur: Puppy())
+  let _: Claws.Fangs<Puppy> = Claws<Kitten>.Fangs()
 }
 
 // https://bugs.swift.org/browse/SR-4379
