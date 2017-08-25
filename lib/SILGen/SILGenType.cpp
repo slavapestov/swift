@@ -35,7 +35,7 @@ using namespace swift;
 using namespace Lowering;
 
 
-SILVTable::Entry
+Optional<SILVTable::Entry>
 SILGenModule::emitVTableMethod(ClassDecl *theClass,
                                SILDeclRef derived, SILDeclRef base) {
   assert(base.kind == derived.kind);
@@ -43,17 +43,33 @@ SILGenModule::emitVTableMethod(ClassDecl *theClass,
   auto *baseDecl = base.getDecl();
   auto *derivedDecl = derived.getDecl();
 
+  // Note: We intentionally don't support extension members here.
+  //
+  // Once extensions can override or introduce new vtable entries, this will
+  // all likely change anyway.
+  auto *baseClass = cast<ClassDecl>(baseDecl->getDeclContext());
+  auto *derivedClass = cast<ClassDecl>(derivedDecl->getDeclContext());
+
   // Figure out if the vtable entry comes from the superclass, in which
   // case we won't emit it if building a resilient module.
   SILVTable::Entry::Kind implKind;
-  if (baseDecl->getDeclContext()->getAsClassOrClassExtensionContext()
-      == theClass) {
+  if (baseClass == theClass) {
+    // This is a vtable entry for a method of the immediate class.
     implKind = SILVTable::Entry::Kind::Normal;
-  } else if (derivedDecl->getDeclContext()->getAsClassOrClassExtensionContext()
-             == theClass) {
+  } else if (derivedClass == theClass) {
+    // This is a vtable entry for a method of a base class, but it is being
+    // overridden in the immediate class.
     implKind = SILVTable::Entry::Kind::Override;
   } else {
+    // This vtable entry is copied from the superclass.
     implKind = SILVTable::Entry::Kind::Inherited;
+
+    // If the override is defined in a class from a different resilience
+    // domain, don't emit the vtable entry.
+    if (!derivedClass->hasFixedLayout(M.getSwiftModule(),
+                                      ResilienceExpansion::Maximal)) {
+      return None;
+    }
   }
 
   SILFunction *implFn;
@@ -73,7 +89,7 @@ SILGenModule::emitVTableMethod(ClassDecl *theClass,
 
   // As a fast path, if there is no override, definitely no thunk is necessary.
   if (derived == base)
-    return {base, implFn, implKind, implLinkage};
+    return SILVTable::Entry(base, implFn, implKind, implLinkage);
 
   // Determine the derived thunk type by lowering the derived type against the
   // abstraction pattern of the base.
@@ -89,7 +105,7 @@ SILGenModule::emitVTableMethod(ClassDecl *theClass,
   if (M.Types.checkFunctionForABIDifferences(derivedInfo.SILFnType,
                                              overrideInfo.SILFnType)
       == TypeConverter::ABIDifference::Trivial)
-    return {base, implFn, implKind, implLinkage};
+    return SILVTable::Entry(base, implFn, implKind, implLinkage);
 
   // Generate the thunk name.
   std::string name;
@@ -109,7 +125,7 @@ SILGenModule::emitVTableMethod(ClassDecl *theClass,
 
   // If we already emitted this thunk, reuse it.
   if (auto existingThunk = M.lookUpFunction(name))
-    return {base, existingThunk, implKind, implLinkage};
+    return SILVTable::Entry(base, existingThunk, implKind, implLinkage);
 
   // Emit the thunk.
   SILLocation loc(derivedDecl);
@@ -126,7 +142,7 @@ SILGenModule::emitVTableMethod(ClassDecl *theClass,
                      overrideInfo.LoweredType,
                      derivedInfo.LoweredType);
 
-  return {base, thunk, implKind, implLinkage};
+  return SILVTable::Entry(base, thunk, implKind, implLinkage);
 }
 
 bool SILGenModule::requiresObjCMethodEntryPoint(FuncDecl *method) {
@@ -190,7 +206,8 @@ public:
       std::tie(baseRef, derivedRef) = method;
 
       auto entry = SGM.emitVTableMethod(theClass, derivedRef, baseRef);
-      vtableEntries.push_back(entry);
+      if (entry)
+        vtableEntries.push_back(*entry);
     }
 
     // Create the vtable.
