@@ -32,6 +32,7 @@
 namespace swift {
 
 class ExtensionDecl;
+class LazyMemberLoader;
 class ModuleDecl;
 
 /// Keeps track of the protocols to which a particular nominal type conforms.
