@@ -5,6 +5,7 @@
 // RUN: %target-build-swift %S/main.swift -I %t/linker/ -L %t/linker/ -llibrary -o %t/linker/main
 
 // REQUIRES: executable_test
+// REQUIRES: objc_interop
 
 import Foundation
 import library
