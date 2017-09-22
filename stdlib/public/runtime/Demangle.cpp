@@ -67,7 +67,7 @@ _buildDemanglingForNominalType(const Metadata *type, Demangle::Demangler &Dem) {
     while (classType->isTypeMetadata() && classType->isArtificialSubclass())
       classType = classType->SuperClass;
 #endif
-    parent = classType->getParentType(classType->getDescription());
+    parent = nullptr; // FIXME classType->getParentType(classType->getDescription());
     boundGenericKind = Node::Kind::BoundGenericClass;
     description = classType->getDescription();
     break;
@@ -75,14 +75,14 @@ _buildDemanglingForNominalType(const Metadata *type, Demangle::Demangler &Dem) {
   case MetadataKind::Enum:
   case MetadataKind::Optional: {
     auto enumType = static_cast<const EnumMetadata *>(type);
-    parent = enumType->Parent;
+    parent = nullptr; // FIXME enumType->Parent;
     boundGenericKind = Node::Kind::BoundGenericEnum;
     description = enumType->Description;
     break;
   }
   case MetadataKind::Struct: {
     auto structType = static_cast<const StructMetadata *>(type);
-    parent = structType->Parent;
+    parent = nullptr; // FIXME structType->Parent;
     boundGenericKind = Node::Kind::BoundGenericStructure;
     description = structType->Description;
     break;

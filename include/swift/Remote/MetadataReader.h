@@ -934,33 +934,6 @@ public:
     swift_runtime_unreachable("Unhandled IsaEncodingKind in switch.");
   }
 
-  /// Read the parent type metadata from a nested nominal type metadata.
-  std::pair<bool, StoredPointer>
-  readParentFromMetadata(StoredPointer metadata) {
-    auto Meta = readMetadata(metadata);
-    if (!Meta)
-      return std::make_pair(false, 0);
-
-    auto descriptorAddress = readAddressOfNominalTypeDescriptor(Meta);
-    if (!descriptorAddress)
-      return std::make_pair(false, 0);
-
-    // Read the nominal type descriptor.
-    auto descriptor = readNominalTypeDescriptor(descriptorAddress);
-    if (!descriptor)
-      return std::make_pair(false, 0);
-
-    // Read the parent type if the type has one.
-    if (descriptor->GenericParams.Flags.hasParent()) {
-      StoredPointer parentAddress = getNominalParent(Meta, descriptor);
-      if (!parentAddress)
-        return std::make_pair(false, 0);
-      return std::make_pair(true, parentAddress);
-    }
-
-    return std::make_pair(false, 0);
-  }
-
   /// Read a single generic type argument from a bound generic type
   /// metadata.
   std::pair<bool, StoredPointer>
@@ -1389,6 +1362,8 @@ private:
 
     // Read the parent type if the type has one.
     BuiltType parent = BuiltType();
+    // FIXME
+    #if 0
     if (descriptor->GenericParams.Flags.hasParent()) {
       StoredPointer parentAddress = getNominalParent(metadata, descriptor);
       if (!parentAddress)
@@ -1396,6 +1371,7 @@ private:
       parent = readTypeFromMetadata(parentAddress);
       if (!parent) return BuiltType();
     }
+    #endif
 
     BuiltType nominal;
     if (descriptor->GenericParams.NumPrimaryParams) {
