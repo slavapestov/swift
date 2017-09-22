@@ -30,6 +30,25 @@ Demangle::NodePointer
 swift::_swift_buildDemanglingForMetadata(const Metadata *type,
                                          Demangle::Demangler &Dem);
 
+static Demangle::NodePointer
+_applyGenericArguments(const Metadata * const *genericArgs,
+                       const GenericContextDescriptor *genericContexts,
+                       Node::Kind boundGenericKind,
+                       Demangle::NodePointer node) {
+
+  // if there's a parent, recurse in the parent and increment genericArgs/genericContexts
+  // apply the args.
+
+  auto typeNode = node;
+  if (typeNode->getKind() == Node::Kind::Type)
+    typeNode = typeNode->getChild(0);
+
+  auto parentNode = typeNode->getChild(0);
+  if (parentNode->getKind() == Node::Kind::Type ||
+      parentNode->getKind() == Node::Kind::{Struct, Class, Enum}... ||
+      parentNode->getKind() == Node::Kind::{Struct, Class, Enum}... ||
+}
+                       
 // Build a demangled type tree for a nominal type.
 static Demangle::NodePointer
 _buildDemanglingForNominalType(const Metadata *type, Demangle::Demangler &Dem) {
@@ -76,6 +95,7 @@ _buildDemanglingForNominalType(const Metadata *type, Demangle::Demangler &Dem) {
   auto node = Dem.demangleType(StringRef(description->Name));
   assert(node->getKind() == Node::Kind::Type);
 
+  #if 0
   // Demangle the parent.
   if (parent) {
     auto parentNode = _swift_buildDemanglingForMetadata(parent, Dem);
@@ -91,6 +111,7 @@ _buildDemanglingForNominalType(const Metadata *type, Demangle::Demangler &Dem) {
     newNode->addChild(newTypeNode, Dem);
     node = newNode;
   }
+  #endif
 
   // If generic, demangle the type parameters.
   if (description->GenericParams.NumPrimaryParams > 0) {
