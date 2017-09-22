@@ -2200,13 +2200,25 @@ namespace {
       for (auto *outer = ntd; outer != nullptr;
            outer = outer->getDeclContext()
                ->getAsNominalTypeOrNominalTypeExtensionContext()) {
+        unsigned genericParamsAtDepth = 0;
         if (auto *genericParams = outer->getGenericParams()) {
-          unsigned genericParamsAtDepth = genericParams->getParams().size();
-          numPrimaryParams.push_back(genericParamsAtDepth);
-          totalGenericParams += genericParamsAtDepth;
-        } else {
-          numPrimaryParams.push_back(0);
+          for (auto *paramDecl : *genericParams) {
+            auto contextTy = ntd->mapTypeIntoContext(
+                paramDecl->getDeclaredInterfaceType());
+            // Skip parameters which have been made concrete, because they do
+            // not appear in type metadata.
+            //
+            // FIXME: We should emit information about same-type constraints
+            // as well as conformance constraints, so that clients can
+            // reconstruct the full generic signature of the type, including
+            // fully-concrete parameters.
+            if (contextTy->is<ArchetypeType>()) {
+              totalGenericParams++;
+              genericParamsAtDepth++;
+            }
+          }
         }
+        numPrimaryParams.push_back(genericParamsAtDepth);
       }
 
       // This assertion will fail once we have generic types nested
