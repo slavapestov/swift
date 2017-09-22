@@ -185,4 +185,17 @@ TypeNameTests.test("Nested") {
               _typeName(SomeOuterGenericClass<String>.SomeInnerGenericStruct<Int>.self));
 }
 
+extension SomeOuterGenericClass where T == Int {
+  struct AnotherInnerStruct {}
+  struct AnotherInnerGenericStruct<U> {}
+}
+
+TypeNameTests.test("NestedExtension") {
+  expectEqual("main.SomeOuterGenericClass.AnotherInnerStruct",
+              _typeName(SomeOuterGenericClass<Int>.AnotherInnerStruct.self));
+  expectEqual("main.SomeOuterGenericClass.AnotherInnerGenericStruct<Swift.String>",
+              _typeName(SomeOuterGenericClass<Int>.AnotherInnerGenericStruct<String>.self));
+
+}
+
 runAllTests()
