@@ -142,8 +142,7 @@ namespace {
     static unsigned getNumGenericArguments(IRGenModule &IGM,
                                            NominalTypeDecl *nominal) {
       GenericTypeRequirements requirements(IGM, nominal);
-      return unsigned(requirements.hasParentType())
-               + requirements.getNumTypeRequirements();
+      return requirements.getNumTypeRequirements();
     }
 
     void collectTypes(IRGenModule &IGM, NominalTypeDecl *nominal) {
@@ -153,10 +152,6 @@ namespace {
 
     void collectTypes(IRGenModule &IGM,
                       const GenericTypeRequirements &requirements) {
-      if (requirements.hasParentType()) {
-        Types.push_back(IGM.TypeMetadataPtrTy);
-      }
-
       for (auto &requirement : requirements.getRequirements()) {
         if (requirement.Protocol) {
           Types.push_back(IGM.WitnessTablePtrTy);
@@ -180,10 +175,6 @@ namespace {
       }
 
       GenericTypeRequirements requirements(IGF.IGM, decl);
-
-      if (requirements.hasParentType()) {
-        Values.push_back(IGF.emitTypeMetadataRef(parentType));
-      }
 
       auto subs =
         type->getContextSubstitutionMap(IGF.IGM.getSwiftModule(), decl);
@@ -216,14 +207,6 @@ static void emitPolymorphicParametersFromArray(IRGenFunction &IGF,
     return typeDecl->mapTypeIntoContext(type)
              ->getCanonicalType();
   };
-
-  // If we have a parent type, it's the first parameter.
-  if (requirements.hasParentType()) {
-    auto parentType = getInContext(requirements.getParentType());
-    llvm::Value *parentMetadata = IGF.Builder.CreateLoad(array);
-    array = IGF.Builder.CreateConstArrayGEP(array, 1, IGF.IGM.getPointerSize());
-    IGF.bindLocalTypeDataFromTypeMetadata(parentType, IsExact, parentMetadata);
-  }
 
   // Okay, bind everything else from the context.
   requirements.bindFromBuffer(IGF, array, getInContext);
