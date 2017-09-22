@@ -2193,14 +2193,45 @@ namespace {
         if (layout.getVTableSize() > 0)
           flags = flags.withHasVTable(true);
       }
-      B.addInt32(flags.getIntValue());
+
+      // Calculate the number of generic parameters at each nesting depth.
+      unsigned totalGenericParams = 0;
+      SmallVector<unsigned, 2> numPrimaryParams;
+      for (auto *outer = ntd; outer != nullptr;
+           outer = outer->getDeclContext()
+               ->getAsNominalTypeOrNominalTypeExtensionContext()) {
+        if (auto *genericParams = outer->getGenericParams()) {
+          unsigned genericParamsAtDepth = genericParams->getParams().size();
+          numPrimaryParams.push_back(genericParamsAtDepth);
+          totalGenericParams += genericParamsAtDepth;
+        } else {
+          numPrimaryParams.push_back(0);
+        }
+      }
+
+      // This assertion will fail once we have generic types nested
+      // inside generic functions or other local generic contexts.
+      //
+      // FIXME: Enable this once we stop fulfilling generic parameters
+      // from parent type metadata.
+      //
+      // assert(totalGenericParams == requirements.getNumTypeRequirements());
+
+      // Emit the nesting depth.
+      B.addInt16(numPrimaryParams.size());
+
+      // Emit the flags.
+      B.addInt16(flags.getIntValue());
+
+      // Emit the number of generic parameters at each nesting depth.
+      std::reverse(numPrimaryParams.begin(), numPrimaryParams.end());
+      for (auto count : numPrimaryParams)
+        B.addInt32(count);
 
       // TODO: provide reflective descriptions of the type and
       // conformance requirements stored here.
-
-      // };
     }
-    
+
     llvm::Constant *emit() {
       asImpl().layout();
 
