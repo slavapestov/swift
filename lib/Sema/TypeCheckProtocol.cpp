@@ -1072,7 +1072,7 @@ RequirementEnvironment::RequirementEnvironment(
            ctx,
            TypeChecker::LookUpConformance(tc, conformanceDC));
 
-  SmallVector<GenericTypeParamType*, 4> allGenericParams;
+  bool isGeneric = false;
 
   // Add the generic signature of the context of the conformance. This includes
   // the generic parameters from the conforming type as well as any additional
@@ -1080,12 +1080,10 @@ RequirementEnvironment::RequirementEnvironment(
   // conformance (i.e., if the conformance is conditional).
   unsigned depth = 0;
   if (auto *conformanceSig = conformanceDC->getGenericSignatureOfContext()) {
-    // Use the canonical signature here.
-    conformanceSig = conformanceSig->getCanonicalSignature();
-    allGenericParams.append(conformanceSig->getGenericParams().begin(),
-                            conformanceSig->getGenericParams().end());
-    builder.addGenericSignature(conformanceSig);
-    depth = allGenericParams.back()->getDepth() + 1;
+    builder.addGenericSignature(conformanceSig->getCanonicalSignature());
+    auto genericParams = conformanceSig->getGenericParams();
+    depth = genericParams.back()->getDepth() + 1;
+    isGeneric = true;
   }
 
   // Add the generic signature of the requirement, substituting our concrete
@@ -1137,12 +1135,12 @@ RequirementEnvironment::RequirementEnvironment(
     auto substGenericParam =
       GenericTypeParamType::get(depth, genericParam->getIndex(), ctx);
 
-    allGenericParams.push_back(substGenericParam);
     builder.addGenericParameter(substGenericParam);
+    isGeneric = true;
   }
 
   // If there were no generic parameters, we're done.
-  if (allGenericParams.empty()) return;
+  if (!isGeneric) return;
 
   // Next, add each of the requirements (mapped from the requirement's
   // interface types into the abstract type parameters).
