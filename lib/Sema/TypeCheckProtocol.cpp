@@ -2335,25 +2335,31 @@ static Type getRequirementTypeForDisplay(ModuleDecl *module,
 
   // Replace generic type parameters and associated types with their
   // witnesses, when we have them.
-  auto selfTy = conformance->getProtocol()->getSelfInterfaceType();
-  type = type.transform([&](Type type) -> Type {
-    // If a dependent member refers to an associated type, replace it.
-    if (auto member = type->getAs<DependentMemberType>()) {
-      if (member->getBase()->isEqual(selfTy)) {
-        // FIXME: Could handle inherited conformances here.
-        if (conformance->hasTypeWitness(member->getAssocType()))
-          return conformance->getTypeWitness(member->getAssocType(), nullptr);
+  auto concreteTy = conformance->getType();
+
+  auto substSelfType = [conformance](Type type, Type concreteTy) -> Type {
+    auto subMap = SubstitutionMap::getProtocolSubstitutions(
+        conformance->getProtocol(), concreteTy,
+        ProtocolConformanceRef(conformance));
+    return type.subst(subMap, SubstFlags::UseErrorType);
+  };
+
+  // For method requirements in a class, print the return type as 'Self'.
+  if (auto *funcDecl = dyn_cast<FuncDecl>(req)) {
+    // FIXME: This relies on the GenericFunctionType subst() behavior...
+    auto substTy = substSelfType(type, concreteTy);
+    if (auto *funcTy = type->getAs<AnyFunctionType>()) {
+      auto resultTy = funcTy->getResult();
+      if (conformance->getDeclContext()->getAsClassOrClassExtensionContext()) {
+        auto &ctx = module->getASTContext();
+        resultTy = substSelfType(resultTy,
+                                 DynamicSelfType::get(concreteTy, ctx));
       }
+      return FunctionType::get(substTy->castTo<AnyFunctionType>()->getInput(),
+                               resultTy);
     }
+  }
 
-    // Replace 'Self' with the conforming type.
-    if (type->isEqual(selfTy))
-      return conformance->getType();
-
-    return type;
-  });
-
-  //
   return type;
 }
 

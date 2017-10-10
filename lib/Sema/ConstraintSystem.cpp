@@ -847,7 +847,7 @@ ConstraintSystem::getTypeOfReference(ValueDecl *value,
 
     // If this is a method whose result type is dynamic Self, replace
     // DynamicSelf with the actual object type.
-    if (!func->getDeclContext()->getAsProtocolOrProtocolExtensionContext()) {
+    if (func->getDeclContext()->getAsClassOrClassExtensionContext()) {
       if (func->hasDynamicSelf()) {
         Type selfTy = openedFnType->getInput()->getRValueInstanceType();
         openedType = openedType->replaceCovariantResultType(
@@ -855,9 +855,6 @@ ConstraintSystem::getTypeOfReference(ValueDecl *value,
                        func->getNumParameterLists());
         openedFnType = openedType->castTo<FunctionType>();
       }
-    } else {
-      openedType = openedType->eraseDynamicSelfType();
-      openedFnType = openedType->castTo<FunctionType>();
     }
 
     // The reference implicitly binds 'self'.
@@ -1259,7 +1256,7 @@ ConstraintSystem::getTypeOfMemberReference(
                                 locator, replacements, innerDC, outerDC,
                                 /*skipProtocolSelfConstraint=*/true);
 
-  if (!outerDC->getAsProtocolOrProtocolExtensionContext()) {
+  if (outerDC->getAsClassOrClassExtensionContext()) {
     // Class methods returning Self as well as constructors get the
     // result replaced with the base object type.
     if (auto func = dyn_cast<AbstractFunctionDecl>(value)) {
@@ -1272,11 +1269,6 @@ ConstraintSystem::getTypeOfMemberReference(
             func->getNumParameterLists());
       }
     }
-  } else {
-    // Protocol requirements returning Self have a dynamic Self return
-    // type. Erase the dynamic Self since it only comes into play during
-    // protocol conformance checking.
-    openedType = openedType->eraseDynamicSelfType();
   }
 
   // If we are looking at a member of an existential, open the existential.

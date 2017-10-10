@@ -3773,9 +3773,15 @@ namespace {
       // If the method has a related result type that is representable
       // in Swift as DynamicSelf, do so.
       if (decl->hasRelatedResultType()) {
-        result->setDynamicSelf(true);
-        resultTy = DynamicSelfType::get(dc->getSelfInterfaceType(),
-                                        Impl.SwiftContext);
+        if (dc->getAsClassOrClassExtensionContext()) {
+          result->setDynamicSelf(true);
+          resultTy = DynamicSelfType::get(dc->getSelfInterfaceType(),
+                                          Impl.SwiftContext);
+        } else {
+          assert(isa<ProtocolDecl>(dc) && "related result type in "
+                 "non-class, non-protocol declaration?");
+          resultTy = dc->getSelfInterfaceType();
+        }
 
         OptionalTypeKind nullability = OTK_ImplicitlyUnwrappedOptional;
         if (auto typeNullability = decl->getReturnType()->getNullability(

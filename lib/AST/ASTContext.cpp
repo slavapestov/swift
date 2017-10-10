@@ -3425,9 +3425,11 @@ ModuleType *ModuleType::get(ModuleDecl *M) {
 }
 
 DynamicSelfType *DynamicSelfType::get(Type selfType, const ASTContext &ctx) {
-  assert(selfType->isMaterializable()
-         && "non-materializable dynamic self?");
-  
+  auto *nominal = selfType->getAnyNominal();
+  assert(nominal && "non-nominal dynamic self?");
+  assert(isa<ClassDecl>(nominal) && "non-class dynamic self?");
+  (void) nominal;
+
   auto properties = selfType->getRecursiveProperties();
   auto arena = getArena(properties);
 

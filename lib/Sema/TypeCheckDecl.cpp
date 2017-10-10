@@ -4979,9 +4979,8 @@ public:
     if (!typeRepr)
       return false;
 
-    // 'Self' on a free function is not dynamic 'Self'.
-    if (!func->getDeclContext()->getAsClassOrClassExtensionContext() &&
-        !isa<ProtocolDecl>(func->getDeclContext()))
+    // Only class methods support dynamic 'Self'.
+    if (!func->getDeclContext()->getAsClassOrClassExtensionContext())
       return false;
 
     // 'Self' on a property accessor is not dynamic 'Self'...even on a read-only

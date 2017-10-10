@@ -146,8 +146,6 @@ void ASTPrinter::printTypeRef(Type T, const TypeDecl *RefTo, Identifier Name) {
   if (isa<GenericTypeParamDecl>(RefTo)) {
     Context = PrintNameContext::GenericParameter;
   } else if (T && T->is<DynamicSelfType>()) {
-    assert(T->castTo<DynamicSelfType>()->getSelfType()->getAnyNominal() &&
-           "protocol Self handled as GenericTypeParamDecl");
     Context = PrintNameContext::ClassDynamicSelf;
   }
 
@@ -3444,17 +3442,9 @@ public:
 
     // Try to print as a reference to the static type so that we will get a USR,
     // in cursor info.
-    auto staticSelfT = T->getSelfType();
-
-    if (auto *NTD = staticSelfT->getAnyNominal()) {
-      if (isa<ClassDecl>(NTD)) {
-        auto Name = T->getASTContext().Id_Self;
-        Printer.printTypeRef(T, NTD, Name);
-        return;
-      }
-    }
-
-    visit(staticSelfT);
+    auto *NTD = T->getSelfType()->getAnyNominal();
+    auto Name = T->getASTContext().Id_Self;
+    Printer.printTypeRef(T, NTD, Name);
   }
 
   void printFunctionExtInfo(AnyFunctionType::ExtInfo info) {
