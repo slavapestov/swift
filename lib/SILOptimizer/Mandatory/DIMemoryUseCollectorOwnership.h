@@ -270,10 +270,13 @@ struct DIElementUseInfo {
   SmallVector<DIMemoryUse, 16> Uses;
   SmallVector<SILInstruction *, 4> Releases;
   TinyPtrVector<TermInst *> FailableInits;
+  TinyPtrVector<SILInstruction *> StoresToSelf;
 
   void trackUse(DIMemoryUse Use) { Uses.push_back(Use); }
 
   void trackDestroy(SILInstruction *Destroy) { Releases.push_back(Destroy); }
+
+  void trackStoreToSelf(SILInstruction *I);
 
   void trackFailableInitCall(const DIMemoryObjectInfo &TheMemory,
                              SILInstruction *I);
