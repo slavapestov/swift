@@ -4127,8 +4127,19 @@ public:
             TC.checkTypeModifyingDeclAttributes(var);
 
           // Decide whether we should suppress default initialization.
-          if (!PBD->isDefaultInitializable(i))
-            continue;
+          //
+          // Note: in Swift 4, we screwed up: a property of Optional<Int> does
+          // not have to be initialized in a designated initializer, but still
+          // inhibits the implicit no-argument initializer from being synthesized.
+          //
+          // In Swift 5 mode, use the right condition here.
+          if (TC.Context.isSwiftVersionAtLeast(5)) {
+            if (!PBD->isDefaultInitializable(i))
+              continue;
+          } else {
+            if (PBD->getPattern(i)->isNeverDefaultInitializable())
+              continue;
+          }
 
           auto type = PBD->getPattern(i)->getType();
           if (auto defaultInit = buildDefaultInitializer(TC, type)) {
