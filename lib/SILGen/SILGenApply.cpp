@@ -498,6 +498,30 @@ public:
     return result;
   }
 
+  SILDeclRef getConstantAtUncurryLevel(unsigned level) const {
+    unsigned uncurryLevel = Constant.getUncurryLevel();
+    assert(level <= uncurryLevel &&
+           "uncurrying past natural uncurry level of standalone function");
+    if (level < uncurryLevel) {
+      assert(level == 0);
+      auto constant = Constant.asCurried();
+
+      // If we're currying a direct reference to a class-dispatched method,
+      // make sure we emit the right set of thunks.
+      if (kind == Kind::StandaloneFunction) {
+        if (auto func = Constant.getAbstractFunctionDecl()) {
+          if (getMethodDispatch(func) == MethodDispatch::Class) {
+            return constant.asDirectReference(true);
+          }
+        }
+      }
+
+      return constant;
+    }
+
+    return Constant;
+  }
+
   ManagedValue getFnValueAtUncurryLevel(SILGenFunction &SGF,
                                         unsigned level) const & {
     Optional<SILDeclRef> constant = None;
@@ -505,14 +529,13 @@ public:
     if (!Constant) {
       assert(level == 0 && "can't curry indirect function");
     } else {
-      unsigned uncurryLevel = Constant.getUncurryLevel();
-      assert(level <= uncurryLevel &&
-             "uncurrying past natural uncurry level of standalone function");
-      if (level < uncurryLevel) {
-        assert(level == 0);
-        constant = Constant.asCurried();
-      } else {
-        constant = Constant;
+      constant = getConstantAtUncurryLevel(level);
+
+      // If the call is curried, emit a direct call to the curry thunk.
+      if (constant->isCurried) {
+        auto constantInfo = SGF.getConstantInfo(*constant);
+        SILValue ref = SGF.emitGlobalFunctionRef(Loc, *constant, constantInfo);
+        return ManagedValue::forUnmanaged(ref);
       }
     }
 
@@ -522,36 +545,13 @@ public:
       return IndirectValue;
 
     case Kind::StandaloneFunction: {
-      // If we're currying a direct reference to a class-dispatched method,
-      // make sure we emit the right set of thunks.
-      if (constant->isCurried && Constant.hasDecl())
-        if (auto func = Constant.getAbstractFunctionDecl())
-          if (getMethodDispatch(func) == MethodDispatch::Class)
-            constant = constant->asDirectReference(true);
-
       auto constantInfo = SGF.getConstantInfo(*constant);
       SILValue ref = SGF.emitGlobalFunctionRef(Loc, *constant, constantInfo);
       return ManagedValue::forUnmanaged(ref);
     }
-    case Kind::EnumElement: {
-      auto constantInfo = SGF.getConstantInfo(*constant);
-
-      // We should not end up here if the enum constructor call is fully
-      // applied.
-      assert(constant->isCurried);
-
-      SILValue ref = SGF.emitGlobalFunctionRef(Loc, *constant, constantInfo);
-      return ManagedValue::forUnmanaged(ref);
-    }
+    case Kind::EnumElement:
+      llvm_unreachable("Should have been curried");
     case Kind::ClassMethod: {
-      auto constantInfo = SGF.getConstantInfo(*constant);
-
-      // If the call is curried, emit a direct call to the curry thunk.
-      if (constant->isCurried) {
-        SILValue ref = SGF.emitGlobalFunctionRef(Loc, *constant, constantInfo);
-        return ManagedValue::forUnmanaged(ref);
-      }
-
       auto methodTy = SGF.SGM.Types.getConstantOverrideType(*constant);
 
       // Otherwise, do the dynamic dispatch inline.
@@ -594,12 +594,6 @@ public:
     case Kind::WitnessMethod: {
       auto constantInfo = SGF.getConstantInfo(*constant);
 
-      // If the call is curried, emit a direct call to the curry thunk.
-      if (constant->isCurried) {
-        SILValue ref = SGF.emitGlobalFunctionRef(Loc, *constant, constantInfo);
-        return ManagedValue::forUnmanaged(ref);
-      }
-
       auto proto = Constant.getDecl()
                        ->getDeclContext()
                        ->getAsProtocolOrProtocolExtensionContext();
@@ -615,7 +609,6 @@ public:
       ;
     }
     case Kind::DynamicMethod: {
-      assert(!constant->isCurried);
       assert(constant->isForeign);
 
       // Lower the substituted type from the AST, which should have any generic
@@ -650,14 +643,12 @@ public:
     if (!Constant) {
       assert(level == 0 && "can't curry indirect function");
     } else {
-      unsigned uncurryLevel = Constant.getUncurryLevel();
-      assert(level <= uncurryLevel &&
-             "uncurrying past natural uncurry level of standalone function");
-      if (level < uncurryLevel) {
-        assert(level == 0);
-        constant = Constant.asCurried();
-      } else {
-        constant = Constant;
+      constant = getConstantAtUncurryLevel(level);
+
+      // If the call is curried, emit a direct call to the curry thunk.
+      if (constant->isCurried) {
+        auto constantInfo = SGF.getConstantInfo(*constant);
+        return createCalleeTypeInfo(SGF, constant, constantInfo.getSILType());
       }
     }
 
@@ -667,38 +658,16 @@ public:
       return createCalleeTypeInfo(SGF, constant, IndirectValue.getType());
 
     case Kind::StandaloneFunction: {
-      // If we're currying a direct reference to a class-dispatched method,
-      // make sure we emit the right set of thunks.
-      if (constant->isCurried && Constant.hasDecl())
-        if (auto func = Constant.getAbstractFunctionDecl())
-          if (getMethodDispatch(func) == MethodDispatch::Class)
-            constant = constant->asDirectReference(true);
-
       auto constantInfo = SGF.getConstantInfo(*constant);
       return createCalleeTypeInfo(SGF, constant, constantInfo.getSILType());
-      ;
     }
-    case Kind::EnumElement: {
-      auto constantInfo = SGF.getConstantInfo(*constant);
-
-      // We should not end up here if the enum constructor call is fully
-      // applied.
-      assert(constant->isCurried);
-      return createCalleeTypeInfo(SGF, constant, constantInfo.getSILType());
-    }
+    case Kind::EnumElement:
+      llvm_unreachable("Should have been curried");
     case Kind::ClassMethod: {
-      // If the call is curried, emit a direct call to the curry thunk.
-      if (constant->isCurried) {
-        auto constantInfo = SGF.getConstantInfo(*constant);
-        return createCalleeTypeInfo(SGF, constant, constantInfo.getSILType());
-      }
-
-      // Otherwise, grab the override info.
       auto constantInfo = SGF.SGM.Types.getConstantOverrideInfo(*constant);
       return createCalleeTypeInfo(SGF, constant, constantInfo.getSILType());
     }
     case Kind::SuperMethod: {
-      assert(!constant->isCurried);
       auto base = SGF.SGM.Types.getOverriddenVTableEntry(*constant);
       auto constantInfo =
           SGF.SGM.Types.getConstantOverrideInfo(*constant, base);
