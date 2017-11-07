@@ -64,16 +64,6 @@ getIndirectApplyAbstractionPattern(SILGenFunction &SGF,
   llvm_unreachable("bad representation");
 }
 
-static CanType getDynamicMethodSelfType(SILGenFunction &SGF,
-                                        const ArgumentSource &proto,
-                                        ValueDecl *member) {
-  if (member->isInstanceMember()) {
-    return SGF.getASTContext().getAnyObjectType();
-  } else {
-    return proto.getSILSubstType(SGF).getSwiftRValueType();
-  }
-}
-
 /// Return the formal type for the partial-apply result type of a
 /// dynamic method invocation.
 static CanFunctionType
@@ -398,12 +388,10 @@ public:
   }
   static Callee forDynamic(SILGenFunction &SGF, ArgumentSource &&arg,
                            SILDeclRef c, const SubstitutionList &constantSubs,
-                           CanAnyFunctionType partialSubstFormalType,
+                           CanAnyFunctionType substFormalType,
                            SubstitutionList subs, SILLocation l) {
     auto &ci = SGF.getConstantInfo(c);
     AbstractionPattern origFormalType = ci.FormalPattern;
-
-    auto selfType = getDynamicMethodSelfType(SGF, arg, c.getDecl());
 
     // Replace the original self type with the partially-applied subst type.
     auto origFormalFnType = cast<AnyFunctionType>(origFormalType.getType());
@@ -418,15 +406,7 @@ public:
         cast<FunctionType>(genericFnType->substGenericArgs(constantSubs)
                                         ->getCanonicalType());
     }
-    origFormalFnType = CanFunctionType::get(selfType,
-                                            origFormalFnType.getResult(),
-                                            origFormalFnType->getExtInfo());
     origFormalType.rewriteType(CanGenericSignature(), origFormalFnType);
-
-    // Add the self type clause to the partially-applied subst type.
-    auto substFormalType = CanFunctionType::get(selfType,
-                                                partialSubstFormalType,
-                                                origFormalFnType->getExtInfo());
 
     return Callee(Kind::DynamicMethod, SGF, std::move(arg), c, origFormalType,
                   substFormalType, subs, l);
@@ -518,22 +498,17 @@ public:
     return Constant;
   }
 
-  SILType getDynamicMethodType(SILGenFunction &SGF) const {
+  SILType getDynamicMethodType(SILModule &M) const {
     // Lower the substituted type from the AST, which should have any generic
     // parameters in the original signature erased to their upper bounds.
     auto substFormalType = getSubstFormalType();
     auto objcFormalType = substFormalType.withExtInfo(
       substFormalType->getExtInfo().withSILRepresentation(
         SILFunctionTypeRepresentation::ObjCMethod));
-    auto fnType = SGF.SGM.M.Types.getUncachedSILFunctionTypeForConstant(
+    auto fnType = M.Types.getUncachedSILFunctionTypeForConstant(
         Constant, objcFormalType);
 
-    auto closureType = replaceSelfTypeForDynamicLookup(
-        SGF.getASTContext(), fnType,
-        SelfValue.getValue().getSILSubstType(SGF).getSwiftRValueType(),
-        Constant);
-
-    return SILType::getPrimitiveObjectType(closureType);
+    return SILType::getPrimitiveObjectType(fnType);
   }
 
   ManagedValue getFnValue(SILGenFunction &SGF, bool isCurried) const & {
@@ -621,7 +596,7 @@ public:
     }
     case Kind::DynamicMethod: {
       assert(constant->isForeign);
-      auto closureType = getDynamicMethodType(SGF);
+      auto closureType = getDynamicMethodType(SGF.SGM.M);
 
       Scope S(SGF, Loc);
       ManagedValue self =
@@ -675,7 +650,7 @@ public:
       return createCalleeTypeInfo(SGF, constant, constantInfo.getSILType());
     }
     case Kind::DynamicMethod: {
-      auto formalType = getDynamicMethodType(SGF);
+      auto formalType = getDynamicMethodType(SGF.SGM.M);
       return createCalleeTypeInfo(SGF, constant, formalType);
     }
     }
@@ -1461,6 +1436,10 @@ public:
       auto substFormalType =
         cast<FunctionType>(dynamicMemberRef->getType()->getCanonicalType()
                                             .getAnyOptionalObjectType());
+      substFormalType = CanFunctionType::get(
+        dynamicMemberRef->getBase()->getType()->getCanonicalType(),
+        substFormalType, AnyFunctionType::ExtInfo());
+
       setCallee(Callee::forDynamic(SGF, baseArgSource.delayedBorrow(SGF),
                                    member, memberRef.getSubstitutions(),
                                    substFormalType, {}, e));
