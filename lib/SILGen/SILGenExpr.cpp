@@ -2562,7 +2562,7 @@ SILGenFunction::emitApplyOfDefaultArgGenerator(SILLocation loc,
 
   auto substFnType = fnType->substGenericArgs(SGM.M, subs);
 
-  CalleeTypeInfo calleeTypeInfo(substFnType, origResultType, resultType);
+  CalleeTypeInfo calleeTypeInfo(fnType, substFnType, origResultType, resultType);
   ResultPlanPtr resultPtr =
       ResultPlanBuilder::computeResultPlan(*this, calleeTypeInfo, loc, C);
   ArgumentScope argScope(*this, loc);
@@ -2585,7 +2585,7 @@ RValue SILGenFunction::emitApplyOfStoredPropertyInitializer(
 
   auto substFnType = fnType->substGenericArgs(SGM.M, subs);
 
-  CalleeTypeInfo calleeTypeInfo(substFnType, origResultType, resultType);
+  CalleeTypeInfo calleeTypeInfo(fnType, substFnType, origResultType, resultType);
   ResultPlanPtr resultPlan =
       ResultPlanBuilder::computeResultPlan(*this, calleeTypeInfo, loc, C);
   ArgumentScope argScope(*this, loc);
@@ -3352,7 +3352,8 @@ getOrCreateKeyPathEqualsAndHash(SILGenFunction &SGF,
     auto equatableProtocol = C.getProtocol(KnownProtocolKind::Equatable);
     auto equalsMethod = equatableProtocol->lookupDirect(C.Id_EqualsOperator)[0];
     auto equalsRef = SILDeclRef(equalsMethod);
-    auto equalsTy = subSGF.SGM.Types.getConstantType(equalsRef);
+    auto equalsTy = subSGF.SGM.Types.getConstantType(equalsRef)
+      .castTo<SILFunctionType>();
     
     auto hashableSig = C.getExistentialSignature(
       hashableProto->getDeclaredType()->getCanonicalType(),
@@ -3383,11 +3384,10 @@ getOrCreateKeyPathEqualsAndHash(SILGenFunction &SGF,
     
       auto equalsWitness = subSGF.B.createWitnessMethod(loc,
         formalTy, equatable,
-        equalsRef, equalsTy);
+        equalsRef, SILType::getPrimitiveObjectType(equalsTy));
       
-      auto equalsSubstTy = equalsTy.castTo<SILFunctionType>()
-        ->substGenericArgs(SGM.M, equatableSub);
-      auto equalsInfo = CalleeTypeInfo(equalsSubstTy,
+      auto equalsSubstTy = equalsTy->substGenericArgs(SGM.M, equatableSub);
+      auto equalsInfo = CalleeTypeInfo(equalsTy, equalsSubstTy,
                                        AbstractionPattern(boolTy), boolTy,
                                        None,
                                        ImportAsMemberStatus());
@@ -3509,7 +3509,8 @@ getOrCreateKeyPathEqualsAndHash(SILGenFunction &SGF,
       hashableProto->lookupDirect(C.Id_hashValue)[0])
                    ->getGetter();
     auto hashRef = SILDeclRef(hashMethod);
-    auto hashTy = subSGF.SGM.Types.getConstantType(hashRef);
+    auto hashTy = subSGF.SGM.Types.getConstantType(hashRef)
+      .castTo<SILFunctionType>();
 
     SILValue hashCode;
 
@@ -3540,11 +3541,10 @@ getOrCreateKeyPathEqualsAndHash(SILGenFunction &SGF,
 
       auto hashWitness = subSGF.B.createWitnessMethod(loc,
         formalTy, hashable,
-        hashRef, hashTy);
+        hashRef, SILType::getPrimitiveObjectType(hashTy));
       
-      auto hashSubstTy = hashTy.castTo<SILFunctionType>()
-        ->substGenericArgs(SGM.M, hashableSub);
-      auto hashInfo = CalleeTypeInfo(hashSubstTy,
+      auto hashSubstTy = hashTy->substGenericArgs(SGM.M, hashableSub);
+      auto hashInfo = CalleeTypeInfo(hashTy, hashSubstTy,
                                      AbstractionPattern(intTy), intTy,
                                      None,
                                      ImportAsMemberStatus());

@@ -192,16 +192,14 @@ emitBridgeObjectiveCToNative(SILGenFunction &SGF,
   auto witnessRef = SGF.emitGlobalFunctionRef(loc, witnessConstant);
 
   // Determine the substitutions.
-  auto witnessFnTy = witnessRef->getType().castTo<SILFunctionType>();
+  auto origWitnessFnTy = witnessRef->getType().castTo<SILFunctionType>();
 
   CanType swiftValueType = conformance->getType()->getCanonicalType();
-  auto genericSig = witnessFnTy->getGenericSignature();
-  SubstitutionMap typeSubMap;
-  if (genericSig)
-    typeSubMap = genericSig->getSubstitutionMap(witness.getSubstitutions());
+  auto genericSig = origWitnessFnTy->getGenericSignature();
+  auto subs = witness.getSubstitutions();
 
   // Substitute into the witness function type.
-  witnessFnTy = witnessFnTy->substGenericArgs(SGF.SGM.M, typeSubMap);
+  auto witnessFnTy = origWitnessFnTy->substGenericArgs(SGF.SGM.M, subs);
 
   // The witness takes an _ObjectiveCType?, so convert to that type.
   CanType desiredValueType = OptionalType::get(objcType)->getCanonicalType();
@@ -219,12 +217,10 @@ emitBridgeObjectiveCToNative(SILGenFunction &SGF,
   auto witnessCI = SGF.getConstantInfo(witnessConstant);
   CanType formalResultTy = witnessCI.LoweredType.getResult();
 
-  auto subs = witness.getSubstitutions();
-
   // Set up the generic signature, since formalResultTy is an interface type.
   GenericContextScope genericContextScope(SGF.SGM.Types, genericSig);
   CalleeTypeInfo calleeTypeInfo(
-      witnessFnTy,
+      origWitnessFnTy, witnessFnTy,
       AbstractionPattern(genericSig, formalResultTy),
       swiftValueType);
   SGFContext context;
@@ -1680,8 +1676,8 @@ void SILGenFunction::emitForeignToNativeThunk(SILDeclRef thunk) {
     auto fn = getThunkedForeignFunctionRef(*this, fd, foreignDeclRef, args, subs,
                                            foreignCI);
 
-    auto fnType = fn->getType().castTo<SILFunctionType>();
-    fnType = fnType->substGenericArgs(SGM.M, subs);
+    auto origFnType = fn->getType().castTo<SILFunctionType>();
+    auto fnType = origFnType->substGenericArgs(SGM.M, subs);
 
     CanType nativeFormalResultType =
         fd->mapTypeIntoContext(nativeCI.LoweredType.getResult())
@@ -1690,8 +1686,9 @@ void SILGenFunction::emitForeignToNativeThunk(SILDeclRef thunk) {
         fd->mapTypeIntoContext(foreignCI.LoweredType.getResult())
             ->getCanonicalType();
     CalleeTypeInfo calleeTypeInfo(
-        fnType, AbstractionPattern(nativeFnTy->getGenericSignature(),
-                                   bridgedFormalResultType),
+        origFnType, fnType,
+        AbstractionPattern(nativeFnTy->getGenericSignature(),
+                           bridgedFormalResultType),
         nativeFormalResultType, foreignError, ImportAsMemberStatus());
 
     auto init = indirectResult

@@ -484,6 +484,7 @@ public:
                                       SILType formalFnType) const & {
     CalleeTypeInfo result;
 
+    result.origFnType = formalFnType.castTo<SILFunctionType>();
     result.substFnType =
         formalFnType.castTo<SILFunctionType>()->substGenericArgs(SGF.SGM.M,
                                                                  Substitutions);
@@ -1928,7 +1929,8 @@ RValue SILGenFunction::emitMonomorphicApply(SILLocation loc,
                                             SGFContext evalContext) {
   auto fnType = fn.getType().castTo<SILFunctionType>();
   assert(!fnType->isPolymorphic());
-  CalleeTypeInfo calleeTypeInfo(fnType, AbstractionPattern(foreignResultType),
+  CalleeTypeInfo calleeTypeInfo(fnType, fnType,
+                                AbstractionPattern(foreignResultType),
                                 nativeResultType, foreignError,
                                 ImportAsMemberStatus(), overrideRep);
   ResultPlanPtr resultPlan = ResultPlanBuilder::computeResultPlan(
@@ -4570,7 +4572,8 @@ RValue CallEmission::applyRemainingCallSites(RValue &&result,
 
     // Create the callee type info and initialize our indirect results.
     CalleeTypeInfo calleeTypeInfo(
-        substFnType, origResultType, extraSites[i].getSubstResultType(),
+        substFnType, substFnType, origResultType,
+        extraSites[i].getSubstResultType(),
         Optional<ForeignErrorConvention>(), foreignSelf);
     ResultPlanPtr resultPtr =
         ResultPlanBuilder::computeResultPlan(SGF, calleeTypeInfo, loc, context);

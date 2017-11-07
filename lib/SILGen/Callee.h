@@ -22,6 +22,7 @@ namespace Lowering {
 
 class CalleeTypeInfo {
 public:
+  CanSILFunctionType origFnType;
   CanSILFunctionType substFnType;
   Optional<AbstractionPattern> origResultType;
   CanType substResultType;
@@ -34,21 +35,24 @@ private:
 public:
   CalleeTypeInfo() = default;
 
-  CalleeTypeInfo(CanSILFunctionType substFnType,
+  CalleeTypeInfo(CanSILFunctionType origFnType,
+                 CanSILFunctionType substFnType,
                  AbstractionPattern origResultType, CanType substResultType,
                  const Optional<ForeignErrorConvention> &foreignError,
                  ImportAsMemberStatus foreignSelf,
                  Optional<SILFunctionTypeRepresentation> overrideRep = None)
-      : substFnType(substFnType), origResultType(origResultType),
-        substResultType(substResultType), foreignError(foreignError),
-        foreignSelf(foreignSelf), overrideRep(overrideRep) {}
+      : origFnType(origFnType), substFnType(substFnType),
+        origResultType(origResultType), substResultType(substResultType),
+        foreignError(foreignError), foreignSelf(foreignSelf),
+        overrideRep(overrideRep) {}
 
-  CalleeTypeInfo(CanSILFunctionType substFnType,
+  CalleeTypeInfo(CanSILFunctionType origFnType,
+                 CanSILFunctionType substFnType,
                  AbstractionPattern origResultType, CanType substResultType,
                  Optional<SILFunctionTypeRepresentation> overrideRep = None)
-      : substFnType(substFnType), origResultType(origResultType),
-        substResultType(substResultType), foreignError(), foreignSelf(),
-        overrideRep(overrideRep) {}
+      : origFnType(origFnType), substFnType(substFnType),
+        origResultType(origResultType), substResultType(substResultType),
+        foreignError(), foreignSelf(), overrideRep(overrideRep) {}
 
   SILFunctionTypeRepresentation getOverrideRep() const {
     return overrideRep.getValueOr(substFnType->getRepresentation());
