@@ -953,9 +953,9 @@ ProtocolConformance::subst(Type substType,
     if (substType->isSpecialized()) {
       assert(getType()->isSpecialized()
              && "substitution mapped non-specialized to specialized?!");
-      assert(getType()->getNominalOrBoundGenericNominal()
+      /*assert(getType()->getNominalOrBoundGenericNominal()
                == substType->getNominalOrBoundGenericNominal()
-             && "substitution mapped to different nominal?!");
+               && "substitution mapped to different nominal?!");*/
 
       SubstitutionMap subMap;
       if (getGenericSignature()) {
