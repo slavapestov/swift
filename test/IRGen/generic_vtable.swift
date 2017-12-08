@@ -68,17 +68,13 @@ public class Concrete : Derived<Int> {
 //// Type metadata pattern for 'Derived' has an empty vtable, filled in at
 //// instantiation time.
 
-// CHECK-LABEL: @_T014generic_vtable7DerivedCMP = internal global
-// -- vtable entry for 'm1()'
-// CHECK-SAME: i8* null,
-// -- vtable entry for 'm2()'
-// CHECK-SAME: i8* null,
-// -- vtable entry for 'init()'
-// CHECK-SAME: i8* null,
-// -- vtable entry for 'm3()'
+// CHECK-LABEL: @_T014generic_vtable7DerivedCMP = internal global <{{.*}}> <{
+// -- nominal type descriptor
+// CHECK-SAME: @_T014generic_vtable7DerivedCMn,
+// -- ivar destroyer
 // CHECK-SAME: i8* null
 // --
-// CHECK-SAME: , align 8
+// CHECK-SAME: }>, align 8
 
 
 //// Nominal type descriptor for 'Concrete' has method descriptors.
@@ -107,6 +103,7 @@ public class Concrete : Derived<Int> {
 // CHECK-SAME: @_T014generic_vtable8ConcreteCMn,
 // -- ivar destroyer
 // CHECK-SAME: i8* null
+// --
 // CHECK-SAME: }>, align 8
 
 

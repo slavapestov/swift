@@ -10,7 +10,7 @@
 
 // CHECK-LABEL: @_T013generic_types1ACMP = internal global
 // CHECK:   %swift.type* (%swift.type_pattern*, i8**)* @create_generic_metadata_A,
-// CHECK-native-SAME: i32 116,
+// CHECK-native-SAME: i32 104,
 // CHECK-objc-SAME:   i32 288,
 // CHECK-SAME:   i16 1,
 // CHECK-native-SAME: i16 24,
