@@ -237,12 +237,20 @@ ClassMetadataLayout::ClassMetadataLayout(IRGenModule &IGM, ClassDecl *decl)
     using super = LayoutScanner;
 
     ClassMetadataLayout &Layout;
+
     Scanner(IRGenModule &IGM, ClassDecl *decl, ClassMetadataLayout &layout)
       : super(IGM, decl), Layout(layout) {}
 
-    void noteResilientSuperclass() {}
+    void noteResilientSuperclass() {
+      Layout.HasResilientSuperclass = true;
+    }
 
-    void noteStartOfImmediateMembers(ClassDecl *theClass) {}
+    void noteStartOfImmediateMembers(ClassDecl *theClass) {
+      if (Layout.HasResilientSuperclass) {
+        assert(!DynamicOffsetBase);
+        DynamicOffsetBase = NextOffset;
+      }
+    }
 
     void addClassSize() {
       Layout.MetadataSize = getNextOffset();
