@@ -3156,6 +3156,7 @@ namespace {
         auto *classDecl = cast<ClassDecl>(fn.getDecl()->getDeclContext());
         auto &layout = IGM.getMetadataLayout(classDecl);
 
+        // XXXYYY
         auto offset = layout.getStaticMethodOffset(fn);
 
         // Record the override so that we can fill it in later.
