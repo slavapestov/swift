@@ -951,6 +951,15 @@ static void VisitNodeDestructor(
   }
 }
 
+static Demangle::NodePointer DropGenericSignature(
+    Demangle::NodePointer cur_node) {
+  if (cur_node->getKind() != Demangle::Node::Kind::DependentGenericType)
+    return cur_node;
+  if (cur_node->getChild(0) == nullptr)
+    return cur_node;
+  return cur_node->getFirstChild();
+}
+
 static void VisitNodeDeclContext(
     ASTContext *ast,
     Demangle::NodePointer cur_node, VisitNodeResult &result) {
@@ -979,14 +988,8 @@ static void VisitNodeDeclContext(
     if (generics->getChild(0) == nullptr)
       break;
     generics = generics->getFirstChild();
-    if (generics->getKind() != Demangle::Node::Kind::DependentGenericType)
-      break;
-    if (generics->getChild(0) == nullptr)
-      break;
-    generics = generics->getFirstChild();
-    //                        if (generics->getKind() !=
-    //                        Demangle::Node::Kind::ArchetypeList)
-    //                            break;
+    generics = DropGenericSignature(generics);
+
     AbstractFunctionDecl *func_decl = nullptr;
     for (Decl *decl : found_decls._decls) {
       func_decl = dyn_cast<AbstractFunctionDecl>(decl);
@@ -1441,7 +1444,7 @@ static void VisitNodeSetterGetter(
       identifier.assign((*pos)->getText());
       break;
     case Demangle::Node::Kind::Type:
-      VisitNode(ast, *pos, type_result);
+      VisitNode(ast, DropGenericSignature(*pos), type_result);
       break;
     default:
       result._error =
@@ -1449,6 +1452,11 @@ static void VisitNodeSetterGetter(
                       Demangle::getNodeKindString(child_node_kind));
       break;
     }
+  }
+
+  if (!type_result.HasSingleType()) {
+    result._error = "bad type";
+    return;
   }
 
   if (referenced_node->getKind() == Demangle::Node::Kind::Subscript) {

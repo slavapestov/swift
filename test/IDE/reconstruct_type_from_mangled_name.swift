@@ -270,3 +270,12 @@ fileprivate struct VeryPrivateData {}
 // FIXME
 // CHECK: decl: FAILURE for 'privateFunction'
 fileprivate func privateFunction(_ d: VeryPrivateData) {}
+
+struct HasGenericSubscript<T> {
+  subscript<U>(_ t: T) -> U {
+    get {
+      return t as! U
+    }
+    set {}
+  }
+}
