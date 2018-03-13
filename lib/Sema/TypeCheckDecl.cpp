@@ -8481,7 +8481,7 @@ static void diagnoseClassWithoutInitializers(TypeChecker &tc,
       // We're going to diagnose on the concrete init(from:) decl if it exists
       // and isn't implicit; otherwise, on the subclass itself.
       ValueDecl *diagDest = classDecl;
-      auto initFrom = DeclName(C, C.Id_init, C.Id_from);
+      auto initFrom = DeclName(C, DeclBaseName::createConstructor(), C.Id_from);
       auto result = tc.lookupMember(superclassDecl, superclassType, initFrom,
                                     NameLookupFlags::ProtocolMembers |
                                     NameLookupFlags::IgnoreAccessControl);
@@ -8719,7 +8719,7 @@ void TypeChecker::addImplicitConstructors(NominalTypeDecl *decl) {
   //        this. Investigate why this hasn't worked otherwise.
   DeclName synthesizedInitializers[1] = {
     // init(from:) is synthesized by derived conformance to Decodable.
-    DeclName(Context, DeclBaseName(Context.Id_init), Context.Id_from)
+    DeclName(Context, DeclBaseName::createConstructor(), Context.Id_from)
   };
 
   auto initializerIsSynthesized = [=](ConstructorDecl *initializer) {
@@ -9026,7 +9026,7 @@ void TypeChecker::synthesizeMemberForLookup(NominalTypeDecl *target,
       return;
 
     auto argumentName = argumentNames.front();
-    if (baseName.getIdentifier() == Context.Id_init &&
+    if (baseName == DeclBaseName::createConstructor() &&
         argumentName == Context.Id_from) {
       // init(from:) may be synthesized as part of derived conformance to the
       // Decodable protocol.

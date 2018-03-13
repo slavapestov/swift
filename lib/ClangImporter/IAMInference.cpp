@@ -379,15 +379,17 @@ private:
     return clangLookupFunction(pairName);
   }
 
-  Identifier getHumbleIdentifier(StringRef name) {
+  DeclBaseName getHumbleBaseName(StringRef name) {
     // Lower-camel-case the incoming name
     NameBuffer buf;
     formHumbleCamelName(name, buf);
+    if (buf == "init")
+      return DeclBaseName::createConstructor();
     return getIdentifier(buf);
   }
 
   DeclName formDeclName(StringRef baseName) {
-    return {getHumbleIdentifier(baseName)};
+    return {getHumbleBaseName(baseName)};
   }
 
   DeclName formDeclName(StringRef baseName,
@@ -402,7 +404,7 @@ private:
       // We need to form an argument label, despite there being no argument
       NameBuffer paramName;
       formHumbleCamelName(firstPrefix, paramName);
-      return {context, getHumbleIdentifier(baseName),
+      return {context, getHumbleBaseName(baseName),
               getIdentifier(paramName)};
     }
 
@@ -426,7 +428,7 @@ private:
       SmallVector<Identifier, 8> argLabels;
       for (auto str : argStrs)
         argLabels.push_back(getIdentifier(str));
-      DEBUG((beforeOmit = {context, getHumbleIdentifier(baseName), argLabels}));
+      DEBUG((beforeOmit = {context, getHumbleBaseName(baseName), argLabels}));
     }
 
     SmallVector<OmissionTypeName, 8> paramTypeNames;
@@ -435,8 +437,8 @@ private:
           clangSema.getASTContext(), param->getType()));
     }
 
-    auto humbleBaseName = getHumbleIdentifier(baseName);
-    baseName = humbleBaseName.str();
+    auto humbleBaseName = getHumbleBaseName(baseName);
+    baseName = humbleBaseName.userFacingName();
     bool didOmit =
         omitNeedlessWords(baseName, argStrs, "", "", "", paramTypeNames, false,
                           false, nullptr, scratch);
@@ -444,7 +446,11 @@ private:
     for (auto str : argStrs)
       argLabels.push_back(getIdentifier(str));
 
-    DeclName ret = {context, getHumbleIdentifier(baseName), argLabels};
+    DeclName ret(context,
+                 baseName == "init"
+                 ? DeclBaseName::createConstructor()
+                 : getHumbleBaseName(baseName),
+                 argLabels);
 
     if (didOmit) {
       ++OmitNumTimes;

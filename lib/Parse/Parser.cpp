@@ -1162,8 +1162,10 @@ DeclName swift::formDeclName(ASTContext &ctx,
   if (!Lexer::isIdentifier(baseName) && !Lexer::isOperator(baseName))
     return DeclName();
 
-  // Get the identifier for the base name.
-  Identifier baseNameId = ctx.getIdentifier(baseName);
+  // Get the identifier for the base name. Special-case `init`.
+  DeclBaseName baseNameId = (baseName == "init"
+                             ? DeclBaseName::createConstructor()
+                             : ctx.getIdentifier(baseName));
 
   // For non-functions, just use the base name.
   if (!isFunctionName) return baseNameId;
