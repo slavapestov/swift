@@ -3184,6 +3184,9 @@ bool ClangImporter::Implementation::forEachLookupTable(
 void ClangImporter::Implementation::lookupValue(
        SwiftLookupTable &table, DeclName name,
        VisibleDeclConsumer &consumer) {
+  if (!name.getBaseName().isSpecial())
+    assert(name.getBaseName().getIdentifier() != SwiftContext.getIdentifier("init"));
+
   auto &clangCtx = getClangASTContext();
   auto clangTU = clangCtx.getTranslationUnitDecl();
 
@@ -3207,6 +3210,7 @@ void ClangImporter::Implementation::lookupValue(
         llvm_unreachable("new kind of lookup table entry");
       if (!decl) continue;
     } else {
+      assert(name.getBaseName() != DeclBaseName::createConstructor());
       continue;
     }
 

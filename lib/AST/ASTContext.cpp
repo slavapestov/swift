@@ -4290,6 +4290,9 @@ void DeclName::CompoundDeclName::Profile(llvm::FoldingSetNodeID &id,
 
 void DeclName::initialize(ASTContext &C, DeclBaseName baseName,
                           ArrayRef<Identifier> argumentNames) {
+  if (!baseName.isSpecial())
+    assert(baseName.getIdentifier() != C.getIdentifier("init"));
+
   if (argumentNames.empty()) {
     SimpleOrCompound = BaseNameAndCompound(baseName, true);
     return;
@@ -4319,6 +4322,9 @@ void DeclName::initialize(ASTContext &C, DeclBaseName baseName,
 /// extracted from a parameter list.
 DeclName::DeclName(ASTContext &C, DeclBaseName baseName,
                    ParameterList *paramList) {
+  if (!baseName.isSpecial())
+    assert(baseName.getIdentifier() != C.getIdentifier("init"));
+
   SmallVector<Identifier, 4> names;
   
   for (auto P : *paramList)
