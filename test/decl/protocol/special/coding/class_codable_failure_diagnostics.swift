@@ -98,12 +98,12 @@ class C5 : Codable {
     case c
   }
 
+  // CHECK: error: class 'C5' has no initializers
+  // CHECK: note: stored property 'b' without initial value prevents synthesized initializers
+
   // CHECK: error: type 'C5' does not conform to protocol 'Decodable'
   // CHECK: note: protocol requires initializer 'init(from:)' with type 'Decodable'
   // CHECK: note: cannot automatically synthesize 'Decodable' because 'b' does not have a matching CodingKey and does not have a default value
-
-  // CHECK: error: class 'C5' has no initializers
-  // CHECK: note: stored property 'b' without initial value prevents synthesized initializers
 }
 
 // Codable class with non-decoded property (which has no default value).
