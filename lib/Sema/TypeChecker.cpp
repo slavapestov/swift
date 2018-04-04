@@ -493,6 +493,18 @@ static void typeCheckFunctionsAndExternalDecls(SourceFile &SF, TypeChecker &TC) 
       TC.finalizeDecl(decl);
     }
 
+    // Type check conformance contexts.
+    for (unsigned i = 0; i != TC.ConformanceContexts.size(); ++i) {
+      auto decl = TC.ConformanceContexts[i];
+      if (auto *ext = dyn_cast<ExtensionDecl>(decl))
+        TC.checkConformancesInContext(ext, ext);
+      else {
+        auto *ntd = cast<NominalTypeDecl>(decl);
+        TC.checkConformancesInContext(ntd, ntd);
+      }
+    }
+    TC.ConformanceContexts.clear();
+
     // Type check synthesized functions and their bodies.
     for (unsigned n = SF.SynthesizedDecls.size();
          currentSynthesizedDecl != n;
