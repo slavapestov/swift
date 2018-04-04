@@ -2289,8 +2289,8 @@ public:
   /// \sa getFormalAccess
   /// \sa isAccessibleFrom
   AccessScope
-  getFormalAccessScope(const DeclContext *useDC = nullptr,
-                       bool respectVersionedAttr = false) const;
+  getFormalAccessScope(const DeclContext *useDC=nullptr,
+                       bool isUsageFromInline=false) const;
 
 
   /// Copy the formal access level and @usableFromInline attribute from source.
