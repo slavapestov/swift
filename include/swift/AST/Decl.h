@@ -2265,6 +2265,13 @@ public:
     return result;
   }
 
+  /// SE-0025 corner case -- we allow members to have more visible access levels
+  /// than their enclosing scope. Normally, we won't find such members if the
+  /// containing scope is not really visible. However, if the containing scope
+  /// is a protocol extension, they can show up here, so we have to filter
+  /// them out directly.
+  AccessLevel adjustAccessLevelForProtocolExtension(AccessLevel access) const;
+
   /// Determine whether this Decl has either Private or FilePrivate access.
   bool isOutermostPrivateOrFilePrivateScope() const;
 

@@ -1547,7 +1547,8 @@ diagnoseUnviableLookupResults(MemberLookupResult &result, Type baseObjTy,
       auto decl = result.UnviableCandidates[0].first.getDecl();
       // FIXME: What if the unviable candidates have different levels of access?
       diagnose(nameLoc, diag::candidate_inaccessible, decl->getBaseName(),
-               decl->getFormalAccess());
+               decl->adjustAccessLevelForProtocolExtension(
+                 decl->getFormalAccess()));
       for (auto cand : result.UnviableCandidates)
         diagnose(cand.first.getDecl(), diag::decl_declared_here, memberName);
         

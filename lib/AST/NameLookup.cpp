@@ -1507,6 +1507,24 @@ void ClassDecl::recordObjCMethod(AbstractFunctionDecl *method) {
   vec.push_back(method);
 }
 
+AccessLevel
+ValueDecl::adjustAccessLevelForProtocolExtension(AccessLevel access) const {
+  if (auto *ext = dyn_cast<ExtensionDecl>(getDeclContext())) {
+    if (auto *protocol = ext->getAsProtocolOrProtocolExtensionContext()) {
+      // Note: it gets worse. The standard library has public methods
+      // in protocol extensions of a @usableFromInline internal protocol,
+      // and expects these extension methods to witness public protocol
+      // requirements. Which works at the ABI level, so let's keep
+      // supporting that here by passing 'isUsageFromInline'.
+      access = std::min(access,
+                        protocol->getFormalAccess(/*useDC=*/nullptr,
+                                                  /*isUsageFromInline=*/true));
+    }
+  }
+
+  return access;
+}
+
 static bool checkAccess(const DeclContext *useDC, const DeclContext *sourceDC,
                         AccessLevel access) {
   if (!useDC)
@@ -1537,7 +1555,8 @@ static bool checkAccess(const DeclContext *useDC, const DeclContext *sourceDC,
 }
 
 bool ValueDecl::isAccessibleFrom(const DeclContext *DC) const {
-  return checkAccess(DC, getDeclContext(), getFormalAccess());
+  return checkAccess(DC, getDeclContext(),
+                     adjustAccessLevelForProtocolExtension(getFormalAccess()));
 }
 
 bool AbstractStorageDecl::isSetterAccessibleFrom(const DeclContext *DC) const {
@@ -1552,7 +1571,8 @@ bool AbstractStorageDecl::isSetterAccessibleFrom(const DeclContext *DC) const {
   if (isa<ParamDecl>(this))
     return true;
 
-  return checkAccess(DC, getDeclContext(), getSetterFormalAccess());
+  return checkAccess(DC, getDeclContext(),
+                     adjustAccessLevelForProtocolExtension(getSetterFormalAccess()));
 }
 
 Type AbstractStorageDecl::getStorageInterfaceType() const {
