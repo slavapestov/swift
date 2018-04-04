@@ -477,23 +477,11 @@ public:
                                SILDeclRef witnessRef,
                                IsFreeFunctionWitness_t isFree,
                                Witness witness) {
-    // Emit the witness thunk and add it to the table.
-    auto witnessLinkage = witnessRef.getLinkage(ForDefinition);
-    auto witnessSerialized = Serialized;
-    if (witnessSerialized &&
-        fixmeWitnessHasLinkageThatNeedsToBePublic(witnessLinkage)) {
-      witnessLinkage = SILLinkage::Public;
-      witnessSerialized = IsNotSerialized;
-    } else {
-      // This is the "real" rule; the above case should go away once we
-      // figure out what's going on.
-      witnessLinkage = (witnessSerialized
-                        ? SILLinkage::Shared
-                        : SILLinkage::Private);
-    }
-
+    auto witnessLinkage = (Serialized
+                           ? SILLinkage::Shared
+                           : SILLinkage::Private);
     SILFunction *witnessFn = SGM.emitProtocolWitness(
-        ProtocolConformanceRef(Conformance), witnessLinkage, witnessSerialized,
+        ProtocolConformanceRef(Conformance), witnessLinkage, Serialized,
         requirementRef, witnessRef, isFree, witness);
     Entries.push_back(
                     SILWitnessTable::MethodWitness{requirementRef, witnessFn});

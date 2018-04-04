@@ -86,34 +86,6 @@ void TBDGenVisitor::addConformances(DeclContext *DC) {
     addSymbol(
         LinkEntity::forProtocolWitnessTableAccessFunction(normalConformance));
     addSymbol(LinkEntity::forProtocolConformanceDescriptor(normalConformance));
-
-    // FIXME: the logic around visibility in extensions is confusing, and
-    // sometimes witness thunks need to be manually made public.
-
-    auto conformanceIsFixed = SILWitnessTable::conformanceIsSerialized(
-        normalConformance);
-    auto addSymbolIfNecessary = [&](SILDeclRef declRef) {
-      auto witnessLinkage = declRef.getLinkage(ForDefinition);
-      if (conformanceIsFixed &&
-          fixmeWitnessHasLinkageThatNeedsToBePublic(witnessLinkage)) {
-        Mangle::ASTMangler Mangler;
-        addSymbol(Mangler.mangleWitnessThunk(normalConformance,
-                                             declRef.getDecl()));
-      }
-    };
-    normalConformance->forEachValueWitness(nullptr, [&](ValueDecl *valueReq,
-                                                        Witness witness) {
-      if (isa<AbstractFunctionDecl>(valueReq)) {
-        addSymbolIfNecessary(SILDeclRef(valueReq));
-      } else if (auto *storage = dyn_cast<AbstractStorageDecl>(valueReq)) {
-        if (auto *getter = storage->getGetter())
-          addSymbolIfNecessary(SILDeclRef(getter));
-        if (auto *setter = storage->getGetter())
-          addSymbolIfNecessary(SILDeclRef(setter));
-        if (auto *materializeForSet = storage->getMaterializeForSetFunc())
-          addSymbolIfNecessary(SILDeclRef(materializeForSet));
-      }
-    });
   }
 }
 
