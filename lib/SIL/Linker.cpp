@@ -32,38 +32,33 @@ STATISTIC(NumFuncLinked, "Number of SIL functions linked");
 //                               Linker Helpers
 //===----------------------------------------------------------------------===//
 
-bool SILLinkerVisitor::addFunctionToWorklist(SILFunction *F) {
+void SILLinkerVisitor::addFunctionToWorklist(SILFunction *F) {
   assert(F->isExternalDeclaration());
 
   DEBUG(llvm::dbgs() << "Imported function: "
                      << F->getName() << "\n");
   if (auto *NewFn = Loader->lookupSILFunction(F)) {
     if (NewFn->isExternalDeclaration())
-      return false;
+      return;
 
     assert(NewFn == F && "This shouldn't happen");
 
     NewFn->setBare(IsBare);
     NewFn->verify();
     Worklist.push_back(NewFn);
+    LinkResult = true;
     ++NumFuncLinked;
-
-    return true;
   }
-
-  return false;
 }
 
 /// Deserialize a function and add it to the worklist for processing.
-bool SILLinkerVisitor::maybeAddFunctionToWorklist(SILFunction *F) {
+void SILLinkerVisitor::maybeAddFunctionToWorklist(SILFunction *F) {
   // Don't need to do anything if the function already has a body.
   if (!F->isExternalDeclaration())
-    return false;
+    return;
 
   if (isLinkAll() || hasSharedVisibility(F->getLinkage()))
-    return addFunctionToWorklist(F);
-
-  return false;
+    addFunctionToWorklist(F);
 }
 
 /// Process F, recursively deserializing any thing F may reference.
@@ -73,75 +68,56 @@ bool SILLinkerVisitor::processFunction(SILFunction *F) {
 
   // If F is a declaration, first deserialize it.
   if (F->isExternalDeclaration()) {
-    if (!addFunctionToWorklist(F))
-      return false;
+    addFunctionToWorklist(F);
   } else {
     Worklist.push_back(F);
   }
 
   process();
-  return true;
+  return LinkResult;
 }
 
 /// Deserialize the given VTable all SIL the VTable transitively references.
-bool SILLinkerVisitor::linkInVTable(ClassDecl *D) {
+void SILLinkerVisitor::linkInVTable(ClassDecl *D) {
   // Attempt to lookup the Vtbl from the SILModule.
   SILVTable *Vtbl = Mod.lookUpVTable(D);
   if (!Vtbl)
-    return false;
+    return;
 
   // Ok we found our VTable. Visit each function referenced by the VTable. If
   // any of the functions are external declarations, add them to the worklist
   // for processing.
-  bool Result = false;
-  for (auto P : Vtbl->getEntries()) {
-    Result |= maybeAddFunctionToWorklist(P.Implementation);
-  }
-  return Result;
+  for (auto P : Vtbl->getEntries())
+    maybeAddFunctionToWorklist(P.Implementation);
 }
 
 //===----------------------------------------------------------------------===//
 //                                  Visitors
 //===----------------------------------------------------------------------===//
 
-bool SILLinkerVisitor::visitApplyInst(ApplyInst *AI) {
-  bool performFuncDeserialization = false;
-  
+void SILLinkerVisitor::visitApplyInst(ApplyInst *AI) {
   if (auto sig = AI->getCallee()->getType().castTo<SILFunctionType>()
                    ->getGenericSignature()) {
-    performFuncDeserialization |= visitApplySubstitutions(
-      sig->getSubstitutionMap(AI->getSubstitutions()));
+    visitApplySubstitutions(sig->getSubstitutionMap(AI->getSubstitutions()));
   }
-
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitTryApplyInst(TryApplyInst *TAI) {
-  bool performFuncDeserialization = false;
-
+void SILLinkerVisitor::visitTryApplyInst(TryApplyInst *TAI) {
   if (auto sig = TAI->getCallee()->getType().castTo<SILFunctionType>()
                    ->getGenericSignature()) {
-    performFuncDeserialization |= visitApplySubstitutions(
-      sig->getSubstitutionMap(TAI->getSubstitutions()));
+    visitApplySubstitutions(sig->getSubstitutionMap(TAI->getSubstitutions()));
   }
-
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitPartialApplyInst(PartialApplyInst *PAI) {
-  bool performFuncDeserialization = false;
-  
+void SILLinkerVisitor::visitPartialApplyInst(PartialApplyInst *PAI) {
   if (auto sig = PAI->getCallee()->getType().castTo<SILFunctionType>()
                     ->getGenericSignature()) {
-    performFuncDeserialization |= visitApplySubstitutions(
-      sig->getSubstitutionMap(PAI->getSubstitutions()));
+    visitApplySubstitutions(sig->getSubstitutionMap(PAI->getSubstitutions()));
   }
-
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitFunctionRefInst(FunctionRefInst *FRI) {
-  return maybeAddFunctionToWorklist(FRI->getReferencedFunction());
+void SILLinkerVisitor::visitFunctionRefInst(FunctionRefInst *FRI) {
+  maybeAddFunctionToWorklist(FRI->getReferencedFunction());
 }
 
 // Eagerly visiting all used conformances leads to a large blowup
@@ -159,11 +135,11 @@ static bool mustDeserializeProtocolConformance(SILModule &M,
                                        ->getModuleScopeContext());
 }
 
-bool SILLinkerVisitor::visitProtocolConformance(
+void SILLinkerVisitor::visitProtocolConformance(
     ProtocolConformanceRef ref, const Optional<SILDeclRef> &Member) {
   // If an abstract protocol conformance was passed in, just return false.
   if (ref.isAbstract())
-    return false;
+    return;
   
   bool mustDeserialize = mustDeserializeProtocolConformance(Mod, ref);
 
@@ -171,7 +147,7 @@ bool SILLinkerVisitor::visitProtocolConformance(
   auto C = ref.getConcrete();
   
   if (!VisitedConformances.insert(C).second)
-    return false;
+    return;
   
   SILWitnessTable *WT = Mod.lookUpWitnessTable(C, true);
 
@@ -189,17 +165,15 @@ bool SILLinkerVisitor::visitProtocolConformance(
       assert(WT && WT->isDefinition()
              && "unable to deserialize witness table when we must?!");
     } else {
-      return false;
+      return;
     }
   }
 
   // If the looked up witness table is a declaration, there is nothing we can
   // do here. Just bail and return false.
   if (WT->isDeclaration())
-    return false;
+    return;
 
-  bool performFuncDeserialization = false;
-  
   auto maybeVisitRelatedConformance = [&](ProtocolConformanceRef c) {
     // Formally all conformances referenced by a used conformance are used.
     // However, eagerly visiting them all at this point leads to a large blowup
@@ -208,7 +182,7 @@ bool SILLinkerVisitor::visitProtocolConformance(
     // However, we *must* pull in shared clang-importer-derived conformances
     // we potentially use, since we may not otherwise have a local definition.
     if (mustDeserializeProtocolConformance(Mod, c))
-      performFuncDeserialization |= visitProtocolConformance(c, None);
+      visitProtocolConformance(c, None);
   };
   
   // For each entry in the witness table...
@@ -228,7 +202,6 @@ bool SILLinkerVisitor::visitProtocolConformance(
       // Otherwise if it is the requirement we are looking for or we just want
       // to deserialize everything, add the function to the list of functions
       // to deserialize.
-      performFuncDeserialization = true;
       maybeAddFunctionToWorklist(E.getMethodWitness().Witness);
       break;
     }
@@ -251,13 +224,9 @@ bool SILLinkerVisitor::visitProtocolConformance(
       break;
     }
   }
-
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitApplySubstitutions(const SubstitutionMap &subs) {
-  bool performFuncDeserialization = false;
-  
+void SILLinkerVisitor::visitApplySubstitutions(const SubstitutionMap &subs) {
   for (auto &reqt : subs.getGenericSignature()->getRequirements()) {
     switch (reqt.getKind()) {
     case RequirementKind::Conformance: {
@@ -274,8 +243,7 @@ bool SILLinkerVisitor::visitApplySubstitutions(const SubstitutionMap &subs) {
       // However, we *must* pull in shared clang-importer-derived conformances
       // we potentially use, since we may not otherwise have a local definition.
       if (mustDeserializeProtocolConformance(Mod, conformance)) {
-        performFuncDeserialization |=
-                                    visitProtocolConformance(conformance, None);
+        visitProtocolConformance(conformance, None);
       }
       break;
     }
@@ -285,11 +253,9 @@ bool SILLinkerVisitor::visitApplySubstitutions(const SubstitutionMap &subs) {
       break;
     }
   }
-  
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitInitExistentialAddrInst(
+void SILLinkerVisitor::visitInitExistentialAddrInst(
     InitExistentialAddrInst *IEI) {
   // Link in all protocol conformances that this touches.
   //
@@ -299,15 +265,12 @@ bool SILLinkerVisitor::visitInitExistentialAddrInst(
   // not going to be smart about this to enable avoiding any issues with
   // visiting the open_existential_addr/witness_method before the
   // init_existential_inst.
-  bool performFuncDeserialization = false;
   for (ProtocolConformanceRef C : IEI->getConformances()) {
-    performFuncDeserialization |=
-        visitProtocolConformance(C, Optional<SILDeclRef>());
+    visitProtocolConformance(C, Optional<SILDeclRef>());
   }
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitInitExistentialRefInst(
+void SILLinkerVisitor::visitInitExistentialRefInst(
     InitExistentialRefInst *IERI) {
   // Link in all protocol conformances that this touches.
   //
@@ -316,36 +279,33 @@ bool SILLinkerVisitor::visitInitExistentialRefInst(
   // protocol method inst causes the actual deserialization. For now we are
   // not going to be smart about this to enable avoiding any issues with
   // visiting the protocol_method before the init_existential_inst.
-  bool performFuncDeserialization = false;
   for (ProtocolConformanceRef C : IERI->getConformances()) {
-    performFuncDeserialization |=
-        visitProtocolConformance(C, Optional<SILDeclRef>());
+    visitProtocolConformance(C, Optional<SILDeclRef>());
   }
-  return performFuncDeserialization;
 }
 
-bool SILLinkerVisitor::visitAllocRefInst(AllocRefInst *ARI) {
+void SILLinkerVisitor::visitAllocRefInst(AllocRefInst *ARI) {
   if (!isLinkAll())
-    return false;
+    return;
 
   // Grab the class decl from the alloc ref inst.
   ClassDecl *D = ARI->getType().getClassOrBoundGenericClass();
   if (!D)
-    return false;
+    return;
 
-  return linkInVTable(D);
+  linkInVTable(D);
 }
 
-bool SILLinkerVisitor::visitMetatypeInst(MetatypeInst *MI) {
+void SILLinkerVisitor::visitMetatypeInst(MetatypeInst *MI) {
   if (!isLinkAll())
-    return false;
+    return;
 
   CanType instTy = MI->getType().castTo<MetatypeType>().getInstanceType();
   ClassDecl *C = instTy.getClassOrBoundGenericClass();
   if (!C)
-    return false;
+    return;
 
-  return linkInVTable(C);
+  linkInVTable(C);
 }
 
 //===----------------------------------------------------------------------===//
@@ -353,10 +313,9 @@ bool SILLinkerVisitor::visitMetatypeInst(MetatypeInst *MI) {
 //===----------------------------------------------------------------------===//
 
 // Main loop of the visitor. Called by one of the other *visit* methods.
-bool SILLinkerVisitor::process() {
+void SILLinkerVisitor::process() {
   // Process everything transitively referenced by one of the functions in the
   // worklist.
-  bool Result = false;
   while (!Worklist.empty()) {
     auto *Fn = Worklist.pop_back_val();
 
@@ -372,11 +331,8 @@ bool SILLinkerVisitor::process() {
 
     for (auto &BB : *Fn) {
       for (auto &I : BB) {
-        Result |= visit(&I);
+        visit(&I);
       }
     }
   }
-
-  // If we return true, we deserialized at least one function.
-  return Result;
 }
