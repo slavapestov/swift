@@ -404,10 +404,12 @@ static SILFunction *getCalleeFunction(
     return nullptr;
   }
 
-  // If CalleeFunction is a declaration, see if we can load it. If we fail to
-  // load it, bail.
-  if (CalleeFunction->empty()
-      && !AI.getModule().linkFunction(CalleeFunction, Mode))
+  // If CalleeFunction is a declaration, see if we can load it.
+  if (CalleeFunction->empty())
+    AI.getModule().linkFunction(CalleeFunction, Mode);
+
+  // If we fail to load it, bail.
+  if (CalleeFunction->empty())
     return nullptr;
 
   // If the CalleeFunction is a not-transparent definition, we can not process
