@@ -32,6 +32,23 @@ STATISTIC(NumFuncLinked, "Number of SIL functions linked");
 //                               Linker Helpers
 //===----------------------------------------------------------------------===//
 
+bool SILLinkerVisitor::addFunctionToWorklist(SILFunction *F) {
+  FunctionDeserializationWorklist.push_back(F);
+  return true;
+}
+
+bool SILLinkerVisitor::maybeAddFunctionToWorklist(SILFunction *F) {
+  if (!F->isExternalDeclaration())
+    return false;
+
+  if (isLinkAll() || hasSharedVisibility(F->getLinkage())) {
+    FunctionDeserializationWorklist.push_back(F);
+    return true;
+  }
+
+  return true;
+}
+
 /// Process F, recursively deserializing any thing F may reference.
 bool SILLinkerVisitor::processFunction(SILFunction *F) {
   if (Mode == LinkingMode::LinkNone)
@@ -70,10 +87,7 @@ bool SILLinkerVisitor::linkInVTable(ClassDecl *D) {
   // for processing.
   bool Result = false;
   for (auto P : Vtbl->getEntries()) {
-    if (P.Implementation->isExternalDeclaration()) {
-      Result = true;
-      addFunctionToWorklist(P.Implementation);
-    }
+    Result |= maybeAddFunctionToWorklist(P.Implementation);
   }
   return Result;
 }
@@ -119,18 +133,7 @@ bool SILLinkerVisitor::visitPartialApplyInst(PartialApplyInst *PAI) {
 }
 
 bool SILLinkerVisitor::visitFunctionRefInst(FunctionRefInst *FRI) {
-  // Needed to handle closures which are no longer applied, but are left
-  // behind as dead code. This shouldn't happen, but if it does don't get into
-  // an inconsistent state.
-  SILFunction *Callee = FRI->getReferencedFunction();
-
-  if (isLinkAll() ||
-      hasSharedVisibility(Callee->getLinkage())) {
-    addFunctionToWorklist(FRI->getReferencedFunction());
-    return true;
-  }
-
-  return false;
+  return maybeAddFunctionToWorklist(FRI->getReferencedFunction());
 }
 
 // Eagerly visiting all used conformances leads to a large blowup
