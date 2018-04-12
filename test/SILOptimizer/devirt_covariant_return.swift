@@ -24,6 +24,7 @@
 // CHECK: apply
 // CHECK: tuple
 // CHECK: return
+// CHECK: // end sil function '$S23devirt_covariant_return6driveryyF'
 
 @_silgen_name("unknown1a")
 func unknown1a() -> ()
