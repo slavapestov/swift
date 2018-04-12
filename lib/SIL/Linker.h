@@ -83,6 +83,8 @@ public:
   void visitMetatypeInst(MetatypeInst *MI);
 
 private:
+  bool shouldLinkFunction(SILFunction *F);
+
   void addFunctionToWorklist(SILFunction *F);
 
   void maybeAddFunctionToWorklist(SILFunction *F);

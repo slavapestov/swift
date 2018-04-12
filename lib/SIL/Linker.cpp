@@ -51,13 +51,25 @@ void SILLinkerVisitor::addFunctionToWorklist(SILFunction *F) {
   }
 }
 
+bool SILLinkerVisitor::shouldLinkFunction(SILFunction *F) {
+  if (!F->isSerialized())
+    return false;
+
+  if (!F->isExternalDeclaration())
+    return false;
+
+  if (isLinkAll())
+    return true;
+
+  return (F->getLinkage() == SILLinkage::Shared ||
+          F->getLinkage() == SILLinkage::SharedExternal ||
+          F->getLinkage() == SILLinkage::HiddenExternal ||
+          F->isTransparent());
+}
+
 /// Deserialize a function and add it to the worklist for processing.
 void SILLinkerVisitor::maybeAddFunctionToWorklist(SILFunction *F) {
-  // Don't need to do anything if the function already has a body.
-  if (!F->isExternalDeclaration())
-    return;
-
-  if (isLinkAll() || hasSharedVisibility(F->getLinkage()))
+  if (shouldLinkFunction(F))
     addFunctionToWorklist(F);
 }
 
@@ -68,7 +80,8 @@ bool SILLinkerVisitor::processFunction(SILFunction *F) {
 
   // If F is a declaration, first deserialize it.
   if (F->isExternalDeclaration()) {
-    addFunctionToWorklist(F);
+    if (shouldLinkFunction(F))
+      addFunctionToWorklist(F);
   } else {
     Worklist.push_back(F);
   }
