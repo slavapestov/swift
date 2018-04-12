@@ -221,7 +221,7 @@ bool SILLinkerVisitor::visitProtocolConformance(
       // to deserialize everything, add the function to the list of functions
       // to deserialize.
       performFuncDeserialization = true;
-      addFunctionToWorklist(E.getMethodWitness().Witness);
+      maybeAddFunctionToWorklist(E.getMethodWitness().Witness);
       break;
     }
     
