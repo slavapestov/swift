@@ -686,9 +686,15 @@ private:
 
     unsigned origParamIndex = NextOrigParamIndex++;
 
+    bool isInout = false;
+    if (auto inoutType = dyn_cast<InOutType>(substType)) {
+      isInout = true;
+      substType = inoutType.getObjectType();
+    }
+
     auto &substTL = M.Types.getTypeLowering(origType, substType);
     ParameterConvention convention;
-    if (isa<InOutType>(substType)) {
+    if (isInout) {
       assert(origType.isTypeParameter() || origType.getAs<InOutType>());
       convention = ParameterConvention::Indirect_Inout;
     } else if (isFormallyPassedIndirectly(origType, substType, substTL)) {

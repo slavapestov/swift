@@ -225,11 +225,9 @@ struct ArgumentInitHelper {
     if (vd->isInOut()) {
       SILValue address = argrv.getUnmanagedValue();
 
-      CanType objectType = vd->getType()->getCanonicalType();
-
       // As a special case, don't introduce a local variable for
       // Builtin.UnsafeValueBuffer, which is not copyable.
-      if (isa<BuiltinUnsafeValueBufferType>(objectType)) {
+      if (isa<BuiltinUnsafeValueBufferType>(ty->getCanonicalType())) {
         // FIXME: mark a debug location?
         SGF.VarLocs[vd] = SILGenFunction::VarLoc::get(address);
         SGF.B.createDebugValueAddr(loc, address,
@@ -279,6 +277,8 @@ struct ArgumentInitHelper {
 
   void emitAnonymousParam(Type type, SILLocation paramLoc, ParamDecl *PD) {
     // Allow non-materializable tuples to be bound to anonymous parameters.
+    //
+    // FIXME: Remove this once -swift-version 3 code generation goes away.
     if (!type->isMaterializable()) {
       if (auto tupleType = type->getAs<TupleType>()) {
         for (auto eltType : tupleType->getElementTypes()) {
@@ -318,10 +318,13 @@ static void makeArgument(Type ty, ParamDecl *decl,
   // Destructure tuple arguments.
   if (TupleType *tupleTy = ty->getAs<TupleType>()) {
     for (auto fieldType : tupleTy->getElementTypes())
-      makeArgument(fieldType, decl, args, SGF);
+      makeArgument(fieldType->getInOutObjectType(), decl, args, SGF);
   } else {
+    auto loweredTy = SGF.getLoweredType(ty);
+    if (decl->isInOut())
+      loweredTy = SILType::getPrimitiveAddressType(loweredTy.getASTType());
     auto arg =
-        SGF.F.begin()->createFunctionArgument(SGF.getLoweredType(ty), decl);
+        SGF.F.begin()->createFunctionArgument(loweredTy, decl);
     args.push_back(arg);
   }
 }
@@ -333,8 +336,6 @@ void SILGenFunction::bindParametersForForwarding(const ParameterList *params,
     Type type = (param->hasType()
                  ? param->getType()
                  : F.mapTypeIntoContext(param->getInterfaceType()));
-    if (param->isInOut())
-      type = InOutType::get(type); // FIXME remove InOutType
     makeArgument(type->eraseDynamicSelfType(), param, parameters, *this);
   }
 }
