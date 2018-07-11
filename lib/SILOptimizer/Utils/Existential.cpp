@@ -209,6 +209,8 @@ ConcreteExistentialInfo::ConcreteExistentialInfo(Operand &openedUse) {
   if (!InitExistential)
     return;
 
+  ArrayRef<ProtocolConformanceRef> ExistentialConformances;
+
   if (auto IE = dyn_cast<InitExistentialAddrInst>(InitExistential)) {
     ExistentialType = IE->getOperand()->getType().getASTType();
     ExistentialConformances = IE->getConformances();
