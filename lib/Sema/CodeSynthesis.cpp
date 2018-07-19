@@ -68,7 +68,7 @@ static void addMemberToContextIfNeeded(Decl *D, DeclContext *DC,
 }
 
 static ParamDecl *getParamDeclAtIndex(FuncDecl *fn, unsigned index) {
-  return fn->getParameterLists().back()->get(index);
+  return fn->getParameterList()->get(index);
 }
 
 static VarDecl *getFirstParamDecl(FuncDecl *fn) {
@@ -509,7 +509,7 @@ static Expr *buildSubscriptIndexReference(ASTContext &ctx,
   // Pull out the body parameters, which we should have cloned
   // previously to be forwardable.  Drop the initial buffer/value
   // parameter in accessors that have one.
-  auto params = accessor->getParameterLists().back()->getArray();
+  auto params = accessor->getParameterList()->getArray();
   auto accessorKind = accessor->getAccessorKind();
 
   // Ignore the value/buffer parameter.
@@ -1050,7 +1050,7 @@ static void synthesizeObservedSetterBody(TypeChecker &TC, AccessorDecl *Set,
   // Okay, the getter is done, create the setter now.  Start by finding the
   // decls for 'self' and 'value'.
   auto *SelfDecl = Set->getImplicitSelfDecl();
-  VarDecl *ValueDecl = Set->getParameterLists().back()->get(0);
+  VarDecl *ValueDecl = Set->getParameterList()->get(0);
 
   // The setter loads the oldValue, invokes willSet with the incoming value,
   // does a direct store, then invokes didSet with the oldValue.
@@ -1481,11 +1481,10 @@ void TypeChecker::completePropertyBehaviorParameter(VarDecl *VD,
     ParamLists.back()->get(0)->setImplicit();
   }
   
-  assert(BehaviorParameter->getParameterLists().size() == 2);
   SmallVector<ParamDecl *, 4> Params;
   SmallVector<Identifier, 4> NameComponents;
   
-  auto *DeclaredParams = BehaviorParameter->getParameterList(1);
+  auto *DeclaredParams = BehaviorParameter->getParameterList();
   for (unsigned i : indices(*DeclaredParams)) {
     auto declaredParam = DeclaredParams->get(i);
     auto declaredParamTy = declaredParam->getInterfaceType();

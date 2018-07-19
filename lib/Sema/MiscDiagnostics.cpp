@@ -2225,10 +2225,10 @@ bool swift::fixItOverrideDeclarationTypes(InFlightDiagnostic &diag,
   if (auto *fn = dyn_cast<AbstractFunctionDecl>(decl)) {
     auto *baseFn = cast<AbstractFunctionDecl>(base);
     bool fixedAny = false;
-    if (fn->getParameterLists().back()->size() ==
-        baseFn->getParameterLists().back()->size()) {
-      for_each(*fn->getParameterLists().back(),
-               *baseFn->getParameterLists().back(),
+    if (fn->getParameterList()->size() ==
+        baseFn->getParameterList()->size()) {
+      for_each(*fn->getParameterList(),
+               *baseFn->getParameterList(),
                [&](ParamDecl *param, const ParamDecl *baseParam) {
         fixedAny |= fixItOverrideDeclarationTypes(diag, param, baseParam);
       });
@@ -2320,7 +2320,7 @@ public:
     if (auto FD = dyn_cast<AccessorDecl>(AFD)) {
       if (FD->getAccessorKind() == AccessorKind::Set) {
         if (auto getter = dyn_cast<VarDecl>(FD->getStorage())) {
-          auto arguments = FD->getParameterLists().back();
+          auto arguments = FD->getParameterList();
           VarDecls[arguments->get(0)] = 0;
           AssociatedGetter = getter;
         }
@@ -4155,7 +4155,7 @@ Optional<DeclName> TypeChecker::omitNeedlessWords(AbstractFunctionDecl *afd) {
   SmallVector<OmissionTypeName, 4> paramTypes;
 
   // Always look at the parameters in the last parameter list.
-  for (auto param : *afd->getParameterLists().back()) {
+  for (auto param : *afd->getParameterList()) {
     paramTypes.push_back(getTypeNameForOmission(param->getInterfaceType())
                          .withDefaultArgument(param->isDefaultArgument()));
   }

@@ -2314,7 +2314,7 @@ public:
         typeForAccessors =
             var->getDeclContext()->mapTypeIntoContext(typeForAccessors);
         if (const FuncDecl *getter = var->getGetter()) {
-          if (getter->getParameterLists().back()->size() != 0) {
+          if (getter->getParameterList()->size() != 0) {
             Out << "property getter has parameters\n";
             abort();
           }
@@ -2337,15 +2337,15 @@ public:
           Out << "property setter has non-Void result type\n";
           abort();
         }
-        if (setter->getParameterLists().back()->size() == 0) {
+        if (setter->getParameterList()->size() == 0) {
           Out << "property setter has no parameters\n";
           abort();
         }
-        if (setter->getParameterLists().back()->size() != 1) {
+        if (setter->getParameterList()->size() != 1) {
           Out << "property setter has 2+ parameters\n";
           abort();
         }
-        const ParamDecl *param = setter->getParameterLists().back()->get(0);
+        const ParamDecl *param = setter->getParameterList()->get(0);
         Type paramType = param->getInterfaceType();
         if (!var->getDeclContext()->contextHasLazyGenericEnvironment()) {
           paramType = var->getDeclContext()->mapTypeIntoContext(paramType);
@@ -2883,8 +2883,8 @@ public:
       // If a decl has the Throws bit set, the function type should throw,
       // and vice versa.
       auto fnTy = AFD->getInterfaceType()->castTo<AnyFunctionType>();
-      for (unsigned i = 1, e = AFD->getNumParameterLists(); i != e; ++i)
-        fnTy = fnTy->getResult()->castTo<AnyFunctionType>();
+      if (AFD->getImplicitSelfDecl())
+        fnTy = fnTy->getResult()->castTo<FunctionType>();
 
       if (AFD->hasThrows() != fnTy->getExtInfo().throws()) {
         Out << "function 'throws' flag does not match function type\n";
@@ -3012,26 +3012,11 @@ public:
     void verifyParsed(FuncDecl *FD) {
       PrettyStackTraceDecl debugStack("verifying FuncDecl", FD);
 
-      unsigned MinParamPatterns = FD->getImplicitSelfDecl() ? 2 : 1;
-      if (FD->getParameterLists().size() < MinParamPatterns) {
-        Out << "should have at least " << MinParamPatterns
-            << " parameter patterns\n";
-        abort();
-      }
-
       verifyParsedBase(FD);
     }
 
     void verifyParsed(AccessorDecl *FD) {
       PrettyStackTraceDecl debugStack("verifying AccessorDecl", FD);
-
-      unsigned NumExpectedParamPatterns = 1;
-      if (FD->getImplicitSelfDecl())
-        NumExpectedParamPatterns++;
-      if (FD->getParameterLists().size() != NumExpectedParamPatterns) {
-        Out << "accessors should not be curried\n";
-        abort();
-      }
 
       auto storage = FD->getStorage();
       if (storage->isStatic() != FD->isStatic()) {

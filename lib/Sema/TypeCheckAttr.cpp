@@ -1468,12 +1468,11 @@ void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
   // 'rethrows' only applies to functions that take throwing functions
   // as parameters.
   auto fn = cast<AbstractFunctionDecl>(D);
-  for (auto paramList : fn->getParameterLists()) {
-    for (auto param : *paramList)
-      if (hasThrowingFunctionParameter(param->getType()
-              ->lookThroughAllOptionalTypes()
-              ->getCanonicalType()))
-        return;
+  for (auto param : *fn->getParameterList()) {
+    if (hasThrowingFunctionParameter(param->getType()
+            ->lookThroughAllOptionalTypes()
+            ->getCanonicalType()))
+      return;
   }
 
   TC.diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);

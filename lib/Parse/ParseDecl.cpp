@@ -4663,7 +4663,7 @@ Parser::ParsedAccessors::classify(Parser &P, AbstractStorageDecl *storage,
                            AddressorKind::NotAddressor, nullptr);
 
     auto argFunc = (WillSet ? WillSet : DidSet);
-    auto argLoc = argFunc->getParameterLists().back()->getStartLoc();
+    auto argLoc = argFunc->getParameterList()->getStartLoc();
 
     auto argument = createSetterAccessorArgument(
         argLoc, Identifier(), AccessorKind::Set, P, elementTy);

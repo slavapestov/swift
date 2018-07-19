@@ -1760,10 +1760,7 @@ SourceLoc OptionalAdjustment::getOptionalityLoc(ValueDecl *witness) const {
   // For parameter adjustments, dig out the pattern.
   ParameterList *params = nullptr;
   if (auto func = dyn_cast<AbstractFunctionDecl>(witness)) {
-    auto bodyParamLists = func->getParameterLists();
-    if (func->getDeclContext()->isTypeContext())
-      bodyParamLists = bodyParamLists.slice(1);
-    params = bodyParamLists[0];
+    params = func->getParameterList();
   } else if (auto subscript = dyn_cast<SubscriptDecl>(witness)) {
     params = subscript->getIndices();
   } else {

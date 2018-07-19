@@ -482,16 +482,10 @@ bool Decl::isPrivateStdlibDecl(bool treatNonBuiltinProtocolsAsPublic) const {
   };
 
   if (auto AFD = dyn_cast<AbstractFunctionDecl>(D)) {
-    // Hide '~>' functions (but show the operator, because it defines
-    // precedence).
-    if (isa<FuncDecl>(AFD) && AFD->getNameStr() == "~>")
-      return true;
-
     // If it's a function with a parameter with leading underscore, it's a
     // private function.
-    for (auto *PL : AFD->getParameterLists())
-      if (hasInternalParameter(PL))
-        return true;
+    if (hasInternalParameter(AFD->getParameterList()))
+      return true;
   }
 
   if (auto SubscriptD = dyn_cast<SubscriptDecl>(D)) {
@@ -4769,7 +4763,7 @@ ParamDecl *AbstractFunctionDecl::getImplicitSelfDecl() {
 
   // "self" is always the first parameter list.
   auto paramLists = getParameterLists();
-  assert(paramLists.size() >= 1);
+  assert(paramLists.size() == 2);
   assert(paramLists[0]->size() == 1);
 
   auto selfParam = paramLists[0]->get(0);
@@ -4781,27 +4775,15 @@ ParamDecl *AbstractFunctionDecl::getImplicitSelfDecl() {
 
 std::pair<DefaultArgumentKind, Type>
 swift::getDefaultArgumentInfo(ValueDecl *source, unsigned Index) {
-  ArrayRef<const ParameterList *> paramLists;
+  const ParameterList *paramList;
   if (auto *AFD = dyn_cast<AbstractFunctionDecl>(source)) {
-    paramLists = AFD->getParameterLists();
-
-    // Skip the 'self' parameter; it is not counted.
-    if (AFD->getImplicitSelfDecl())
-      paramLists = paramLists.slice(1);
+    paramList = AFD->getParameterList();
   } else {
-    paramLists = cast<EnumElementDecl>(source)->getParameterList();
+    paramList = cast<EnumElementDecl>(source)->getParameterList();
   }
 
-  for (auto paramList : paramLists) {
-    if (Index < paramList->size()) {
-      auto param = paramList->get(Index);
-      return { param->getDefaultArgumentKind(), param->getInterfaceType() };
-    }
-    
-    Index -= paramList->size();
-  }
-
-  llvm_unreachable("Invalid parameter index");
+  auto param = paramList->get(Index);
+  return { param->getDefaultArgumentKind(), param->getInterfaceType() };
 }
 
 Type AbstractFunctionDecl::getMethodInterfaceType() const {
@@ -4855,15 +4837,12 @@ SourceRange AbstractFunctionDecl::getSignatureSourceRange() const {
   if (isImplicit())
     return SourceRange();
 
-  auto paramLists = getParameterLists();
-  if (paramLists.empty())
-    return getNameLoc();
+  auto paramList = getParameterList();
 
-  for (auto *paramList : reversed(paramLists)) {
-    auto endLoc = paramList->getSourceRange().End;
-    if (endLoc.isValid())
-      return SourceRange(getNameLoc(), endLoc);
-  }
+  auto endLoc = paramList->getSourceRange().End;
+  if (endLoc.isValid())
+    return SourceRange(getNameLoc(), endLoc);
+
   return getNameLoc();
 }
 
@@ -5373,7 +5352,7 @@ SourceRange FuncDecl::getSourceRange() const {
   if (hasThrows())
     return { StartLoc, getThrowsLoc() };
 
-  auto LastParamListEndLoc = getParameterLists().back()->getSourceRange().End;
+  auto LastParamListEndLoc = getParameterList()->getSourceRange().End;
   if (LastParamListEndLoc.isValid())
     return { StartLoc, LastParamListEndLoc };
   return StartLoc;

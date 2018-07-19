@@ -305,7 +305,7 @@ deriveBodyEquatable_enum_uninhabited_eq(AbstractFunctionDecl *eqDecl) {
   auto parentDC = eqDecl->getDeclContext();
   ASTContext &C = parentDC->getASTContext();
 
-  auto args = eqDecl->getParameterLists().back();
+  auto args = eqDecl->getParameterList();
   auto aParam = args->get(0);
   auto bParam = args->get(1);
 
@@ -336,7 +336,7 @@ deriveBodyEquatable_enum_noAssociatedValues_eq(AbstractFunctionDecl *eqDecl) {
   auto parentDC = eqDecl->getDeclContext();
   ASTContext &C = parentDC->getASTContext();
 
-  auto args = eqDecl->getParameterLists().back();
+  auto args = eqDecl->getParameterList();
   auto aParam = args->get(0);
   auto bParam = args->get(1);
 
@@ -391,7 +391,7 @@ deriveBodyEquatable_enum_hasAssociatedValues_eq(AbstractFunctionDecl *eqDecl) {
   auto parentDC = eqDecl->getDeclContext();
   ASTContext &C = parentDC->getASTContext();
 
-  auto args = eqDecl->getParameterLists().back();
+  auto args = eqDecl->getParameterList();
   auto aParam = args->get(0);
   auto bParam = args->get(1);
 
@@ -505,7 +505,7 @@ static void deriveBodyEquatable_struct_eq(AbstractFunctionDecl *eqDecl) {
   auto parentDC = eqDecl->getDeclContext();
   ASTContext &C = parentDC->getASTContext();
 
-  auto args = eqDecl->getParameterLists().back();
+  auto args = eqDecl->getParameterList();
   auto aParam = args->get(0);
   auto bParam = args->get(1);
 

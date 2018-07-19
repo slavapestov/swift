@@ -1601,24 +1601,6 @@ void SILGenFunction::emitForeignToNativeThunk(SILDeclRef thunk) {
   }
   ImportAsMemberStatus memberStatus = fd->getImportAsMemberStatus();
 
-  // Forward the arguments.
-  auto forwardedParameters = fd->getParameterLists();
-
-  // For allocating constructors, 'self' is a metatype, not the 'self' value
-  // formally present in the constructor body.
-  Type allocatorSelfType;
-  if (thunk.kind == SILDeclRef::Kind::Allocator) {
-    allocatorSelfType = forwardedParameters[0]
-      ->getInterfaceType(getASTContext())
-      ->getWithoutSpecifierType();
-    if (F.getGenericEnvironment())
-      allocatorSelfType = F.getGenericEnvironment()
-        ->mapTypeIntoContext(allocatorSelfType);
-    forwardedParameters = forwardedParameters.slice(1);
-  }
-
-  SmallVector<SILValue, 8> params;
-  
   // Introduce indirect returns if necessary.
   // TODO: Handle exploded results? We don't currently need to since the only
   // bridged indirect type is Any.
@@ -1631,8 +1613,19 @@ void SILGenFunction::emitForeignToNativeThunk(SILDeclRef thunk) {
         F.begin()->createFunctionArgument(nativeConv.getSingleSILResultType());
   }
   
-  for (auto *paramList : reversed(forwardedParameters))
-    bindParametersForForwarding(paramList, params);
+  // Forward the arguments.
+  SmallVector<SILValue, 8> params;  
+  bindParametersForForwarding(fd->getParameterList(), params);
+
+  // For allocating constructors, 'self' is a metatype, not the 'self' value
+  // formally present in the constructor body.
+  Type allocatorSelfType;
+  if (thunk.kind == SILDeclRef::Kind::Allocator) {
+    allocatorSelfType = fd->getImplicitSelfDecl()->getInterfaceType();
+    if (F.getGenericEnvironment())
+      allocatorSelfType = F.getGenericEnvironment()
+        ->mapTypeIntoContext(allocatorSelfType);
+  }
 
   if (allocatorSelfType) {
     auto selfMetatype =

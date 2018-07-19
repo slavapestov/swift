@@ -4801,8 +4801,8 @@ namespace {
       // different (usually in something like nullability), but for Swift it's
       // an AST invariant that's assumed and asserted elsewhere. If the type is
       // different, just drop the setter, and leave the property as get-only.
-      assert(setter->getParameterLists().back()->size() == 1);
-      const ParamDecl *param = setter->getParameterLists().back()->get(0);
+      assert(setter->getParameterList()->size() == 1);
+      const ParamDecl *param = setter->getParameterList()->get(0);
       if (!param->getInterfaceType()->isEqual(original->getInterfaceType()))
         return;
 

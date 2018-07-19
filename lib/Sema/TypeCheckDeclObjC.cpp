@@ -496,7 +496,7 @@ bool swift::isRepresentableInObjC(
 
   if (!isSpecialInit &&
       !isParamListRepresentableInObjC(AFD,
-                                      AFD->getParameterLists().back(),
+                                      AFD->getParameterList(),
                                       Reason)) {
     if (!Diagnose) {
       // Return as soon as possible if we are not producing diagnostics.
@@ -653,7 +653,7 @@ bool swift::isRepresentableInObjC(
     // If the selector did not provide an index for the error, find
     // the last parameter that is not a trailing closure.
     if (!foundErrorParameterIndex) {
-      auto *paramList = AFD->getParameterLists().back();
+      auto *paramList = AFD->getParameterList();
       errorParameterIndex = paramList->size();
 
       // Note: the errorParameterIndex is actually a SIL function

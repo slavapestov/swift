@@ -635,15 +635,15 @@ FuncDecl *ASTContext::getPlusFunctionOnString() const {
       auto ResultType = FD->getResultInterfaceType();
       if (ResultType->getNominalOrBoundGenericNominal() != getStringDecl())
         continue;
-      auto ParamLists = FD->getParameterLists();
-      if (ParamLists.size() != 2 || ParamLists[1]->size() != 2)
+      auto ParamList = FD->getParameterList();
+      if (ParamList->size() != 2)
         continue;
       auto CheckIfStringParam = [this](ParamDecl* Param) {
         auto Type = Param->getInterfaceType()->getNominalOrBoundGenericNominal();
         return Type == getStringDecl();
       };
-      if (CheckIfStringParam(ParamLists[1]->get(0)) &&
-          CheckIfStringParam(ParamLists[1]->get(1))) {
+      if (CheckIfStringParam(ParamList->get(0)) &&
+          CheckIfStringParam(ParamList->get(1))) {
         getImpl().PlusFunctionOnString = FD;
         break;
       }
@@ -1026,10 +1026,10 @@ FuncDecl *ASTContext::getHashValueForDecl() const {
     auto *fd = dyn_cast<FuncDecl>(result);
     if (!fd)
       continue;
-    auto paramLists = fd->getParameterLists();
-    if (paramLists.size() != 1 || paramLists[0]->size() != 1)
+    auto paramList = fd->getParameterList();
+    if (paramList->size() != 1)
       continue;
-    auto paramDecl = paramLists[0]->get(0);
+    auto paramDecl = paramList->get(0);
     if (paramDecl->getArgumentName() != Id_for)
       continue;
     auto genericParams = fd->getGenericParams();
@@ -1054,25 +1054,23 @@ FuncDecl *ASTContext::getArrayAppendElementDecl() const {
       if (A->Value != "array.append_element")
         continue;
 
-      auto ParamLists = FnDecl->getParameterLists();
-      if (ParamLists.size() != 2)
-        return nullptr;
-      if (ParamLists[0]->size() != 1)
-        return nullptr;
-      if (!ParamLists[0]->get(0)->isInOut())
+      auto SelfDecl = FnDecl->getImplicitSelfDecl();
+      if (!SelfDecl->isInOut())
         return nullptr;
 
-      auto SelfInOutTy = ParamLists[0]->get(0)->getInterfaceType();
+      auto SelfInOutTy = SelfDecl->getInterfaceType();
       BoundGenericStructType *SelfGenericStructTy =
-        SelfInOutTy->getInOutObjectType()->getAs<BoundGenericStructType>();
+        SelfInOutTy->getAs<BoundGenericStructType>();
       if (!SelfGenericStructTy)
         return nullptr;
       if (SelfGenericStructTy->getDecl() != getArrayDecl())
         return nullptr;
 
-      if (ParamLists[1]->size() != 1)
+      auto ParamList = FnDecl->getParameterList();
+      if (ParamList->size() != 1)
         return nullptr;
-      GenericTypeParamType *ElementType = ParamLists[1]->get(0)->
+
+      GenericTypeParamType *ElementType = ParamList->get(0)->
                              getInterfaceType()->getAs<GenericTypeParamType>();
       if (!ElementType)
         return nullptr;
@@ -1103,26 +1101,23 @@ FuncDecl *ASTContext::getArrayReserveCapacityDecl() const {
       if (A->Value != "array.reserve_capacity_for_append")
         continue;
 
-      auto ParamLists = FnDecl->getParameterLists();
-      if (ParamLists.size() != 2)
-        return nullptr;
-      if (ParamLists[0]->size() != 1)
-        return nullptr;
-      if (!ParamLists[0]->get(0)->isInOut())
+      auto SelfDecl = FnDecl->getImplicitSelfDecl();
+      if (!SelfDecl->isInOut())
         return nullptr;
 
-      auto SelfInOutTy = ParamLists[0]->get(0)->getInterfaceType();
+      auto SelfInOutTy = SelfDecl->getInterfaceType();
       BoundGenericStructType *SelfGenericStructTy =
-        SelfInOutTy->getInOutObjectType()->getAs<BoundGenericStructType>();
+        SelfInOutTy->getAs<BoundGenericStructType>();
       if (!SelfGenericStructTy)
         return nullptr;
       if (SelfGenericStructTy->getDecl() != getArrayDecl())
         return nullptr;
 
-      if (ParamLists[1]->size() != 1)
+      auto ParamList = FnDecl->getParameterList();
+      if (ParamList->size() != 1)
         return nullptr;
       StructType *IntType =
-        ParamLists[1]->get(0)->getInterfaceType()->getAs<StructType>();
+        ParamList->get(0)->getInterfaceType()->getAs<StructType>();
       if (!IntType)
         return nullptr;
 

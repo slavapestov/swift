@@ -5183,6 +5183,13 @@ public:
   /// depending on the function context.
   bool argumentNameIsAPIByDefault() const;
 
+  ParameterList *getParameterList() {
+    return getParameterLists().back();
+  }
+  const ParameterList *getParameterList() const {
+    return getParameterLists().back();
+  }
+
   /// \brief Returns the "natural" number of argument clauses taken by this
   /// function.  This value is one for free-standing functions, and two for
   /// methods.
@@ -5424,6 +5431,12 @@ public:
   }
   const ParameterList *getParameterList(unsigned i) const {
     return getParameterLists()[i];
+  }
+  ParameterList *getParameterList() {
+    return getParameterLists().back();
+  }
+  const ParameterList *getParameterList() const {
+    return getParameterLists().back();
   }
   
   /// \returns true if this is non-mutating due to applying a 'mutating'
