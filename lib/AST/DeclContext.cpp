@@ -801,9 +801,6 @@ IterableDeclContext::castDeclToIterableDeclContext(const Decl *D) {
 /// declaration or extension, the supplied context is returned.
 static const DeclContext *
 getPrivateDeclContext(const DeclContext *DC, const SourceFile *useSF) {
-  if (DC->getASTContext().isSwiftVersion3())
-    return DC;
-
   auto NTD = DC->getAsNominalTypeOrNominalTypeExtensionContext();
   if (!NTD)
     return DC;
@@ -854,10 +851,6 @@ bool AccessScope::allowsPrivateAccess(const DeclContext *useDC, const DeclContex
   // Check the lexical scope.
   if (useDC->isChildContextOf(sourceDC))
     return true;
-
-  // Only check lexical scope in Swift 3 mode
-  if (useDC->getASTContext().isSwiftVersion3())
-    return false;
 
   // Do not allow access if the sourceDC is in a different file
   auto useSF = useDC->getParentSourceFile();
