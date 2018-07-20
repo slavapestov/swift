@@ -1322,13 +1322,6 @@ static bool diagnoseAvailability(IdentTypeRepr *IdType,
   auto componentRange = IdType->getComponentRange();
   for (auto comp : componentRange) {
     if (auto *typeDecl = comp->getBoundDecl()) {
-      // In Swift 3, components other than the last one were not properly
-      // checked for availability.
-      // FIXME: We should try to downgrade these errors to warnings, not just
-      // skip diagnosing them.
-      if (TC.getLangOpts().isSwiftVersion3() && comp != componentRange.back())
-        continue;
-
       if (diagnoseDeclAvailability(typeDecl, TC, DC, comp->getIdLoc(),
                                    AllowPotentiallyUnavailableProtocol,
                                    /*SignalOnPotentialUnavailability*/false)) {

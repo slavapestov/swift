@@ -1399,11 +1399,10 @@ void TypeChecker::checkDefaultArguments(ParameterList *params,
     VD->getFormalAccessScope(/*useDC=*/nullptr,
                              /*treatUsableFromInlineAsPublic=*/true);
 
-  // In Swift 4 mode, default argument bodies are inlined into the
-  // caller.
+  // Default argument bodies are inlined into the caller.
   if (auto *func = dyn_cast<AbstractFunctionDecl>(VD)) {
     auto expansion = func->getResilienceExpansion();
-    if (!Context.isSwiftVersion3() && access.isPublic())
+    if (access.isPublic())
       expansion = ResilienceExpansion::Minimal;
 
     func->setDefaultArgumentResilienceExpansion(expansion);

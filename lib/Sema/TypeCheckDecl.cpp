@@ -445,18 +445,6 @@ void TypeChecker::checkInheritanceClause(Decl *decl,
         if (!inheritedTy)
           continue;
       }
-
-      // Swift 3 compatibility -- a class inheriting from AnyObject is a no-op.
-      if (Context.LangOpts.isSwiftVersion3() && isa<ClassDecl>(decl) &&
-          inheritedTy->isAnyObject()) {
-        auto classDecl = cast<ClassDecl>(decl);
-        auto removeRange = getRemovalRange(i);
-        diagnose(inherited.getSourceRange().Start,
-                 diag::class_inherits_anyobject,
-                 classDecl->getDeclaredInterfaceType())
-          .fixItRemoveChars(removeRange.Start, removeRange.End);
-        continue;
-      }
     }
     
     // If this is an enum inheritance clause, check for a raw type.

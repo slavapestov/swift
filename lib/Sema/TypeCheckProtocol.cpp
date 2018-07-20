@@ -2918,15 +2918,13 @@ ConformanceChecker::resolveWitnessViaLookup(ValueDecl *requirement) {
       break;
 
     case CheckKind::WitnessUnavailable: {
-      bool emitError = !witness->getASTContext().LangOpts.isSwiftVersion3();
-      diagnoseOrDefer(requirement, /*isError=*/emitError,
-        [witness, requirement, emitError](
+      diagnoseOrDefer(requirement, /*isError=*/true,
+        [witness, requirement](
                                     NormalProtocolConformance *conformance) {
           auto &diags = witness->getASTContext().Diags;
           SourceLoc diagLoc = getLocForDiagnosingWitness(conformance, witness);
           diags.diagnose(diagLoc,
-                         emitError ? diag::witness_unavailable
-                                   : diag::witness_unavailable_warn,
+                         diag::witness_unavailable,
                          witness->getDescriptiveKind(),
                          witness->getFullName(),
                          conformance->getProtocol()->getFullName());
@@ -4631,10 +4629,8 @@ void TypeChecker::checkConformancesInContext(DeclContext *dc,
         if (kind && getLangOpts().EnableNSKeyedArchiverDiagnostics &&
             isa<NormalProtocolConformance>(conformance) &&
             !hasExplicitObjCName(classDecl)) {
-          bool emitWarning = Context.LangOpts.isSwiftVersion3();
           diagnose(cast<NormalProtocolConformance>(conformance)->getLoc(),
-                   emitWarning ? diag::nscoding_unstable_mangled_name_warn
-                               : diag::nscoding_unstable_mangled_name,
+                   diag::nscoding_unstable_mangled_name,
                    static_cast<unsigned>(kind.getValue()),
                    classDecl->getDeclaredInterfaceType());
           auto insertionLoc =
