@@ -282,18 +282,6 @@ struct ArgumentInitHelper {
   }
 
   void emitAnonymousParam(Type type, SILLocation paramLoc, ParamDecl *PD) {
-    // Allow non-materializable tuples to be bound to anonymous parameters.
-    //
-    // FIXME: Remove this once -swift-version 3 code generation goes away.
-    if (!type->isMaterializable()) {
-      if (auto tupleType = type->getAs<TupleType>()) {
-        for (auto eltType : tupleType->getElementTypes()) {
-          emitAnonymousParam(eltType, paramLoc, nullptr);
-        }
-        return;
-      }
-    }
-
     // A value bound to _ is unused and can be immediately released.
     Scope discardScope(SGF.Cleanups, CleanupLocation(PD));
 
