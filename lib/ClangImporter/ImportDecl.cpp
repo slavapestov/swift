@@ -422,7 +422,6 @@ makeEnumRawValueConstructor(ClangImporter::Implementation &Impl,
   ASTContext &C = Impl.SwiftContext;
   auto rawTy = enumDecl->getRawType();
   auto enumTy = enumDecl->getDeclaredInterfaceType();
-  auto metaTy = MetatypeType::get(enumTy);
   
   auto selfDecl = ParamDecl::createSelf(SourceLoc(), enumDecl,
                                         /*static*/false, /*inout*/true);
@@ -432,11 +431,11 @@ makeEnumRawValueConstructor(ClangImporter::Implementation &Impl,
                                  SourceLoc(), C.Id_rawValue,
                                  rawTy,
                                  enumDecl);
-  param->setInterfaceType(enumDecl->getRawType());
+  param->setInterfaceType(rawTy);
   param->setValidationToChecked();
 
   auto paramPL = ParameterList::createWithoutLoc(param);
-  
+
   DeclName name(C, DeclBaseName::createConstructor(), paramPL);
   auto *ctorDecl =
     new (C) ConstructorDecl(name, enumDecl->getLoc(),
@@ -447,13 +446,7 @@ makeEnumRawValueConstructor(ClangImporter::Implementation &Impl,
   ctorDecl->setImplicit();
   ctorDecl->setAccess(AccessLevel::Public);
 
-  auto optEnumTy = OptionalType::get(enumTy);
-
-  auto fnTy = FunctionType::get(paramPL->getType(C), optEnumTy);
-  auto allocFnTy = FunctionType::get(metaTy, fnTy);
-  auto initFnTy = FunctionType::get(enumTy, fnTy);
-  ctorDecl->setInterfaceType(allocFnTy);
-  ctorDecl->setInitializerInterfaceType(initFnTy);
+  ctorDecl->computeType();
   ctorDecl->setValidationToChecked();
 
   // Don't bother synthesizing the body if we've already finished type-checking.
