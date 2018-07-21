@@ -5694,11 +5694,7 @@ Decl *SwiftDeclConverter::importGlobalAsMethod(
 
   auto importedType =
       Impl.importFunctionReturnType(dc, decl, allowNSUIntegerAsInt);
-
   Type swiftResultTy = importedType.getType();
-
-  auto fnType =
-      ParameterList::getFullInterfaceType(swiftResultTy, bodyParams, C);
 
   auto loc = Impl.importSourceLoc(decl->getLocation());
   auto nameLoc = Impl.importSourceLoc(decl->getLocation());
@@ -5706,9 +5702,8 @@ Decl *SwiftDeclConverter::importGlobalAsMethod(
     createFuncOrAccessor(C, loc, accessorInfo, name, nameLoc,
                          bodyParams, swiftResultTy, /*throws*/ false, dc, decl);
 
-  auto interfaceType = getGenericMethodType(dc, fnType->castTo<AnyFunctionType>());
-  result->setInterfaceType(interfaceType);
   result->setGenericEnvironment(dc->getGenericEnvironmentOfContext());
+  result->computeType();
   result->setValidationToChecked();
 
   result->setAccess(AccessLevel::Public);
