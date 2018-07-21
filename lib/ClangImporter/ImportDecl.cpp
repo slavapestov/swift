@@ -8223,22 +8223,11 @@ ClangImporter::Implementation::createConstant(Identifier name, DeclContext *dc,
   var->setInterfaceType(type);
   var->setIsObjC(false);
 
-  // Form the argument patterns.
-  SmallVector<ParameterList*, 3> getterArgs;
-  
   // 'self'
   ParamDecl *selfDecl = nullptr;
   auto *params = ParameterList::createEmpty(C);
-  if (dc->isTypeContext()) {
+  if (dc->isTypeContext())
     selfDecl = ParamDecl::createSelf(SourceLoc(), dc, isStatic);
-    getterArgs.push_back(ParameterList::createWithoutLoc(selfDecl));
-  }
-  
-  // empty tuple
-  getterArgs.push_back(params);
-
-  // Form the type of the getter.
-  auto getterType = ParameterList::getFullInterfaceType(type, getterArgs, C);
 
   // Create the getter function declaration.
   auto func = AccessorDecl::create(C,
@@ -8255,7 +8244,7 @@ ClangImporter::Implementation::createConstant(Identifier name, DeclContext *dc,
                      selfDecl, params,
                      TypeLoc::withoutLoc(type), dc);
   func->setStatic(isStatic);
-  func->setInterfaceType(getterType);
+  func->computeType();
   func->setAccess(getOverridableAccessLevel(dc));
   func->setValidationToChecked();
   func->setImplicit();
