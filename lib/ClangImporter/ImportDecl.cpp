@@ -1816,11 +1816,6 @@ static bool addErrorDomain(NominalTypeDecl *swiftDecl,
       DeclRefExpr(ConcreteDeclRef(swiftValueDecl), {}, isImplicit);
   auto *selfDecl = ParamDecl::createSelf(SourceLoc(), swiftDecl, isStatic);
   auto *params = ParameterList::createEmpty(C);
-  ParameterList *paramLists[] = {
-    ParameterList::createWithoutLoc(selfDecl),
-    params
-  };
-  auto toStringTy = ParameterList::getFullInterfaceType(stringTy, paramLists, C);
 
   auto getterDecl = AccessorDecl::create(C,
                      /*FuncLoc=*/SourceLoc(),
@@ -1835,7 +1830,7 @@ static bool addErrorDomain(NominalTypeDecl *swiftDecl,
                      /*GenericParams=*/nullptr,
                      selfDecl, params,
                      TypeLoc::withoutLoc(stringTy), swiftDecl);
-  getterDecl->setInterfaceType(toStringTy);
+  getterDecl->computeType();
   getterDecl->setValidationToChecked();
   getterDecl->setIsObjC(false);
 
