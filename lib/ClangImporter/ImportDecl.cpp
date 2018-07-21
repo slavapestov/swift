@@ -711,12 +711,7 @@ static AccessorDecl *makeFieldSetterDecl(ClangImporter::Implementation &Impl,
                      TypeLoc::withoutLoc(voidTy), importedDecl, clangNode);
   setterDecl->setIsObjC(false);
 
-  ParameterList *paramLists[] = {
-    ParameterList::createWithoutLoc(selfDecl),
-    params
-  };
-  auto type = ParameterList::getFullInterfaceType(voidTy, paramLists, C);
-  setterDecl->setInterfaceType(type);
+  setterDecl->computeType();
   setterDecl->setValidationToChecked();
 
   setterDecl->setAccess(AccessLevel::Public);
