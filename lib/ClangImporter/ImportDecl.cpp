@@ -6109,24 +6109,17 @@ ConstructorDecl *SwiftDeclConverter::importConstructor(
     }
   }
 
-  // Add the implicit 'self' parameter patterns.
-  SmallVector<ParameterList *, 4> bodyParams;
-  auto selfMetaVar = ParamDecl::createSelf(SourceLoc(), dc, /*static*/ true);
-  bodyParams.push_back(ParameterList::createWithoutLoc(selfMetaVar));
-
   // Import the type that this method will have.
   Optional<ForeignErrorConvention> errorConvention;
-  bodyParams.push_back(nullptr);
+  ParameterList *bodyParams;
   auto importedType = Impl.importMethodType(
-      dc, objcMethod, args, variadic, isInSystemModule(dc), &bodyParams.back(),
+      dc, objcMethod, args, variadic, isInSystemModule(dc), &bodyParams,
       importedName, errorConvention, SpecialMethodKind::Constructor);
   if (!importedType)
     return nullptr;
 
-  auto type = importedType.getType();
-
   // Determine the failability of this initializer.
-  auto oldFnType = type->castTo<AnyFunctionType>();
+  auto oldFnType = importedType.getType()->castTo<AnyFunctionType>();
   bool resultIsOptional = (bool) oldFnType->getResult()->getOptionalObjectType();
 
   // Update the failability appropriately based on the imported method type.
@@ -6143,27 +6136,9 @@ ConstructorDecl *SwiftDeclConverter::importConstructor(
   if (resultIsOptional)
     resultTy = OptionalType::get(resultTy);
 
-  type = FunctionType::get(oldFnType->getParams(), resultTy,
-                           oldFnType->getExtInfo());
-
-  // Add the 'self' parameter to the function types.
-  auto selfTy = dc->getSelfInterfaceType();
-  auto selfParam = AnyFunctionType::Param(selfTy,
-                                          Identifier(), ParameterTypeFlags());
-  auto selfMetaTy = MetatypeType::get(selfTy);
-  auto selfMetaParam = AnyFunctionType::Param(selfMetaTy, Identifier(),
-                                              ParameterTypeFlags());
-  Type allocType = FunctionType::get({selfMetaParam}, type,
-                                     AnyFunctionType::ExtInfo());
-  Type initType = FunctionType::get({selfParam}, type,
-                                    AnyFunctionType::ExtInfo());
-
   // Look for other imported constructors that occur in this context with
   // the same name.
-  Type allocParamType = allocType->castTo<AnyFunctionType>()
-                            ->getResult()
-                            ->castTo<AnyFunctionType>()
-                            ->getInput();
+  Type allocParamType = oldFnType->getInput();
   bool ignoreNewExtensions = isa<ClassDecl>(dc);
   for (auto other : ownerNominal->lookupDirect(importedName.getDeclName(),
                                                ignoreNewExtensions)) {
@@ -6246,7 +6221,7 @@ ConstructorDecl *SwiftDeclConverter::importConstructor(
       objcMethod, AccessLevel::Public, importedName.getDeclName(),
       /*NameLoc=*/SourceLoc(), failability, /*FailabilityLoc=*/SourceLoc(),
       /*Throws=*/importedName.getErrorInfo().hasValue(),
-      /*ThrowsLoc=*/SourceLoc(), selfVar, bodyParams.back(),
+      /*ThrowsLoc=*/SourceLoc(), selfVar, bodyParams,
       /*GenericParams=*/nullptr, dc);
 
   // Make the constructor declaration immediately visible in its
@@ -6256,14 +6231,8 @@ ConstructorDecl *SwiftDeclConverter::importConstructor(
   addObjCAttribute(result, selector);
 
   // Calculate the function type of the result.
-  auto interfaceAllocType =
-      getGenericMethodType(dc, allocType->castTo<AnyFunctionType>());
-  auto interfaceInitType =
-      getGenericMethodType(dc, initType->castTo<AnyFunctionType>());
-
-  result->setInitializerInterfaceType(interfaceInitType);
-  result->setInterfaceType(interfaceAllocType);
   result->setGenericEnvironment(dc->getGenericEnvironmentOfContext());
+  result->computeType();
 
   Impl.recordImplicitUnwrapForDecl(result,
                                    importedType.isImplicitlyUnwrapped());
