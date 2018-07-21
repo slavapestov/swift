@@ -657,7 +657,7 @@ static AccessorDecl *makeFieldGetterDecl(ClangImporter::Implementation &Impl,
 
   auto *params = ParameterList::createEmpty(C);
   
-  auto getterType = importedFieldDecl->getType();
+  auto getterType = importedFieldDecl->getInterfaceType();
   auto getterDecl = AccessorDecl::create(C,
                      /*FuncLoc=*/importedFieldDecl->getLoc(),
                      /*AccessorKeywordLoc=*/SourceLoc(),
@@ -673,12 +673,7 @@ static AccessorDecl *makeFieldGetterDecl(ClangImporter::Implementation &Impl,
   getterDecl->setAccess(AccessLevel::Public);
   getterDecl->setIsObjC(false);
 
-  ParameterList *paramLists[] = {
-    ParameterList::createWithoutLoc(selfDecl),
-    params
-  };
-  auto type = ParameterList::getFullInterfaceType(getterType, paramLists, C);
-  getterDecl->setInterfaceType(type);
+  getterDecl->computeType();
   getterDecl->setValidationToChecked();
 
   return getterDecl;
