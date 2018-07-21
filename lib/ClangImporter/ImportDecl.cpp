@@ -608,13 +608,7 @@ static AccessorDecl *makeStructRawValueGetter(
   getterDecl->setImplicit();
   getterDecl->setIsObjC(false);
 
-  ParameterList *paramLists[] = {
-    ParameterList::createWithoutLoc(selfDecl),
-    params
-  };
-  auto type = ParameterList::getFullInterfaceType(computedType, paramLists, C);
-
-  getterDecl->setInterfaceType(type);
+  getterDecl->computeType();
   getterDecl->setValidationToChecked();
 
   getterDecl->setAccess(AccessLevel::Public);
