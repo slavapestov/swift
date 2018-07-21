@@ -1644,15 +1644,6 @@ buildSubscriptSetterDecl(ClangImporter::Implementation &Impl,
 
   auto valueIndicesPL = ParameterList::create(C, {paramVarDecl, index});
 
-  // Form the type of the setter.
-  ParameterList *setterArgs[] = {ParameterList::createWithoutLoc(selfDecl),
-                                 valueIndicesPL};
-  Type setterType = ParameterList::getFullInterfaceType(TupleType::getEmpty(C),
-                                                        setterArgs, C);
-
-  auto interfaceType =
-      getGenericMethodType(dc, setterType->castTo<AnyFunctionType>());
-
   // Create the setter thunk.
   auto thunk = AccessorDecl::create(C,
                      /*FuncLoc=*/setter->getLoc(),
@@ -1668,9 +1659,9 @@ buildSubscriptSetterDecl(ClangImporter::Implementation &Impl,
                      selfDecl, valueIndicesPL,
                      TypeLoc::withoutLoc(TupleType::getEmpty(C)), dc,
                      setter->getClangNode());
-  thunk->setInterfaceType(interfaceType);
-  thunk->setValidationToChecked();
   thunk->setGenericEnvironment(dc->getGenericEnvironmentOfContext());
+  thunk->computeType();
+  thunk->setValidationToChecked();
 
   thunk->setAccess(getOverridableAccessLevel(dc));
 
