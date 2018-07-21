@@ -1144,14 +1144,7 @@ createDefaultConstructor(ClangImporter::Implementation &Impl,
       /*GenericParams=*/nullptr, structDecl);
 
   // Set the constructor's type.
-  auto selfType = structDecl->getDeclaredInterfaceType();
-  auto selfMetatype = MetatypeType::get(selfType);
-  auto emptyTy = TupleType::getEmpty(context);
-  auto fnTy = FunctionType::get(emptyTy, selfType);
-  auto allocFnTy = FunctionType::get(selfMetatype, fnTy);
-  auto initFnTy = FunctionType::get(selfType, fnTy);
-  constructor->setInterfaceType(allocFnTy);
-  constructor->setInitializerInterfaceType(initFnTy);
+  constructor->computeType();
   constructor->setValidationToChecked();
 
   constructor->setAccess(AccessLevel::Public);
@@ -1167,6 +1160,7 @@ createDefaultConstructor(ClangImporter::Implementation &Impl,
   // Construct the left-hand reference to self.
   Expr *lhs = new (context) DeclRefExpr(selfDecl,
                                         DeclNameLoc(), /*Implicit=*/true);
+  auto selfType = structDecl->getDeclaredInterfaceType();
   lhs->setType(LValueType::get(selfType));
 
   auto emptyTuple = TupleType::getEmpty(context);
