@@ -6533,7 +6533,6 @@ SwiftDeclConverter::importSubscript(Decl *decl,
   // the implicit 'self' parameter and the normal function
   // parameters.
   auto elementTy = getter->getResultInterfaceType();
-  auto elementContextTy = getter->mapTypeIntoContext(elementTy);
 
   // Local function to mark the setter unavailable.
   auto makeSetterUnavailable = [&] {
@@ -6637,7 +6636,7 @@ SwiftDeclConverter::importSubscript(Decl *decl,
   auto subscript = Impl.createDeclWithClangNode<SubscriptDecl>(
       getter->getClangNode(), getOverridableAccessLevel(dc), name,
       decl->getLoc(), bodyParams, decl->getLoc(),
-      TypeLoc::withoutLoc(elementContextTy), dc,
+      TypeLoc::withoutLoc(elementTy), dc,
       /*GenericParams=*/nullptr);
 
   // Build the thunks.
@@ -6663,15 +6662,7 @@ SwiftDeclConverter::importSubscript(Decl *decl,
 
   subscript->setIsSetterMutating(false);
   makeComputed(subscript, getterThunk, setterThunk);
-  auto indicesType = bodyParams->getType(C);
-
-  AnyFunctionType *fnType;
-  if (auto *sig = dc->getGenericSignatureOfContext())
-    fnType = GenericFunctionType::get(sig, indicesType, elementTy,
-                                      AnyFunctionType::ExtInfo());
-  else
-    fnType = FunctionType::get(indicesType, elementTy);
-  subscript->setInterfaceType(fnType);
+  subscript->computeType();
 
   Impl.recordImplicitUnwrapForDecl(subscript, isIUO);
 
