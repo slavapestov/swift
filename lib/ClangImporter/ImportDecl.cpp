@@ -1583,17 +1583,6 @@ buildSubscriptGetterDecl(ClangImporter::Implementation &Impl,
   auto *selfDecl = ParamDecl::createSelf(SourceLoc(), dc);
   auto *params = ParameterList::create(C, index);
 
-  // Form the type of the getter.
-  ParameterList *paramLists[] = {
-    ParameterList::createWithoutLoc(selfDecl),
-    params
-  };
-  auto getterType =
-      ParameterList::getFullInterfaceType(elementTy, paramLists, C);
-
-  auto interfaceType =
-      getGenericMethodType(dc, getterType->castTo<AnyFunctionType>());
-
   // Create the getter thunk.
   auto thunk = AccessorDecl::create(C,
                      /*FuncLoc=*/loc,
@@ -1610,9 +1599,9 @@ buildSubscriptGetterDecl(ClangImporter::Implementation &Impl,
                      TypeLoc::withoutLoc(elementTy), dc,
                      getter->getClangNode());
 
-  thunk->setInterfaceType(interfaceType);
-  thunk->setValidationToChecked();
   thunk->setGenericEnvironment(dc->getGenericEnvironmentOfContext());
+  thunk->computeType();
+  thunk->setValidationToChecked();
 
   thunk->setAccess(getOverridableAccessLevel(dc));
 
