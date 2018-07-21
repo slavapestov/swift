@@ -1558,19 +1558,6 @@ static void makeStructRawValuedWithBridge(
   addSynthesizedTypealias(structDecl, ctx.Id_RawValue, bridgedType);
 }
 
-static Type getGenericMethodType(DeclContext *dc, AnyFunctionType *fnType) {
-  assert(!fnType->hasArchetype());
-
-  auto *sig = dc->getGenericSignatureOfContext();
-  if (!sig)
-    return fnType;
-
-  Type interfaceType = GenericFunctionType::get(
-      sig, fnType->getParams(), fnType->getResult(), AnyFunctionType::ExtInfo());
-
-  return interfaceType;
-}
-
 /// Build a declaration for an Objective-C subscript getter.
 static AccessorDecl *
 buildSubscriptGetterDecl(ClangImporter::Implementation &Impl,
@@ -3976,10 +3963,6 @@ namespace {
       auto selfVar =
         ParamDecl::createSelf(SourceLoc(), dc, /*isStatic*/!isInstance);
       bodyParams.push_back(ParameterList::createWithoutLoc(selfVar));
-      Type selfInterfaceType = dc->getSelfInterfaceType();
-      if (!isInstance) {
-        selfInterfaceType = MetatypeType::get(selfInterfaceType);
-      }
 
       SpecialMethodKind kind = SpecialMethodKind::Regular;
       if (isNSDictionaryMethod(decl, Impl.objectForKeyedSubscript))
@@ -4066,34 +4049,24 @@ namespace {
                                         Impl.SwiftContext);
         assert(!dc->getSelfInterfaceType()->getOptionalObjectType());
         isIUO = false;
-
-        OptionalTypeKind nullability = OTK_ImplicitlyUnwrappedOptional;
-        if (auto typeNullability = decl->getReturnType()->getNullability(
-                                     Impl.getClangASTContext())) {
-          // If the return type has nullability, use it.
-          nullability = translateNullability(*typeNullability);
-        }
-        if (nullability != OTK_None && !errorConvention.hasValue()) {
-          resultTy = OptionalType::get(resultTy);
-          isIUO = nullability == OTK_ImplicitlyUnwrappedOptional;
-        }
-
-        // Update the method type with the new result type.
-        auto methodTy = type->castTo<FunctionType>();
-        type = FunctionType::get(methodTy->getParams(), resultTy,
-                                 methodTy->getExtInfo());
       }
 
-      // Add the 'self' parameter to the function type. NB. a method's formal
-      // type should be (Type) -> (Args...) -> Ret, not Type -> (Args...) ->
-      // Ret.
-      auto selfParam = AnyFunctionType::Param(selfInterfaceType,
-                                              Identifier(), ParameterTypeFlags());
-      type = FunctionType::get({selfParam}, type, AnyFunctionType::ExtInfo());
+      OptionalTypeKind nullability = OTK_ImplicitlyUnwrappedOptional;
+      if (auto typeNullability = decl->getReturnType()->getNullability(
+            Impl.getClangASTContext())) {
+        // If the return type has nullability, use it.
+        nullability = translateNullability(*typeNullability);
+      }
+      if (nullability != OTK_None && !errorConvention.hasValue()) {
+        resultTy = OptionalType::get(resultTy);
+        isIUO = nullability == OTK_ImplicitlyUnwrappedOptional;
+      }
 
-      auto interfaceType = getGenericMethodType(dc, type->castTo<AnyFunctionType>());
-      result->setInterfaceType(interfaceType);
+      // Update the method type with the new result type.
+      result->getBodyResultTypeLoc().setType(resultTy);
+
       result->setGenericEnvironment(dc->getGenericEnvironmentOfContext());
+      result->computeType();
       result->setValidationToChecked();
 
       Impl.recordImplicitUnwrapForDecl(result, isIUO);
