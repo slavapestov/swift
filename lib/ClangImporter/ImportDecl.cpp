@@ -1243,27 +1243,17 @@ createValueConstructor(ClangImporter::Implementation &Impl,
     valueParameters.push_back(param);
   }
 
-  // self & param.
-  ParameterList *paramLists[] = {
-      ParameterList::createWithoutLoc(selfDecl),
-      ParameterList::create(context, valueParameters)};
+  auto *paramList = ParameterList::create(context, valueParameters);
 
   // Create the constructor
-  DeclName name(context, DeclBaseName::createConstructor(), paramLists[1]);
+  DeclName name(context, DeclBaseName::createConstructor(), paramList);
   auto constructor = new (context) ConstructorDecl(
       name, structDecl->getLoc(), OTK_None, /*FailabilityLoc=*/SourceLoc(),
-      /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(), selfDecl, paramLists[1],
+      /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(), selfDecl, paramList,
       /*GenericParams=*/nullptr, structDecl);
 
   // Set the constructor's type.
-  auto paramTy = paramLists[1]->getType(context);
-  auto selfType = structDecl->getDeclaredTypeInContext();
-  auto selfMetatype = MetatypeType::get(selfType);
-  auto fnTy = FunctionType::get(paramTy, selfType);
-  auto allocFnTy = FunctionType::get(selfMetatype, fnTy);
-  auto initFnTy = FunctionType::get(selfType, fnTy);
-  constructor->setInterfaceType(allocFnTy);
-  constructor->setInitializerInterfaceType(initFnTy);
+  constructor->computeType();
   constructor->setValidationToChecked();
 
   constructor->setAccess(AccessLevel::Public);
