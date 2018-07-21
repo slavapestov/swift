@@ -5618,15 +5618,8 @@ Decl *SwiftDeclConverter::importGlobalAsInitializer(
   result->setInitKind(initKind);
   result->setImportAsStaticMember();
 
-  // Set the constructor's type(s).
-  Type argType = parameterList->getType(Impl.SwiftContext);
-  Type fnType = FunctionType::get(argType, importedType.getType());
-  Type selfType = selfParam->getType();
-  Type initType = FunctionType::get(selfType, fnType);
-  result->setInitializerInterfaceType(initType);
-  Type selfMetaType = MetatypeType::get(selfType);
-  Type allocType = FunctionType::get(selfMetaType, fnType);
-  result->setInterfaceType(allocType);
+  // Set the constructor's type.
+  result->computeType();
   Impl.recordImplicitUnwrapForDecl(result,
                                    importedType.isImplicitlyUnwrapped());
   result->setOverriddenDecls({ });
