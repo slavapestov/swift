@@ -529,13 +529,7 @@ static AccessorDecl *makeEnumRawValueGetter(ClangImporter::Implementation &Impl,
   getterDecl->setImplicit();
   getterDecl->setIsObjC(false);
 
-  ParameterList *paramLists[] = {
-    ParameterList::createWithoutLoc(selfDecl),
-    params
-  };
-  auto type = ParameterList::getFullInterfaceType(rawTy, paramLists, C);
-
-  getterDecl->setInterfaceType(type);
+  getterDecl->computeType();
   getterDecl->setValidationToChecked();
 
   getterDecl->setAccess(AccessLevel::Public);
