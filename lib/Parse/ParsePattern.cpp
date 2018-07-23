@@ -428,7 +428,7 @@ mapParsedParameters(Parser &parser,
     auto param = new (ctx) ParamDecl(VarDecl::Specifier::Default,
                                      paramInfo.SpecifierLoc,
                                      argNameLoc, argName,
-                                     paramNameLoc, paramName, Type(),
+                                     paramNameLoc, paramName,
                                      parser.CurDeclContext);
     param->getAttrs() = paramInfo.Attrs;
     bool parsingEnumElt
@@ -960,7 +960,7 @@ ParserResult<Pattern> Parser::parsePattern() {
 Pattern *Parser::createBindingFromPattern(SourceLoc loc, Identifier name,
                                           VarDecl::Specifier specifier) {
   auto var = new (Context) VarDecl(/*IsStatic*/false, specifier,
-                                   /*IsCaptureList*/false, loc, name, Type(),
+                                   /*IsCaptureList*/false, loc, name,
                                    CurDeclContext);
   return new (Context) NamedPattern(var);
 }

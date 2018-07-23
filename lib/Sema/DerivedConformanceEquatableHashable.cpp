@@ -123,8 +123,9 @@ static VarDecl *indexedVarDecl(char prefixChar, int index, Type type,
 
   auto varDecl = new (C) VarDecl(/*IsStatic*/false, VarDecl::Specifier::Let,
                                  /*IsCaptureList*/true, SourceLoc(),
-                                 C.getIdentifier(indexStrRef), type,
+                                 C.getIdentifier(indexStrRef),
                                  varContext);
+  varDecl->setType(type);
   varDecl->setHasNonPatternBindingInit(true);
   return varDecl;
 }
@@ -210,7 +211,7 @@ static DeclRefExpr *convertEnumToIndex(SmallVectorImpl<ASTNode> &stmts,
 
   auto indexVar = new (C) VarDecl(/*IsStatic*/false, VarDecl::Specifier::Var,
                                   /*IsCaptureList*/false, SourceLoc(),
-                                  C.getIdentifier(indexName), intType,
+                                  C.getIdentifier(indexName),
                                   funcDecl);
   indexVar->setInterfaceType(intType);
   indexVar->setImplicit();
@@ -590,13 +591,12 @@ deriveEquatable_eq(DerivedConformance &derived, Identifier generatedIdentifier,
   ASTContext &C = derived.TC.Context;
 
   auto parentDC = derived.getConformanceContext();
-  auto enumTy = parentDC->getDeclaredTypeInContext();
   auto enumIfaceTy = parentDC->getDeclaredInterfaceType();
 
   auto getParamDecl = [&](StringRef s) -> ParamDecl * {
     auto *param = new (C) ParamDecl(VarDecl::Specifier::Default, SourceLoc(),
                                     SourceLoc(), Identifier(), SourceLoc(),
-                                    C.getIdentifier(s), enumTy, parentDC);
+                                    C.getIdentifier(s), parentDC);
     param->setInterfaceType(enumIfaceTy);
     return param;
   };
@@ -748,7 +748,7 @@ deriveHashable_hashInto(DerivedConformance &derived,
   auto *hasherParamDecl = new (C) ParamDecl(VarDecl::Specifier::InOut,
                                             SourceLoc(),
                                             SourceLoc(), C.Id_into, SourceLoc(),
-                                            C.Id_hasher, hasherType, parentDC);
+                                            C.Id_hasher, parentDC);
   hasherParamDecl->setInterfaceType(hasherType);
 
   ParameterList *params = ParameterList::createWithoutLoc(hasherParamDecl);
@@ -1061,7 +1061,8 @@ static ValueDecl *deriveHashable_hashValue(DerivedConformance &derived) {
   VarDecl *hashValueDecl =
     new (C) VarDecl(/*IsStatic*/false, VarDecl::Specifier::Var,
                     /*IsCaptureList*/false, SourceLoc(),
-                    C.Id_hashValue, intType, parentDC);
+                    C.Id_hashValue, parentDC);
+  hashValueDecl->setType(intType);
 
   auto *selfDecl = ParamDecl::createSelf(SourceLoc(), parentDC);
   ParameterList *params = ParameterList::createEmpty(C);

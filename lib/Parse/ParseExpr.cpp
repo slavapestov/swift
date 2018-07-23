@@ -2529,7 +2529,7 @@ parseClosureSignatureIfPresent(SmallVectorImpl<CaptureListEntry> &captureList,
       auto *VD = new (Context) VarDecl(/*isStatic*/false,
                                        specifierKind,
                                        /*isCaptureList*/true,
-                                       nameLoc, name, Type(), CurDeclContext);
+                                       nameLoc, name, CurDeclContext);
 
       // Attributes.
       if (ownershipKind != ReferenceOwnership::Strong)
@@ -2582,7 +2582,7 @@ parseClosureSignatureIfPresent(SmallVectorImpl<CaptureListEntry> &captureList,
             Context.getIdentifier(Tok.getText()) : Identifier();
         auto var = new (Context)
             ParamDecl(VarDecl::Specifier::Default, SourceLoc(), SourceLoc(),
-                      Identifier(), Tok.getLoc(), name, Type(), nullptr);
+                      Identifier(), Tok.getLoc(), name, nullptr);
         elements.push_back(var);
         consumeToken();
 
@@ -2884,7 +2884,7 @@ Expr *Parser::parseExprAnonClosureArg() {
     SourceLoc varLoc = leftBraceLoc;
     auto *var = new (Context)
         ParamDecl(VarDecl::Specifier::Default, SourceLoc(), SourceLoc(),
-                  Identifier(), varLoc, ident, Type(), closure);
+                  Identifier(), varLoc, ident, closure);
     var->setImplicit();
     decls.push_back(var);
   }
