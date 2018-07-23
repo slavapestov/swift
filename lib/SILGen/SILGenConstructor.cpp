@@ -40,7 +40,7 @@ static SILValue emitConstructorMetatypeArg(SILGenFunction &SGF,
   auto VD =
       new (AC) ParamDecl(VarDecl::Specifier::Default, SourceLoc(), SourceLoc(),
                          AC.getIdentifier("$metatype"), SourceLoc(),
-                         AC.getIdentifier("$metatype"), Type(), DC);
+                         AC.getIdentifier("$metatype"), DC);
   VD->setInterfaceType(metatype);
 
   SGF.AllocatorMetatype = SGF.F.begin()->createFunctionArgument(
@@ -67,7 +67,7 @@ static RValue emitImplicitValueConstructorArg(SILGenFunction &SGF,
   auto VD = new (AC) ParamDecl(VarDecl::Specifier::Default, SourceLoc(), SourceLoc(),
                                AC.getIdentifier("$implicit_value"),
                                SourceLoc(),
-                               AC.getIdentifier("$implicit_value"), Type(),
+                               AC.getIdentifier("$implicit_value"),
                                DC);
   VD->setInterfaceType(interfaceType);
   SILFunctionArgument *arg =
@@ -100,7 +100,7 @@ static void emitImplicitValueConstructor(SILGenFunction &SGF,
                                  SourceLoc(), SourceLoc(),
                                  AC.getIdentifier("$return_value"),
                                  SourceLoc(),
-                                 AC.getIdentifier("$return_value"), Type(),
+                                 AC.getIdentifier("$return_value"),
                                  ctor);
     VD->setInterfaceType(selfIfaceTyCan);
     resultSlot = SGF.F.begin()->createFunctionArgument(selfTy, VD);
@@ -399,7 +399,7 @@ void SILGenFunction::emitEnumConstructor(EnumElementDecl *element) {
                                  SourceLoc(), SourceLoc(),
                                  AC.getIdentifier("$return_value"),
                                  SourceLoc(),
-                                 AC.getIdentifier("$return_value"), Type(),
+                                 AC.getIdentifier("$return_value"),
                                  element->getDeclContext());
     VD->setInterfaceType(enumIfaceTy);
     auto resultSlot =

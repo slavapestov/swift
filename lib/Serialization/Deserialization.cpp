@@ -2989,7 +2989,7 @@ ModuleFile::getDeclCheckedImpl(DeclID DID, Optional<DeclContext *> ForcedContext
 
     auto var = createDecl<VarDecl>(/*IsStatic*/ isStatic, *specifier,
                                    /*IsCaptureList*/ false, SourceLoc(), name,
-                                   Type(), DC);
+                                   DC);
     var->setHasNonPatternBindingInit(hasNonPatternBindingInit);
     var->setIsGetterMutating(isGetterMutating);
     var->setIsSetterMutating(isSetterMutating);
@@ -3055,7 +3055,7 @@ ModuleFile::getDeclCheckedImpl(DeclID DID, Optional<DeclContext *> ForcedContext
 
     auto param = createDecl<ParamDecl>(*specifier, SourceLoc(), SourceLoc(),
                                        getIdentifier(argNameID), SourceLoc(),
-                                       getIdentifier(paramNameID), Type(), DC);
+                                       getIdentifier(paramNameID), DC);
 
     declOrOffset = param;
 
