@@ -4352,8 +4352,6 @@ Type VarDecl::getType() const {
 void VarDecl::setType(Type t) {
   assert(t.isNull() || !t->is<InOutType>());
   typeInContext = t;
-  if (t && t->hasError())
-    setInvalid();
 }
 
 void VarDecl::markInvalid() {
@@ -4892,6 +4890,9 @@ void SubscriptDecl::computeType() {
 
   // Record the interface type.
   setInterfaceType(funcTy);
+
+  if (funcTy->hasError())
+    setInvalid();
 }
 
 ObjCSubscriptKind SubscriptDecl::getObjCSubscriptKind() const {
@@ -5296,11 +5297,12 @@ void AbstractFunctionDecl::computeType(AnyFunctionType::ExtInfo info) {
   } else if (auto ctor = dyn_cast<ConstructorDecl>(this)) {
     auto *dc = ctor->getDeclContext();
 
-    if (hasSelf)
-      resultTy = dc->getSelfInterfaceType();
-
-    if (!resultTy)
-      resultTy = ErrorType::get(ctx);
+    if (hasSelf) {
+      if (!dc->isTypeContext())
+        resultTy = ErrorType::get(ctx);
+      else
+        resultTy = dc->getSelfInterfaceType();
+    }
 
     // Adjust result type for failability.
     if (ctor->getFailability() != OTK_None)
@@ -5359,6 +5361,9 @@ void AbstractFunctionDecl::computeType(AnyFunctionType::ExtInfo info) {
   setInterfaceType(funcTy);
   if (auto *ctor = dyn_cast<ConstructorDecl>(this))
     ctor->setInitializerInterfaceType(initFuncTy);
+
+  if (funcTy->hasError() || (initFuncTy && initFuncTy->hasError()))
+    setInvalid();
 }
 
 FuncDecl *FuncDecl::createImpl(ASTContext &Context,
@@ -5514,7 +5519,7 @@ Type FuncDecl::getResultInterfaceType() const {
     return nullptr;
 
   Type resultTy = getInterfaceType();
-  if (resultTy->hasError())
+  if (resultTy->is<ErrorType>())
     return resultTy;
 
   if (hasImplicitSelfDecl())
@@ -5642,12 +5647,6 @@ bool EnumElementDecl::computeType() {
   EnumDecl *ED = getParentEnum();
   Type resultTy = ED->getDeclaredInterfaceType();
 
-  if (resultTy->hasError()) {
-    setInterfaceType(resultTy);
-    setInvalid();
-    return false;
-  }
-
   Type selfTy = MetatypeType::get(resultTy);
 
   // The type of the enum element is either (T) -> T or (T) -> ArgType -> T.
@@ -5664,6 +5663,9 @@ bool EnumElementDecl::computeType() {
 
   // Record the interface type.
   setInterfaceType(resultTy);
+
+  if (resultTy->hasError())
+    setInvalid();
 
   return true;
 }

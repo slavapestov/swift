@@ -1697,6 +1697,8 @@ void TypeChecker::completeLazyVarImplementation(VarDecl *VD) {
                                         StorageName, StorageTy,
                                         VD->getDeclContext());
   Storage->setInterfaceType(StorageInterfaceTy);
+  if (StorageInterfaceTy->hasError())
+    Storage->setInvalid();
   Storage->setUserAccessible(false);
   addMemberToContextIfNeeded(Storage, VD->getDeclContext(), VD);
 

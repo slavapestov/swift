@@ -500,12 +500,10 @@ void TypeChecker::revertGenericRequirements(
 ///
 
 /// Check the signature of a generic function.
-static bool checkGenericFuncSignature(TypeChecker &tc,
+static void checkGenericFuncSignature(TypeChecker &tc,
                                       GenericSignatureBuilder *builder,
                                       AbstractFunctionDecl *func,
                                       GenericTypeResolver &resolver) {
-  bool badType = false;
-
   // Check the generic parameter list.
   auto genericParams = func->getGenericParams();
 
@@ -517,9 +515,8 @@ static bool checkGenericFuncSignature(TypeChecker &tc,
   // Check the parameter patterns.
   auto params = func->getParameters();
 
-  if (tc.typeCheckParameterList(params, func, TypeResolutionOptions(),
-                                resolver))
-    badType = true;
+  tc.typeCheckParameterList(params, func, TypeResolutionOptions(),
+                            resolver);
 
   // Infer requirements from the pattern.
   if (builder) {
@@ -535,9 +532,7 @@ static bool checkGenericFuncSignature(TypeChecker &tc,
       if (fn->hasDynamicSelf())
         options |= TypeResolutionFlags::DynamicSelfResult;
 
-      if (tc.validateType(fn->getBodyResultTypeLoc(), fn, options, &resolver)) {
-        badType = true;
-      }
+      tc.validateType(fn->getBodyResultTypeLoc(), fn, options, &resolver);
 
       // Infer requirements from it.
       if (builder && genericParams &&
@@ -571,8 +566,6 @@ static bool checkGenericFuncSignature(TypeChecker &tc,
       }
     }
   }
-
-  return badType;
 }
 
 static void revertGenericFuncSignature(AbstractFunctionDecl *func) {
@@ -602,13 +595,12 @@ static bool isSelfDerivedOrConcrete(Type protoSelf, Type type) {
 
 // For a generic requirement in a protocol, make sure that the requirement
 // set didn't add any requirements to Self or its associated types.
-static bool checkProtocolSelfRequirements(GenericSignature *sig,
-                                          ValueDecl *decl,
-                                          TypeChecker &TC) {
+void TypeChecker::checkProtocolSelfRequirements(ValueDecl *decl) {
   // For a generic requirement in a protocol, make sure that the requirement
   // set didn't add any requirements to Self or its associated types.
   if (auto *proto = dyn_cast<ProtocolDecl>(decl->getDeclContext())) {
     auto protoSelf = proto->getSelfInterfaceType();
+    auto *sig = decl->getInnermostDeclContext()->getGenericSignatureOfContext();
     for (auto req : sig->getRequirements()) {
       // If one of the types in the requirement is dependent on a non-Self
       // type parameter, this requirement is okay.
@@ -622,27 +614,21 @@ static bool checkProtocolSelfRequirements(GenericSignature *sig,
           req.getFirstType()->is<GenericTypeParamType>())
         continue;
 
-      TC.diagnose(decl,
-                  TC.Context.LangOpts.EffectiveLanguageVersion[0] >= 4
-                    ? diag::requirement_restricts_self
-                    : diag::requirement_restricts_self_swift3,
-                  decl->getDescriptiveKind(), decl->getFullName(),
-                  req.getFirstType().getString(),
-                  static_cast<unsigned>(req.getKind()),
-                  req.getSecondType().getString());
-
-      if (TC.Context.LangOpts.EffectiveLanguageVersion[0] >= 4)
-        return true;
+      diagnose(decl,
+               Context.isSwiftVersion3()
+                 ? diag::requirement_restricts_self_swift3
+                 : diag::requirement_restricts_self,
+               decl->getDescriptiveKind(), decl->getFullName(),
+               req.getFirstType().getString(),
+               static_cast<unsigned>(req.getKind()),
+               req.getSecondType().getString());
     }
   }
-
-  return false;
 }
 
 /// All generic parameters of a generic function must be referenced in the
 /// declaration's type, otherwise we have no way to infer them.
-static void checkReferencedGenericParams(GenericContext *dc,
-                                         TypeChecker &TC) {
+void TypeChecker::checkReferencedGenericParams(GenericContext *dc) {
   auto *genericParams = dc->getGenericParams();
   auto *genericSig = dc->getGenericSignatureOfContext();
   if (!genericParams)
@@ -798,20 +784,15 @@ static void checkReferencedGenericParams(GenericContext *dc,
           continue;
       }
       // Produce an error that this generic parameter cannot be bound.
-      TC.diagnose(paramDecl->getLoc(), diag::unreferenced_generic_parameter,
-                  paramDecl->getNameStr());
-      decl->setInterfaceType(ErrorType::get(TC.Context));
+      diagnose(paramDecl->getLoc(), diag::unreferenced_generic_parameter,
+               paramDecl->getNameStr());
+      decl->setInterfaceType(ErrorType::get(Context));
       decl->setInvalid();
     }
   }
 }
 
 void TypeChecker::validateGenericFuncSignature(AbstractFunctionDecl *func) {
-  bool invalid = false;
-
-  if (auto *selfDecl = func->getImplicitSelfDecl())
-    invalid |= selfDecl->getInterfaceType()->hasError();
-
   auto *dc = func->getDeclContext();
 
   GenericSignature *sig;
@@ -825,8 +806,7 @@ void TypeChecker::validateGenericFuncSignature(AbstractFunctionDecl *func) {
     // Type check the function declaration, treating all generic type
     // parameters as dependent, unresolved.
     DependentGenericTypeResolver dependentResolver;
-    if (checkGenericFuncSignature(*this, &builder, func, dependentResolver))
-      invalid = true;
+    checkGenericFuncSignature(*this, &builder, func, dependentResolver);
 
     // The generic function signature is complete and well-formed. Determine
     // the type of the generic function.
@@ -865,29 +845,13 @@ void TypeChecker::validateGenericFuncSignature(AbstractFunctionDecl *func) {
   }
 
   CompleteGenericTypeResolver completeResolver(*this, sig);
-  if (checkGenericFuncSignature(*this, nullptr, func, completeResolver))
-    invalid = true;
-
-  if (!invalid)
-    invalid = checkProtocolSelfRequirements(sig, func, *this);
-
-  if (invalid) {
-    func->setInterfaceType(ErrorType::get(Context));
-    func->setInvalid();
-    return;
-  }
+  checkGenericFuncSignature(*this, nullptr, func, completeResolver);
 
   func->computeType();
 
-  // We get bogus errors here with generic subscript materializeForSet.
-  if (!isa<AccessorDecl>(func) ||
-      !cast<AccessorDecl>(func)->isMaterializeForSet())
-    checkReferencedGenericParams(func, *this);
-
-  // Make sure that there are no unresolved
-  // dependent types in the generic signature.
-  assert(func->getInterfaceType()->hasError() ||
-         !func->getInterfaceType()->findUnresolvedDependentMemberType());
+  // Make sure that there are no unresolved dependent types in the
+  // generic signature.
+  assert(!func->getInterfaceType()->findUnresolvedDependentMemberType());
 }
 
 ///
@@ -898,12 +862,10 @@ void TypeChecker::validateGenericFuncSignature(AbstractFunctionDecl *func) {
 ///
 
 /// Check the signature of a generic subscript.
-static bool checkGenericSubscriptSignature(TypeChecker &tc,
+static void checkGenericSubscriptSignature(TypeChecker &tc,
                                            GenericSignatureBuilder *builder,
                                            SubscriptDecl *subscript,
                                            GenericTypeResolver &resolver) {
-  bool badType = false;
-
   // Check the generic parameter list.
   auto genericParams = subscript->getGenericParams();
 
@@ -915,8 +877,8 @@ static bool checkGenericSubscriptSignature(TypeChecker &tc,
                     &resolver);
 
   // Check the element type.
-  badType |= tc.validateType(subscript->getElementTypeLoc(), subscript,
-                             TypeResolutionFlags::AllowIUO, &resolver);
+  tc.validateType(subscript->getElementTypeLoc(), subscript,
+                  TypeResolutionFlags::AllowIUO, &resolver);
 
   // Infer requirements from it.
   if (genericParams && builder) {
@@ -933,17 +895,13 @@ static bool checkGenericSubscriptSignature(TypeChecker &tc,
   auto params = subscript->getIndices();
   TypeResolutionOptions options = TypeResolutionFlags::SubscriptParameters;
 
-  badType |= tc.typeCheckParameterList(params, subscript,
-                                       options,
-                                       resolver);
+  tc.typeCheckParameterList(params, subscript, options, resolver);
 
   // Infer requirements from the pattern.
   if (builder) {
     builder->inferRequirements(*subscript->getParentModule(), params,
                                genericParams);
   }
-
-  return badType;
 }
 
 static void revertGenericSubscriptSignature(SubscriptDecl *subscript) {
@@ -958,8 +916,6 @@ static void revertGenericSubscriptSignature(SubscriptDecl *subscript) {
 
 void
 TypeChecker::validateGenericSubscriptSignature(SubscriptDecl *subscript) {
-  bool invalid = false;
-
   auto *dc = subscript->getDeclContext();
 
   GenericSignature *sig;
@@ -973,9 +929,8 @@ TypeChecker::validateGenericSubscriptSignature(SubscriptDecl *subscript) {
     // Type check the function declaration, treating all generic type
     // parameters as dependent, unresolved.
     DependentGenericTypeResolver dependentResolver;
-    if (checkGenericSubscriptSignature(*this, &builder, subscript,
-                                       dependentResolver))
-      invalid = true;
+    checkGenericSubscriptSignature(*this, &builder, subscript,
+                                   dependentResolver);
 
     // The generic subscript signature is complete and well-formed. Determine
     // the type of the generic subscript.
@@ -1008,22 +963,9 @@ TypeChecker::validateGenericSubscriptSignature(SubscriptDecl *subscript) {
   }
 
   CompleteGenericTypeResolver completeResolver(*this, sig);
-  if (checkGenericSubscriptSignature(*this, nullptr, subscript, completeResolver))
-    invalid = true;
-
-  if (!invalid)
-    invalid = checkProtocolSelfRequirements(sig, subscript, *this);
-
-  if (invalid) {
-    subscript->setInterfaceType(ErrorType::get(Context));
-    subscript->setInvalid();
-    // null doesn't mean error here: callers still expect the signature.
-    return;
-  }
+  checkGenericSubscriptSignature(*this, nullptr, subscript, completeResolver);
 
   subscript->computeType();
-
-  checkReferencedGenericParams(subscript, *this);
 }
 
 ///

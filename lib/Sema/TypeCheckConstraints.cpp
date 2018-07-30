@@ -2932,6 +2932,8 @@ bool TypeChecker::typeCheckExprPattern(ExprPattern *EP, DeclContext *DC,
                                          rhsType,
                                          DC);
   matchVar->setInterfaceType(rhsType->mapTypeOutOfContext());
+  if (rhsType->hasError())
+    matchVar->setInvalid();
 
   matchVar->setImplicit();
   EP->setMatchVar(matchVar);

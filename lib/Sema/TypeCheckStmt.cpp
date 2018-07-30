@@ -709,6 +709,8 @@ public:
         VarDecl(/*IsStatic*/false, VarDecl::Specifier::Var, /*IsCaptureList*/false,
                 S->getInLoc(), TC.Context.getIdentifier(name), generatorTy, DC);
       generator->setInterfaceType(generatorTy->mapTypeOutOfContext());
+      if (generatorTy->hasError())
+        generator->setInvalid();
       generator->setImplicit();
 
       // Create a pattern binding to initialize the generator.

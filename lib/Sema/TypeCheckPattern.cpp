@@ -1091,6 +1091,8 @@ recur:
   case PatternKind::Named: {
     NamedPattern *NP = cast<NamedPattern>(P);
     VarDecl *var = NP->getDecl();
+    if (type->hasError())
+      var->setInvalid();
     if (var->isInvalid())
       type = ErrorType::get(Context);
     var->setType(type->getInOutObjectType());

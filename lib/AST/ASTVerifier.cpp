@@ -3472,7 +3472,8 @@ public:
 
       if (!D->hasInterfaceType())
         return;
-      if (D->getInterfaceType()->hasError() && !D->isInvalid()) {
+      if (D->getInterfaceType()->hasError() && !D->isInvalid() &&
+          !isa<ParamDecl>(D)) {
         Out << "Valid decl has error type!\n";
         D->dump(Out);
         abort();
