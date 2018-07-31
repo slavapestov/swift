@@ -1469,6 +1469,9 @@ let _ = sr4745.enumerated().map { (count, element) in "\(count): \(element)" }
 let sr4738 = (1, (2, 3))
 [sr4738].map { (x, (y, z)) -> Int in x + y + z } // expected-error {{use of undeclared type 'y'}}
 // expected-error@-1 {{closure tuple parameter does not support destructuring}} {{20-26=arg1}} {{38-38=let (y, z) = arg1; }}
+// expected-note@-2 2{{'x' declared here}}
+// expected-error@-3 {{use of unresolved identifier 'y'; did you mean 'x'?}}
+// expected-error@-4 {{use of unresolved identifier 'z'; did you mean 'x'?}}
 
 // rdar://problem/31892961
 let r31892961_1 = [1: 1, 2: 2]
@@ -1479,6 +1482,7 @@ let _: [Int] = r31892961_2.enumerated().map { ((index, val)) in
   // expected-error@-1 {{closure tuple parameter does not support destructuring}} {{48-60=arg0}} {{3-3=\n  let (index, val) = arg0\n  }}
   // expected-error@-2 {{use of undeclared type 'index'}}
   val + 1
+  // expected-error@-1 {{use of unresolved identifier 'val'}}
 }
 
 let r31892961_3 = (x: 1, y: 42)
@@ -1492,10 +1496,14 @@ _ = [r31892961_4].map { x, y in x + y }
 let r31892961_5 = (x: 1, (y: 2, (w: 3, z: 4)))
 [r31892961_5].map { (x: Int, (y: Int, (w: Int, z: Int))) in x + y }
 // expected-error@-1 {{closure tuple parameter does not support destructuring}} {{30-56=arg1}} {{61-61=let (y, (w, z)) = arg1; }}
+// expected-note@-2 {{'x' declared here}}
+// expected-error@-3 {{use of unresolved identifier 'y'; did you mean 'x'?}}
 
 let r31892961_6 = (x: 1, (y: 2, z: 4))
 [r31892961_6].map { (x: Int, (y: Int, z: Int)) in x + y }
 // expected-error@-1 {{closure tuple parameter does not support destructuring}} {{30-46=arg1}} {{51-51=let (y, z) = arg1; }}
+// expected-note@-2 {{'x' declared here}}
+// expected-error@-3 {{use of unresolved identifier 'y'; did you mean 'x'?}}
 
 // rdar://problem/32214649 -- these regressed in Swift 4 mode
 // with SE-0110 because of a problem in associated type inference

@@ -827,23 +827,18 @@ void TypeChecker::requestRequiredNominalTypeLayoutForParameters(
 }
 
 /// Type check a parameter list.
-bool TypeChecker::typeCheckParameterList(ParameterList *PL, DeclContext *DC,
+void TypeChecker::typeCheckParameterList(ParameterList *PL, DeclContext *DC,
                                          TypeResolutionOptions options,
                                          GenericTypeResolver &resolver) {
-  bool hadError = false;
-  
   for (auto param : *PL) {
     checkDeclAttributesEarly(param);
 
     auto typeRepr = param->getTypeLoc().getTypeRepr();
-    if (!typeRepr &&
-        param->hasInterfaceType()) {
-      hadError |= param->isInvalid();
+    if (!typeRepr && param->hasInterfaceType())
       continue;
-    }
 
-    hadError |= validateParameterType(param, DC, options, resolver, *this);
-    
+    validateParameterType(param, DC, options, resolver, *this);
+
     auto type = param->getTypeLoc().getType();
 
     // If there was no type specified, and if we're not looking at a
@@ -859,7 +854,6 @@ bool TypeChecker::typeCheckParameterList(ParameterList *PL, DeclContext *DC,
     
     if (param->isInvalid() || type->hasError()) {
       param->markInvalid();
-      hadError = true;
     } else {
       if (type->is<InOutType>())
         param->setSpecifier(VarDecl::Specifier::InOut);
@@ -867,7 +861,8 @@ bool TypeChecker::typeCheckParameterList(ParameterList *PL, DeclContext *DC,
     }
     
     checkTypeModifyingDeclAttributes(param);
-    if (!hadError) {
+
+    if (typeRepr && !param->isVariadic()) {
       if (isa<InOutTypeRepr>(typeRepr)) {
         param->setSpecifier(VarDecl::Specifier::InOut);
       } else if (isa<SharedTypeRepr>(typeRepr)) {
@@ -877,8 +872,6 @@ bool TypeChecker::typeCheckParameterList(ParameterList *PL, DeclContext *DC,
       }
     }
   }
-  
-  return hadError;
 }
 
 bool TypeChecker::typeCheckPattern(Pattern *P, DeclContext *dc,

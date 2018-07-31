@@ -1694,7 +1694,7 @@ public:
   void requestRequiredNominalTypeLayoutForParameters(ParameterList *PL);
 
   /// Type check a parameter list.
-  bool typeCheckParameterList(ParameterList *PL, DeclContext *dc,
+  void typeCheckParameterList(ParameterList *PL, DeclContext *dc,
                               TypeResolutionOptions options,
                               GenericTypeResolver &resolver);
 

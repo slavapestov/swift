@@ -1249,30 +1249,16 @@ bool PreCheckExpression::walkToClosureExprPre(ClosureExpr *closure) {
   options |= TypeResolutionFlags::AllowUnboundGenerics;
   options |= TypeResolutionFlags::InExpression;
   options |= TypeResolutionFlags::AllowIUO;
-  bool hadParameterError = false;
 
   GenericTypeToArchetypeResolver resolver(closure);
 
-  if (TC.typeCheckParameterList(PL, DC, options, resolver)) {
-    closure->setType(ErrorType::get(TC.Context));
-
-    // If we encounter an error validating the parameter list, don't bail.
-    // Instead, go on to validate any potential result type, and bail
-    // afterwards.  This allows for better diagnostics, and keeps the
-    // closure expression type well-formed.
-    hadParameterError = true;
-  }
+  TC.typeCheckParameterList(PL, DC, options, resolver);
 
   // Validate the result type, if present.
-  if (closure->hasExplicitResultType() &&
-      TC.validateType(closure->getExplicitResultTypeLoc(), DC,
-                      TypeResolutionFlags::InExpression, &resolver)) {
-    closure->setType(ErrorType::get(TC.Context));
-    return false;
+  if (closure->hasExplicitResultType()) {
+    TC.validateType(closure->getExplicitResultTypeLoc(), DC,
+                    TypeResolutionFlags::InExpression, &resolver);
   }
-
-  if (hadParameterError)
-    return false;
 
   // If the closure has a multi-statement body, we don't walk into it
   // here.
