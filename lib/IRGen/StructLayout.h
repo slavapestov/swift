@@ -430,8 +430,10 @@ struct ClassLayout {
   ArrayRef<VarDecl*> InheritedStoredProperties;
   /// Lazily-initialized array of all field access methods.
   ArrayRef<FieldAccess> AllFieldAccesses;
-  /// Does the class metadata require dynamic initialization.
+  /// Does the class metadata require dynamic initialization?
   bool MetadataRequiresDynamicInitialization;
+  /// Do instances of this class have a fixed size fully known at compile time?
+  bool HasFixedSize;
 
   unsigned getFieldIndex(VarDecl *field) const {
     // FIXME: This is algorithmically terrible.
