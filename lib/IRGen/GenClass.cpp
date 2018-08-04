@@ -235,12 +235,13 @@ namespace {
 
     ClassLayout getClassLayout() const {
       ClassLayout fieldLayout;
-      auto allStoredProps = IGM.Context.AllocateCopy(AllStoredProperties);
-      auto inheritedStoredProps = allStoredProps.slice(0, NumInherited);
+      auto allStoredProps = IGM.Context.AllocateCopy(
+        ArrayRef<VarDecl *>(AllStoredProperties).slice(NumInherited));
       fieldLayout.AllStoredProperties = allStoredProps;
-      fieldLayout.InheritedStoredProperties = inheritedStoredProps;
-      fieldLayout.AllFieldAccesses = IGM.Context.AllocateCopy(AllFieldAccesses);
-      fieldLayout.AllElements = IGM.Context.AllocateCopy(Elements);
+      fieldLayout.AllFieldAccesses = IGM.Context.AllocateCopy(
+        ArrayRef<FieldAccess>(AllFieldAccesses).slice(NumInherited));
+      fieldLayout.AllElements = IGM.Context.AllocateCopy(
+        ArrayRef<ElementLayout>(Elements).slice(NumInherited));
       fieldLayout.MetadataRequiresDynamicInitialization =
         ClassMetadataRequiresDynamicInitialization;
       fieldLayout.HasFixedSize = ClassHasFixedSize;
@@ -1133,8 +1134,8 @@ namespace {
           Layout(&layout),
           FieldLayout(&fieldLayout)
     {
-      FirstFieldIndex = fieldLayout.InheritedStoredProperties.size();
-      NextFieldIndex = FirstFieldIndex;
+      FirstFieldIndex = 0;
+      NextFieldIndex = 0;
 
       visitConformances(theClass);
       visitMembers(theClass);
@@ -1393,15 +1394,15 @@ namespace {
         instanceStart = instanceSize;
       } else {
         instanceSize = Layout->getSize();
-        if (Layout->getElements().empty()
-            || Layout->getElements().size() == FirstFieldIndex) {
+        if (FieldLayout->AllElements.empty()) {
           instanceStart = instanceSize;
-        } else if (Layout->getElement(FirstFieldIndex).getKind()
+        } else if (FieldLayout->AllElements[FirstFieldIndex].getKind()
                      == ElementLayout::Kind::Fixed ||
-                   Layout->getElement(FirstFieldIndex).getKind()
+                   FieldLayout->AllElements[FirstFieldIndex].getKind()
                      == ElementLayout::Kind::Empty) {
           // FIXME: assumes layout is always sequential!
-          instanceStart = Layout->getElement(FirstFieldIndex).getByteOffset();
+          instanceStart = FieldLayout->AllElements[FirstFieldIndex]
+            .getByteOffset();
         } else {
           instanceStart = Size(0);
         }

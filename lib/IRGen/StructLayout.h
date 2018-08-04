@@ -425,9 +425,6 @@ struct ClassLayout {
   /// Lazily-initialized array of all fragile stored properties in the class
   /// (including superclass stored properties).
   ArrayRef<VarDecl*> AllStoredProperties;
-  /// Lazily-initialized array of all fragile stored properties inherited from
-  /// superclasses.
-  ArrayRef<VarDecl*> InheritedStoredProperties;
   /// Lazily-initialized array of all field access methods.
   ArrayRef<FieldAccess> AllFieldAccesses;
   /// Fixed offsets of fields, if known (does not take Objective-C sliding into
