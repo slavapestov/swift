@@ -568,6 +568,19 @@ irgen::getClassFieldAccess(IRGenModule &IGM, SILType baseType, VarDecl *field) {
   return classLayout.AllFieldAccesses[fieldIndex];
 }
 
+Size
+irgen::getClassFieldOffset(IRGenModule &IGM, SILType baseType, VarDecl *field) {
+  auto &baseClassTI = IGM.getTypeInfo(baseType).as<ClassTypeInfo>();
+  auto &classLayout = baseClassTI.getClassLayout(IGM, baseType);
+  auto &layout = baseClassTI.getLayout(IGM, baseType);
+
+  unsigned fieldIndex = classLayout.getFieldIndex(field);
+  auto &element = layout.getElement(fieldIndex);
+  assert(element.getKind() == ElementLayout::Kind::Fixed ||
+         element.getKind() == ElementLayout::Kind::Empty);
+  return element.getByteOffset();
+}
+
 StructLayout *
 irgen::getClassLayoutWithTailElems(IRGenModule &IGM, SILType classType,
                                    ArrayRef<SILType> tailTypes) {
@@ -1762,8 +1775,6 @@ namespace {
                                  ->getCanonicalType());
 
       assert(Layout && "can't build ivar for category");
-      // FIXME: this is not always the right thing to do!
-      //auto &elt = Layout->getElement(NextFieldIndex++);
       auto &ivarTI = IGM.getTypeInfo(fieldType);
 
       llvm::Constant *offsetPtr;
@@ -1799,7 +1810,6 @@ namespace {
         size = fixedTI->getFixedSize();
         alignment = fixedTI->getFixedAlignment();
       } else {
-        // FIXME: set something up to fill these in at runtime!
         size = Size(0);
         alignment = Alignment(1);
       }
