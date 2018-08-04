@@ -152,6 +152,10 @@ namespace irgen {
                                   SILType baseType,
                                   VarDecl *field);
 
+  Size getClassFieldOffset(IRGenModule &IGM,
+                           SILType baseType,
+                           VarDecl *field);
+
   /// Creates a layout for the class \p classType with allocated tail elements
   /// \p tailTypes.
   ///

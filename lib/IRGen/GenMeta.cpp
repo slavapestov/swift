@@ -1852,12 +1852,10 @@ namespace {
     }
 
     void addFieldOffset(VarDecl *var) {
-      unsigned fieldIndex = FieldLayout.getFieldIndex(var);
-      auto &element = Layout.getElement(fieldIndex);
-      assert(element.getKind() == ElementLayout::Kind::Fixed ||
-             element.getKind() == ElementLayout::Kind::Empty);
-
-      B.addInt(IGM.SizeTy, element.getByteOffset().getValue());
+      SILType baseType = SILType::getPrimitiveObjectType(
+        var->getDeclContext()->getDeclaredTypeInContext()
+          ->getCanonicalType());
+      B.addInt(IGM.SizeTy, getClassFieldOffset(IGM, baseType, var).getValue());
     }
 
     void addFieldOffsetPlaceholders(MissingMemberDecl *placeholder) {
