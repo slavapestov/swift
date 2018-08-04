@@ -117,9 +117,6 @@ namespace {
     Alignment getHeapAlignment(IRGenModule &IGM, SILType type) const {
       return getLayout(IGM, type).getAlignment();
     }
-    ArrayRef<ElementLayout> getElements(IRGenModule &IGM, SILType type) const {
-      return getLayout(IGM, type).getElements();
-    }
 
     StructLayout *createLayoutWithTailElems(IRGenModule &IGM,
                                             SILType classType,
@@ -243,6 +240,7 @@ namespace {
       fieldLayout.AllStoredProperties = allStoredProps;
       fieldLayout.InheritedStoredProperties = inheritedStoredProps;
       fieldLayout.AllFieldAccesses = IGM.Context.AllocateCopy(AllFieldAccesses);
+      fieldLayout.AllElements = IGM.Context.AllocateCopy(Elements);
       fieldLayout.MetadataRequiresDynamicInitialization =
         ClassMetadataRequiresDynamicInitialization;
       fieldLayout.HasFixedSize = ClassHasFixedSize;
@@ -543,7 +541,7 @@ irgen::tryEmitConstantClassFragilePhysicalMemberOffset(IRGenModule &IGM,
 
   switch (classLayout.AllFieldAccesses[fieldIndex]) {
   case FieldAccess::ConstantDirect: {
-    auto &element = baseClassTI.getElements(IGM, baseType)[fieldIndex];
+    auto &element = classLayout.AllElements[fieldIndex];
     return llvm::ConstantInt::get(IGM.SizeTy,
                                   element.getByteOffset().getValue());
   }
@@ -572,10 +570,9 @@ Size
 irgen::getClassFieldOffset(IRGenModule &IGM, SILType baseType, VarDecl *field) {
   auto &baseClassTI = IGM.getTypeInfo(baseType).as<ClassTypeInfo>();
   auto &classLayout = baseClassTI.getClassLayout(IGM, baseType);
-  auto &layout = baseClassTI.getLayout(IGM, baseType);
 
   unsigned fieldIndex = classLayout.getFieldIndex(field);
-  auto &element = layout.getElement(fieldIndex);
+  auto &element = classLayout.AllElements[fieldIndex];
   assert(element.getKind() == ElementLayout::Kind::Fixed ||
          element.getKind() == ElementLayout::Kind::Empty);
   return element.getByteOffset();
@@ -608,7 +605,7 @@ OwnedAddress irgen::projectPhysicalClassMemberAddress(IRGenFunction &IGF,
   switch (classLayout.AllFieldAccesses[fieldIndex]) {
   case FieldAccess::ConstantDirect: {
     Address baseAddr(base, baseClassTI.getHeapAlignment(IGF.IGM, baseType));
-    auto &element = baseClassTI.getElements(IGF.IGM, baseType)[fieldIndex];
+    auto &element = classLayout.AllElements[fieldIndex];
     Address memberAddr = element.project(IGF, baseAddr, None);
     // We may need to bitcast the address if the field is of a generic type.
     if (memberAddr.getType()->getElementType() != fieldTI.getStorageType())
@@ -645,7 +642,7 @@ irgen::getPhysicalClassMemberAccessStrategy(IRGenModule &IGM,
 
   switch (classLayout.AllFieldAccesses[fieldIndex]) {
   case FieldAccess::ConstantDirect: {
-    auto &element = baseClassTI.getElements(IGM, baseType)[fieldIndex];
+    auto &element = classLayout.AllElements[fieldIndex];
     return MemberAccessStrategy::getDirectFixed(element.getByteOffset());
   }
 
@@ -977,9 +974,7 @@ void IRGenModule::emitClassDecl(ClassDecl *D) {
   auto &classTI = getTypeInfo(selfType).as<ClassTypeInfo>();
 
   // Emit the class metadata.
-  emitClassMetadata(*this, D,
-                    classTI.getLayout(*this, selfType),
-                    classTI.getClassLayout(*this, selfType));
+  emitClassMetadata(*this, D, classTI.getClassLayout(*this, selfType));
 
   IRGen.addClassForEagerInitialization(D);
 

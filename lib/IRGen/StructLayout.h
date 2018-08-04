@@ -430,6 +430,9 @@ struct ClassLayout {
   ArrayRef<VarDecl*> InheritedStoredProperties;
   /// Lazily-initialized array of all field access methods.
   ArrayRef<FieldAccess> AllFieldAccesses;
+  /// Fixed offsets of fields, if known (does not take Objective-C sliding into
+  /// account).
+  ArrayRef<ElementLayout> AllElements;
   /// Does the class metadata require dynamic initialization?
   bool MetadataRequiresDynamicInitialization;
   /// Do instances of this class have a size and layout known at compile time?
