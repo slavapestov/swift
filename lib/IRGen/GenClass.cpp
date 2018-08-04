@@ -228,15 +228,14 @@ namespace {
     }
 
     ClassLayout getClassLayout() const {
-      auto allStoredProps = IGM.Context.AllocateCopy(AllStoredProperties);
+      auto allStoredProps = IGM.Context.AllocateCopy(
+          ArrayRef<VarDecl *>(AllStoredProperties).slice(NumInherited));
       auto allElements = IGM.Context.AllocateCopy(Elements);
-      auto inheritedStoredProps = allStoredProps.slice(0, NumInherited);
       auto allFieldAccesses = IGM.Context.AllocateCopy(AllFieldAccesses);
       return ClassLayout(*this,
                          ClassIsFixedSize,
                          ClassMetadataRequiresDynamicInitialization,
                          allStoredProps,
-                         inheritedStoredProps,
                          allFieldAccesses,
                          allElements);
     }
@@ -1108,8 +1107,8 @@ namespace {
         : IGM(IGM), TheEntity(theClass), TheExtension(nullptr),
           FieldLayout(&fieldLayout)
     {
-      FirstFieldIndex = fieldLayout.InheritedStoredProperties.size();
-      NextFieldIndex = FirstFieldIndex;
+      FirstFieldIndex = 0;
+      NextFieldIndex = 0;
 
       visitConformances(theClass);
       visitMembers(theClass);
@@ -1368,8 +1367,7 @@ namespace {
         instanceStart = instanceSize;
       } else {
         instanceSize = FieldLayout->getSize();
-        if (FieldLayout->AllElements.empty()
-            || FieldLayout->AllElements.size() == FirstFieldIndex) {
+        if (FieldLayout->AllElements.empty()) {
           instanceStart = instanceSize;
         } else if (FieldLayout->AllElements[FirstFieldIndex].getKind()
                      == ElementLayout::Kind::Fixed ||
