@@ -177,6 +177,23 @@ Address ElementLayout::project(IRGenFunction &IGF, Address baseAddr,
   llvm_unreachable("bad element layout kind");
 }
 
+ClassLayout::ClassLayout(const StructLayoutBuilder &builder,
+                         bool isFixedSize,
+                         bool metadataRequiresDynamicInitialization,
+                         ArrayRef<VarDecl *> allStoredProps,
+                         ArrayRef<VarDecl *> inheritedStoredProps,
+                         ArrayRef<FieldAccess> allFieldAccesses,
+                         ArrayRef<ElementLayout> allElements)
+  : MinimumAlign(builder.getAlignment()),
+    MinimumSize(builder.getSize()),
+    IsFixedLayout(builder.isFixedLayout()),
+    IsFixedSize(isFixedSize),
+    MetadataRequiresDynamicInitialization(metadataRequiresDynamicInitialization),
+    AllStoredProperties(allStoredProps),
+    InheritedStoredProperties(inheritedStoredProps),
+    AllFieldAccesses(allFieldAccesses),
+    AllElements(allElements) { }
+
 void StructLayoutBuilder::addHeapHeader() {
   assert(StructFields.empty() && "adding heap header at a non-zero offset");
   CurSize = IGM.RefCountedStructSize;

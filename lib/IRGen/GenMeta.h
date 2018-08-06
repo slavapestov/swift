@@ -45,7 +45,7 @@ namespace irgen {
   enum RequireMetadata_t : bool;
   class Size;
   class StructLayout;
-  struct ClassLayout;
+  class ClassLayout;
 
   bool requiresForeignTypeMetadata(CanType type);
   bool requiresForeignTypeMetadata(NominalTypeDecl *decl);

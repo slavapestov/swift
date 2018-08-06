@@ -421,26 +421,64 @@ enum class FieldAccess : uint8_t {
   ConstantIndirect
 };
 
-struct ClassLayout {
+class ClassLayout {
+public:
+  /// The statically-known minimum bound on the alignment.
+  Alignment MinimumAlign;
+
+  /// The statically-known minimum bound on the size.
+  Size MinimumSize;
+
+  /// Whether this layout is fixed in size. If so, the size and
+  /// alignment are exact.
+  bool IsFixedLayout;
+
+  /// Do instances of this class have a size and layout known at compile time?
+  ///
+  /// Note: This is a stronger condition than having a fixed layout. The latter
+  /// is true even when the class requires sliding ivars by the Objective-C
+  /// runtime.
+  bool IsFixedSize;
+
+  /// Does the class metadata require dynamic initialization?
+  bool MetadataRequiresDynamicInitialization;
+
+  /// The LLVM type for instances of this class.
+  llvm::Type *Ty;
+
   /// Lazily-initialized array of all fragile stored properties in the class
   /// (including superclass stored properties).
-  ArrayRef<VarDecl*> AllStoredProperties;
+  ArrayRef<VarDecl *> AllStoredProperties;
   /// Lazily-initialized array of all fragile stored properties inherited from
   /// superclasses.
-  ArrayRef<VarDecl*> InheritedStoredProperties;
+  ArrayRef<VarDecl *> InheritedStoredProperties;
   /// Lazily-initialized array of all field access methods.
   ArrayRef<FieldAccess> AllFieldAccesses;
   /// Fixed offsets of fields, if known (does not take Objective-C sliding into
   /// account).
   ArrayRef<ElementLayout> AllElements;
-  /// Does the class metadata require dynamic initialization?
-  bool MetadataRequiresDynamicInitialization;
-  /// Do instances of this class have a size and layout known at compile time?
-  ///
-  /// Note: This is a stronger condition than the StructLayout of a class having
-  /// a fixed layout. The latter is true even when the class requires sliding
-  /// ivars by the Objective-C runtime.
-  bool HasFixedSize;
+
+public:
+  ClassLayout(const StructLayoutBuilder &builder,
+              bool isFixedSize,
+              bool metadataRequiresDynamicInitialization,
+              ArrayRef<VarDecl *> allStoredProps,
+              ArrayRef<VarDecl *> inheritedStoredProps,
+              ArrayRef<FieldAccess> allFieldAccesses,
+              ArrayRef<ElementLayout> allElements);
+
+  llvm::Type *getType() const { return Ty; }
+  Size getSize() const { return MinimumSize; }
+  Alignment getAlignment() const { return MinimumAlign; }
+  Size getAlignMask() const { return getAlignment().asSize() - Size(1); }
+
+  bool isFixedLayout() const { return IsFixedLayout; }
+
+  bool isFixedSize() const { return IsFixedSize; }
+
+  bool doesMetadataRequireDynamicInitialization() const {
+    return MetadataRequiresDynamicInitialization;
+  }
 
   unsigned getFieldIndex(VarDecl *field) const {
     // FIXME: This is algorithmically terrible.
