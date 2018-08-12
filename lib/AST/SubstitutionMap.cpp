@@ -338,6 +338,10 @@ SubstitutionMap::lookupConformance(CanType type, ProtocolDecl *proto) const {
       return None;
     };
 
+  // Fast path: we might be looking up a directly-stated conformance
+  if (auto result = getInitialConformance(type, proto))
+    return *result;
+
   auto genericSig = getGenericSignature();
 
   // If the type doesn't conform to this protocol, the result isn't formed
