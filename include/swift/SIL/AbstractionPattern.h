@@ -1017,6 +1017,10 @@ public:
   /// abstraction pattern for its input type.
   AbstractionPattern getFunctionInputType() const;
 
+  /// Given that the value being abstracted is a function, return the
+  /// abstraction pattern for the parameter at the given index.
+  AbstractionPattern getFunctionParamType(unsigned idx) const;
+
   /// Given that the value being abstracted is optional, return the
   /// abstraction pattern for its object type.
   AbstractionPattern getOptionalObjectType() const;
