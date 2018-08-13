@@ -1318,8 +1318,9 @@ ConstraintSystem::getTypeOfMemberReference(
           elementTy = OptionalType::get(elementTy->getRValueType());
       }
 
-      auto indicesTy = subscript->getIndicesInterfaceType();
-      refType = FunctionType::get(indicesTy, elementTy,
+      SmallVector<AnyFunctionType::Param, 2> indices;
+      subscript->getIndices()->getParams(indices);
+      refType = FunctionType::get(indices, elementTy,
                                   AnyFunctionType::ExtInfo());
     } else {
       refType = getUnopenedTypeOfReference(cast<VarDecl>(value), baseTy, useDC,

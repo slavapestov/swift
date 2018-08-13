@@ -646,8 +646,8 @@ private:
       // FIXME: Should probably add a Param::getTypeOfRValue() or similar
       // to cope with this
       if (flags.isVariadic()) {
-        ty = CanBoundGenericType::get(M.getASTContext().getArrayDecl(),
-                                      Type(), {ty});
+        ty = CanType(BoundGenericType::get(M.getASTContext().getArrayDecl(),
+                                           Type(), {ty}));
       }
 
       handleParameter(eltPattern, flags, ty);
