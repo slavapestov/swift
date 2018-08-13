@@ -2269,11 +2269,27 @@ static CanType copyOptionalityFromDerivedToBase(TypeConverter &tc,
   // (T1 -> T2) +> (S1 -> S2) = (T1 +> S1) -> (T2 +> S2)
   if (auto derivedFunc = dyn_cast<AnyFunctionType>(derived)) {
     if (auto baseFunc = dyn_cast<AnyFunctionType>(base)) {
+      auto derivedParams = derivedFunc.getParams();
+      auto baseParams = baseFunc.getParams();
+      assert(derivedParams.size() == baseParams.size());
+
+      SmallVector<AnyFunctionType::Param, 8> params;
+      for (unsigned i : indices(derivedParams)) {
+        assert(derivedParams[i].getParameterFlags() ==
+               baseParams[i].getParameterFlags());
+
+        params.emplace_back(
+          copyOptionalityFromDerivedToBase(
+              tc,
+              derivedParams[i].getPlainType(),
+              baseParams[i].getPlainType()),
+          Identifier(),
+          baseParams[i].getParameterFlags());
+      }
+
       return CanAnyFunctionType::get(
         baseFunc.getOptGenericSignature(),
-        copyOptionalityFromDerivedToBase(tc,
-                                         derivedFunc.getInput(),
-                                         baseFunc.getInput()),
+        llvm::makeArrayRef(params),
         copyOptionalityFromDerivedToBase(tc,
                                          derivedFunc.getResult(),
                                          baseFunc.getResult()),
@@ -2765,26 +2781,16 @@ TypeConverter::getLoweredFormalTypes(SILDeclRef constant,
   }
 
   // Build the curried function type.
-  auto curriedResultType = FunctionType::get(bridgedParams,
-                                             bridgedResultType,
-                                             innerExtInfo,
-                                             /*canonicalVararg*/ true);
-  AnyFunctionType *curried;
-  if (genericSig) {
-    curried = GenericFunctionType::get(genericSig,
-                                       {selfParam},
-                                       curriedResultType,
-                                       extInfo,
-                                       /*canonicalVararg*/ true);
-  } else {
-    curried = FunctionType::get({selfParam},
-                                curriedResultType,
-                                extInfo,
-                                /*canonicalVararg*/ true);
-  }
+  auto curriedResult = CanFunctionType::get(llvm::makeArrayRef(bridgedParams),
+                                            bridgedResultType,
+                                            innerExtInfo);
+  auto curried = CanAnyFunctionType::get(genericSig,
+                                         {selfParam},
+                                         curriedResult,
+                                         extInfo);
 
   // Replace the type in the abstraction pattern with the curried type.
-  bridgingFnPattern.rewriteType(genericSig, CanType(curried));
+  bridgingFnPattern.rewriteType(genericSig, curried);
 
   // Now, add the self parameter to the end of our parameter list, and copy
   // the 'throws' bit to the outermost function type.
@@ -2792,21 +2798,12 @@ TypeConverter::getLoweredFormalTypes(SILDeclRef constant,
   extInfo = extInfo.withThrows(innerExtInfo.throws());
 
   // Build the uncurried function type.
-  AnyFunctionType *uncurried;
-  if (genericSig) {
-    uncurried = GenericFunctionType::get(genericSig,
-                                         bridgedParams,
-                                         bridgedResultType,
-                                         extInfo,
-                                         /*canonicalVararg*/ true);
-  } else {
-    uncurried = FunctionType::get(bridgedParams,
-                                  bridgedResultType,
-                                  extInfo,
-                                  /*canonicalVararg*/ true);
-  }
+  auto uncurried = CanAnyFunctionType::get(genericSig,
+                                           llvm::makeArrayRef(bridgedParams),
+                                           bridgedResultType,
+                                           extInfo);
 
-  return { bridgingFnPattern, CanAnyFunctionType(uncurried) };
+  return { bridgingFnPattern, uncurried };
 }
 
 // TODO: We should compare generic signatures. Class and witness methods
