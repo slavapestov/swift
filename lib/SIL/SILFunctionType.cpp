@@ -574,7 +574,7 @@ private:
     auto handleForeignSelf = [&] {
       // This is a "self", but it's not a Swift self, we handle it differently.
       visit(ValueOwnership::Default,
-            /*forSelf=*/false, origType.getTupleElementType(numNonSelfParams),
+            /*forSelf=*/false, origType.getFunctionParamType(numNonSelfParams),
             params[numNonSelfParams].getType(), silRepresentation);
     };
 
@@ -592,6 +592,7 @@ private:
     // If we have no parameters, even 'self' parameters, bail unless we need
     // to substitute.
     if (params.empty()) {
+      origType = origType.getFunctionInputType();
       if (origType.isTypeParameter())
         visit(ValueOwnership::Default, /*forSelf=*/false, origType,
               M.getASTContext().TheEmptyTupleType, silRepresentation);
@@ -630,7 +631,7 @@ private:
       auto flags = (params.size() == 1) ? params.front().getParameterFlags()
                                         : ParameterTypeFlags();
 
-      handleParameter(origType, flags, ty);
+      handleParameter(origType.getFunctionInputType(), flags, ty);
       return;
     }
 
@@ -639,8 +640,12 @@ private:
     // Process all the non-self parameters.
     for (unsigned i = 0; i != numNonSelfParams; ++i) {
       CanType ty = params[i].getType();
-      AbstractionPattern eltPattern = origType.getTupleElementType(i);
+      AbstractionPattern eltPattern = origType.getFunctionParamType(i);
       auto flags = params[i].getParameterFlags();
+
+      // FIXME: Gross
+      if (flags.isVariadic())
+        ty = CanType(BoundGenericType::get(M.getASTContext().getArrayDecl(), Type(), {ty}));
 
       handleParameter(eltPattern, flags, ty);
     }
@@ -649,7 +654,7 @@ private:
     // if this is a static foreign-self import.
     if (!Foreign.Self.isImportAsMember()) {
       visit(ValueOwnership::Default, /*forSelf=*/true,
-            origType.getTupleElementType(numNonSelfParams),
+            origType.getFunctionParamType(numNonSelfParams),
             params[numNonSelfParams].getType(), silRepresentation);
     }
 
@@ -674,6 +679,8 @@ private:
         }
         return;
       case ValueOwnership::Shared:
+        // FIXME: What does this mean?
+        //
         // Do not lower tuples @guaranteed.  This can create conflicts with
         // substitutions for witness thunks e.g. we take $*(T, T)
         // @in_guaranteed and try to substitute it for $*T.
@@ -681,6 +688,7 @@ private:
                      rep);
       case ValueOwnership::InOut:
         // handled below
+        llvm_unreachable("Should have an InOutType instead");
         break;
       }
     }
@@ -1048,7 +1056,7 @@ static CanSILFunctionType getSILFunctionType(
   SmallVector<SILParameterInfo, 8> inputs;
   {
     DestructureInputs destructurer(M, conventions, foreignInfo, inputs);
-    destructurer.destructure(origType.getFunctionInputType(),
+    destructurer.destructure(origType,
                              substFnInterfaceType.getParams(),
                              extInfo);
   }
@@ -2596,7 +2604,7 @@ TypeConverter::getBridgedFunctionType(AbstractionPattern pattern,
   case SILFunctionTypeRepresentation::CFunctionPointer:
   case SILFunctionTypeRepresentation::Block:
   case SILFunctionTypeRepresentation::ObjCMethod:
-    SmallVector<AnyFunctionType::Param, 4> bridged;
+    SmallVector<AnyFunctionType::Param, 8> bridged;
     getBridgedParams(rep, pattern, t->getParams(), bridged);
     return rebuild(bridged,
                    getBridgedResultType(rep, pattern.getFunctionResultType(),
@@ -2708,7 +2716,7 @@ TypeConverter::getLoweredFormalTypes(SILDeclRef constant,
 
   // Bridge input and result types.
   AnyFunctionType::Param bridgedSelfParam = selfParam;
-  SmallVector<AnyFunctionType::Param, 4> bridgedParams;
+  SmallVector<AnyFunctionType::Param, 8> bridgedParams;
   CanType bridgedResultType;
 
   switch (rep) {
