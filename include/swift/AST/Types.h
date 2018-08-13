@@ -2634,6 +2634,7 @@ public:
     static CanParam getFromParam(const Param &param) { return CanParam(param); }
 
     CanType getType() const { return CanType(Param::getType()); }
+    CanType getPlainType() const { return CanType(Param::getPlainType()); }
   };
 
   using CanParamArrayRef =
