@@ -1612,7 +1612,9 @@ TypeConverter::getTypeLoweringForUncachedLoweredType(TypeKey key) {
 /// Get the type of a global variable accessor function, () -> RawPointer.
 static CanAnyFunctionType getGlobalAccessorType(CanType varType) {
   ASTContext &C = varType->getASTContext();
-  return CanFunctionType::get(TupleType::getEmpty(C), C.TheRawPointerType);
+  return CanFunctionType::get(FunctionType::CanParamArrayRef(),
+                              C.TheRawPointerType,
+                              FunctionType::ExtInfo());
 }
 
 /// Get the type of a default argument generator, () -> T.
@@ -1640,8 +1642,9 @@ static CanAnyFunctionType getDefaultArgGeneratorInterfaceType(
   // Get the generic signature from the surrounding context.
   auto funcInfo = TC.getConstantInfo(SILDeclRef(VD));
   return CanAnyFunctionType::get(funcInfo.FormalType.getOptGenericSignature(),
-                                 TupleType::getEmpty(TC.Context),
-                                 canResultTy);
+                                 AnyFunctionType::CanParamArrayRef(),
+                                 canResultTy,
+                                 AnyFunctionType::ExtInfo());
 }
 
 /// Get the type of a stored property initializer, () -> T.
@@ -1654,8 +1657,10 @@ static CanAnyFunctionType getStoredPropertyInitializerInterfaceType(
           ->getCanonicalType();
   auto sig = TC.getEffectiveGenericSignature(DC);
 
-  return CanAnyFunctionType::get(sig, TupleType::getEmpty(TC.Context),
-                                 resultTy);
+  return CanAnyFunctionType::get(sig,
+                                 AnyFunctionType::CanParamArrayRef(),
+                                 resultTy,
+                                 AnyFunctionType::ExtInfo());
 }
 
 /// Get the type of a destructor function.
@@ -1682,10 +1687,15 @@ static CanAnyFunctionType getDestructorInterfaceType(TypeConverter &TC,
   CanType resultTy = (isDeallocating
                       ? TupleType::getEmpty(C)
                       : C.TheNativeObjectType);
-  CanType methodTy = CanFunctionType::get(TupleType::getEmpty(C), resultTy);
+  CanType methodTy = CanFunctionType::get(FunctionType::CanParamArrayRef(),
+                                          resultTy,
+                                          FunctionType::ExtInfo());
 
   auto sig = TC.getEffectiveGenericSignature(dd);
-  return CanAnyFunctionType::get(sig, classType, methodTy, extInfo);
+
+  AnyFunctionType::Param classParam(classType, Identifier(),
+                                    ParameterTypeFlags());
+  return CanAnyFunctionType::get(sig, {classParam}, methodTy, extInfo);
 }
 
 /// Retrieve the type of the ivar initializer or destroyer method for
@@ -1705,9 +1715,13 @@ static CanAnyFunctionType getIVarInitDestroyerInterfaceType(TypeConverter &TC,
     .withSILRepresentation(isObjC? SILFunctionTypeRepresentation::ObjCMethod
                            : SILFunctionTypeRepresentation::Method);
 
-  resultType = CanFunctionType::get(emptyTupleTy, resultType, extInfo);
+  resultType = CanFunctionType::get(FunctionType::CanParamArrayRef(),
+                                    resultType, extInfo);
   auto sig = TC.getEffectiveGenericSignature(cd);
-  return CanAnyFunctionType::get(sig, classType, resultType, extInfo);
+
+  AnyFunctionType::Param classParam(classType, Identifier(),
+                                    ParameterTypeFlags());
+  return CanAnyFunctionType::get(sig, {classParam}, resultType, extInfo);
 }
 
 GenericEnvironment *
