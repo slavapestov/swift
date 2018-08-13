@@ -643,9 +643,12 @@ private:
       AbstractionPattern eltPattern = origType.getFunctionParamType(i);
       auto flags = params[i].getParameterFlags();
 
-      // FIXME: Gross
-      if (flags.isVariadic())
-        ty = CanType(BoundGenericType::get(M.getASTContext().getArrayDecl(), Type(), {ty}));
+      // FIXME: Should probably add a Param::getTypeOfRValue() or similar
+      // to cope with this
+      if (flags.isVariadic()) {
+        ty = CanBoundGenericType::get(M.getASTContext().getArrayDecl(),
+                                      Type(), {ty});
+      }
 
       handleParameter(eltPattern, flags, ty);
     }
