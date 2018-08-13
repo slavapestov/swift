@@ -35,50 +35,34 @@ SILType TypeConverter::getLoweredTypeOfGlobal(VarDecl *var) {
   return getLoweredType(origType, origType.getType()).getObjectType();
 }
 
-CanType TypeConverter::getBridgedInputType(SILFunctionTypeRepresentation rep,
-                                           AbstractionPattern pattern,
-                                           CanType input) {
-  if (auto tuple = dyn_cast<TupleType>(input)) {
-    SmallVector<TupleTypeElt, 4> bridgedFields;
-    bool changed = false;
-
-    for (unsigned i : indices(tuple->getElements())) {
-      auto &elt = tuple->getElement(i);
-      Type bridged = getLoweredBridgedType(pattern.getTupleElementType(i),
-                                           elt.getType(), rep,
-                                           TypeConverter::ForArgument);
-      if (!bridged) {
-        Context.Diags.diagnose(SourceLoc(), diag::could_not_find_bridge_type,
-                               elt.getType());
-
-        llvm::report_fatal_error("unable to set up the ObjC bridge!");
-      }
-
-      CanType canBridged = bridged->getCanonicalType();
-      if (canBridged != CanType(elt.getType())) {
-        changed = true;
-        bridgedFields.push_back(elt.getWithType(canBridged));
-      } else {
-        bridgedFields.push_back(elt);
-      }
-    }
-
-    if (!changed)
-      return input;
-    return CanType(TupleType::get(bridgedFields, input->getASTContext()));
-  }
-
-  auto loweredBridgedType = getLoweredBridgedType(pattern, input, rep,
-                                                  TypeConverter::ForArgument);
-
-  if (!loweredBridgedType) {
+AnyFunctionType::Param
+TypeConverter::getBridgedParam(SILFunctionTypeRepresentation rep,
+                               AbstractionPattern pattern,
+                               AnyFunctionType::Param param) {
+  Type bridgedParam = getLoweredBridgedType(pattern,
+                                            param.getPlainType(), rep,
+                                            TypeConverter::ForArgument);
+  if (!bridgedParam) {
     Context.Diags.diagnose(SourceLoc(), diag::could_not_find_bridge_type,
-                           input);
+                           param.getPlainType());
 
     llvm::report_fatal_error("unable to set up the ObjC bridge!");
   }
 
-  return loweredBridgedType->getCanonicalType();
+  return AnyFunctionType::Param(bridgedParam->getCanonicalType(),
+                                param.getLabel(),
+                                param.getParameterFlags());
+}
+
+void
+TypeConverter::getBridgedParams(SILFunctionTypeRepresentation rep,
+                                AbstractionPattern pattern,
+                                ArrayRef<AnyFunctionType::Param> params,
+                                SmallVectorImpl<AnyFunctionType::Param> &bridged) {
+  for (unsigned i : indices(params)) {
+    auto paramPattern = pattern.getFunctionParamType(i);
+    bridged.push_back(getBridgedParam(rep, paramPattern, params[i]));
+  }
 }
 
 /// Bridge a result type.
@@ -195,10 +179,9 @@ Type TypeConverter::getLoweredCBridgedType(AbstractionPattern pattern,
       // Thick functions (TODO: conditionally) get bridged to blocks.
       // This bridging is more powerful than usual block bridging, however,
       // so we use the ObjCMethod representation.
-      Type newInput =
-          getBridgedInputType(SILFunctionType::Representation::ObjCMethod,
-                              pattern.getFunctionInputType(),
-                              funTy->getInput()->getCanonicalType());
+      SmallVector<AnyFunctionType::Param, 4> newInput;
+      getBridgedParams(SILFunctionType::Representation::ObjCMethod,
+                       pattern, funTy->getParams(), newInput);
       Type newResult =
           getBridgedResultType(SILFunctionType::Representation::ObjCMethod,
                                pattern.getFunctionResultType(),

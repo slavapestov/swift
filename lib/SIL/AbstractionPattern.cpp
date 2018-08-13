@@ -793,6 +793,16 @@ AbstractionPattern AbstractionPattern::getFunctionInputType() const {
   llvm_unreachable("bad kind");
 }
 
+AbstractionPattern
+AbstractionPattern::getFunctionParamType(unsigned idx) const {
+  // FIXME: Re-implement this
+  auto pattern = getFunctionInputType();
+  if (pattern.isTuple())
+    return pattern.getTupleElementType(idx);
+  assert(idx == 0);
+  return pattern;
+}
+
 static CanType getOptionalObjectType(CanType type) {
   auto objectType = type.getOptionalObjectType();
   assert(objectType && "type was not optional");
@@ -1000,9 +1010,19 @@ bool AbstractionPattern::hasSameBasicTypeStructure(CanType l, CanType r) {
   auto lFunction = dyn_cast<AnyFunctionType>(l);
   auto rFunction = dyn_cast<AnyFunctionType>(r);
   if (lFunction && rFunction) {
-    return hasSameBasicTypeStructure(lFunction.getInput(),
-                                     rFunction.getInput())
-        && hasSameBasicTypeStructure(lFunction.getResult(),
+    // Check parameters.
+    auto lParams = lFunction.getParams();
+    auto rParams = rFunction.getParams();
+    if (lParams.size() != rParams.size())
+      return false;
+    for (auto i : indices(lParams)) {
+      if (!hasSameBasicTypeStructure(CanType(lParams[i].getPlainType()),
+                                     CanType(rParams[i].getPlainType())))
+        return false;
+    }
+
+    // Check results.
+    return hasSameBasicTypeStructure(lFunction.getResult(),
                                      rFunction.getResult());
   } else if (lFunction || rFunction) {
     return false;
