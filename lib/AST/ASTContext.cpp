@@ -3705,6 +3705,8 @@ GenericFunctionType::get(GenericSignature *sig,
                          const ExtInfo &info) {
   assert(sig && "no generic signature for generic function type?!");
   assert(!input->hasTypeVariable() && !output->hasTypeVariable());
+  assert(isa<ParenType>(input.getPointer()) ||
+    isa<TupleType>(input.getPointer()));
 
   llvm::FoldingSetNodeID id;
   GenericFunctionType::Profile(id, sig, input, output, info);
