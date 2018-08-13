@@ -179,7 +179,7 @@ Type TypeConverter::getLoweredCBridgedType(AbstractionPattern pattern,
       // Thick functions (TODO: conditionally) get bridged to blocks.
       // This bridging is more powerful than usual block bridging, however,
       // so we use the ObjCMethod representation.
-      SmallVector<AnyFunctionType::Param, 4> newInput;
+      SmallVector<AnyFunctionType::Param, 8> newInput;
       getBridgedParams(SILFunctionType::Representation::ObjCMethod,
                        pattern, funTy->getParams(), newInput);
       Type newResult =
