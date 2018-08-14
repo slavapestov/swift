@@ -567,9 +567,7 @@ namespace {
     InPlaceMetadataCacheEntry() {}
 
     AllocationResult allocate(const TypeContextDescriptor *description) {
-      auto valueTypeDescriptor = cast<ValueTypeDescriptor>(description);
-      auto &initialization =
-        valueTypeDescriptor->getInPlaceMetadataInitialization();
+      auto &initialization = description->getInPlaceMetadataInitialization();
 
       auto metadata = initialization.IncompleteMetadata.get();
 
@@ -586,8 +584,8 @@ namespace {
       if (state < PrivateMetadataState::NonTransitiveComplete) {
         // Find a pattern.  Currently we always use the default pattern.
         auto &initialization =
-          cast<ValueMetadata>(metadata)->getDescription()
-                                       ->getInPlaceMetadataInitialization();
+            metadata->getTypeContextDescriptor()
+                    ->getInPlaceMetadataInitialization();
 
         // Complete the metadata's instantiation.
         auto dependency =
@@ -612,8 +610,8 @@ namespace {
     }
 
     void publishCompleteMetadata(Metadata *metadata) {
-      auto &init = cast<ValueMetadata>(metadata)->getDescription()
-                                           ->getInPlaceMetadataInitialization();
+      auto &init = metadata->getTypeContextDescriptor()
+                           ->getInPlaceMetadataInitialization();
       auto &cache = *init.InitializationCache.get();
       cache.Metadata.store(metadata, std::memory_order_release);
     }
@@ -635,8 +633,7 @@ namespace {
     template <class... ArgTys>
     std::pair<EntryType*, bool>
     getOrInsert(KeyType key, ArgTys &&...args) {
-      auto &init =
-        cast<ValueTypeDescriptor>(key)->getInPlaceMetadataInitialization();
+      auto &init = key->getInPlaceMetadataInitialization();
       auto &cache = *init.InitializationCache.get();
 
       // Check for an existing entry.
@@ -664,8 +661,7 @@ namespace {
     }
 
     EntryType *find(KeyType key) {
-      auto &init =
-        cast<ValueTypeDescriptor>(key)->getInPlaceMetadataInitialization();
+      auto &init = key->getInPlaceMetadataInitialization();
 
       return static_cast<InPlaceMetadataCacheEntry*>(
         init.InitializationCache->Private.load(std::memory_order_acquire));
