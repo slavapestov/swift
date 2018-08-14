@@ -1008,52 +1008,6 @@ namespace {
     // void addLayoutInfo(); // ABI TODO: should be superseded
   };
 
-  /// Build the field type vector accessor for a nominal type. This is a
-  /// function that lazily instantiates the type metadata for all of the
-  /// types of the stored properties of an instance of a nominal type.
-  ///
-  /// ABI TODO: This should be unnecessary when the fields that use it are
-  /// superseded.
-  static void addFieldTypes(IRGenModule &IGM, ArrayRef<CanType> fieldTypes) {
-    IGM.addFieldTypes(fieldTypes);
-  }
-  
-  /// Build a field type accessor for stored properties.
-  ///
-  /// ABI TODO: This should be unnecessary when the fields that use it are
-  /// superseded.
-  static void
-  addFieldTypes(IRGenModule &IGM, NominalTypeDecl *type,
-                NominalTypeDecl::StoredPropertyRange storedProperties) {
-    SmallVector<CanType, 4> types;
-    for (VarDecl *prop : storedProperties) {
-      auto propertyType = type->mapTypeIntoContext(prop->getInterfaceType())
-                              ->getCanonicalType();
-      types.push_back(propertyType);
-    }
-
-    addFieldTypes(IGM, types);
-  }
-  
-  /// Build a case type accessor for enum payloads.
-  ///
-  /// ABI TODO: This should be unnecessary when the fields that use it are
-  /// superseded.
-  static void addFieldTypes(IRGenModule &IGM,
-                            ArrayRef<EnumImplStrategy::Element> enumElements) {
-    SmallVector<CanType, 4> types;
-
-    for (auto &elt : enumElements) {
-      auto caseType = elt.decl->getParentEnum()->mapTypeIntoContext(
-        elt.decl->getArgumentInterfaceType())
-          ->getCanonicalType();
-      types.push_back(caseType);
-    }
-
-    addFieldTypes(IGM, types);
-  }
-
-
   class StructContextDescriptorBuilder
     : public TypeContextDescriptorBuilderBase<StructContextDescriptorBuilder,
                                               StructDecl>
@@ -1087,8 +1041,6 @@ namespace {
 
       // uint32_t FieldOffsetVectorOffset;
       B.addInt32(FieldVectorOffset / IGM.getPointerSize());
-
-      addFieldTypes(IGM, getType(), properties);
     }
     
     uint16_t getKindSpecificFlags() {
@@ -1149,8 +1101,6 @@ namespace {
 
       // uint32_t NumEmptyCases;
       B.addInt32(Strategy.getElementsWithNoPayload().size());
-
-      addFieldTypes(IGM, Strategy.getElementsWithPayload());
     }
     
     uint16_t getKindSpecificFlags() {
@@ -1360,8 +1310,6 @@ namespace {
 
       // uint32_t FieldOffsetVectorOffset;
       B.addInt32(getFieldVectorOffset() / IGM.getPointerSize());
-
-      addFieldTypes(IGM, getType(), properties);
     }
   };
 } // end anonymous namespace
@@ -1483,10 +1431,6 @@ IRGenModule::getAddrOfAnonymousContextDescriptor(DeclContext *DC,
   auto entity = LinkEntity::forAnonymousDescriptor(DC);
   return getAddrOfSharedContextDescriptor(entity, definition,
     [&]{ AnonymousContextDescriptorBuilder(*this, DC).emit(); });
-}
-
-void IRGenModule::addFieldTypes(ArrayRef<CanType> fieldTypes) {
-  IRGen.addFieldTypes(fieldTypes, this);
 }
 
 /*****************************************************************************/
@@ -2869,7 +2813,7 @@ void irgen::emitClassMetadata(IRGenModule &IGM, ClassDecl *classDecl,
               classDecl->getAttrs().hasAttribute<ObjCNonLazyRealizationAttr>());
   }
 
-  IGM.IRGen.noteUseOfAnyParentTypeMetadata(classDecl);
+  IGM.IRGen.noteUseOfAnyRelatedTypeMetadata(classDecl);
 }
 
 llvm::Value *IRGenFunction::emitInvariantLoad(Address address,
@@ -3268,18 +3212,47 @@ void irgen::emitStructMetadata(IRGenModule &IGM, StructDecl *structDecl) {
   IGM.defineTypeMetadata(declaredType, isIndirect, isPattern,
                          canBeConstant, init.finishAndCreateFuture());
 
-  IGM.IRGen.noteUseOfAnyParentTypeMetadata(structDecl);
+  IGM.IRGen.noteUseOfAnyRelatedTypeMetadata(structDecl);
 }
 
-void IRGenerator::noteUseOfAnyParentTypeMetadata(NominalTypeDecl *type) {
-  // If this is a nested type we also potentially might need the outer types.
-  auto *declCtxt = type->getDeclContext();
+void IRGenerator::noteUseOfAnyRelatedTypeMetadata(NominalTypeDecl *nominalDecl) {
+  // If this is a nested type, we also potentially might need the parent type
+  // and the types of any stored properties or enum cases for reflection, even
+  // if nothing else otherwise refers to them.
+  auto *declCtxt = nominalDecl->getDeclContext();
   auto *parentNominalDecl =
     declCtxt->getAsNominalTypeOrNominalTypeExtensionContext();
   if (!parentNominalDecl)
     return;
 
   noteUseOfTypeMetadata(parentNominalDecl);
+
+  auto noteUseOfFieldMetadata = [&](CanType t) {
+    t.visit([&](Type t) {
+      if (auto *nominalDecl = t->getAnyNominal())
+        noteUseOfTypeMetadata(nominalDecl);
+    });
+  };
+
+  auto *genericSig = nominalDecl->getGenericSignature();
+
+  if (auto *structDecl = dyn_cast<StructDecl>(nominalDecl)) {
+    for (auto *prop : structDecl->getStoredProperties()) {
+      noteUseOfFieldMetadata(prop->getInterfaceType()
+                                 ->getCanonicalType(genericSig));
+    }
+  } else if (auto *enumDecl = dyn_cast<EnumDecl>(nominalDecl)) {
+    for (auto *enumElement : enumDecl->getAllElements()) {
+      if (enumElement->hasAssociatedValues())
+        noteUseOfFieldMetadata(enumElement->getArgumentInterfaceType()
+                                          ->getCanonicalType(genericSig));
+    }
+  } else if (auto *classDecl = dyn_cast<ClassDecl>(nominalDecl)) {
+    for (auto *prop : classDecl->getStoredProperties()) {
+      noteUseOfFieldMetadata(prop->getInterfaceType()
+                                  ->getCanonicalType(genericSig));
+    }
+  }
 }
 
 // Enums
@@ -3485,7 +3458,7 @@ void irgen::emitEnumMetadata(IRGenModule &IGM, EnumDecl *theEnum) {
   IGM.defineTypeMetadata(declaredType, isIndirect, isPattern,
                          canBeConstant, init.finishAndCreateFuture());
 
-  IGM.IRGen.noteUseOfAnyParentTypeMetadata(theEnum);
+  IGM.IRGen.noteUseOfAnyRelatedTypeMetadata(theEnum);
 }
 
 llvm::Value *IRGenFunction::emitObjCSelectorRefLoad(StringRef selector) {

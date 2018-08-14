@@ -233,14 +233,6 @@ private:
 
   llvm::SmallPtrSet<SILFunction*, 4> LazilyEmittedFunctions;
 
-  struct FieldTypeMetadata {
-    IRGenModule *IGM;
-    std::vector<CanType> fieldTypes;
-  };
-
-  /// Field types we need to verify are present.
-  llvm::SmallVector<FieldTypeMetadata, 4> LazyFieldTypes;
-
   /// SIL functions that we need to emit lazily.
   llvm::SmallVector<SILFunction*, 4> LazyFunctionDefinitions;
 
@@ -359,7 +351,7 @@ public:
     noteUseOfTypeGlobals(type, false, requireMetadata);
   }
 
-  void noteUseOfAnyParentTypeMetadata(NominalTypeDecl *type);
+  void noteUseOfAnyRelatedTypeMetadata(NominalTypeDecl *type);
 
 private:
   void noteUseOfTypeGlobals(NominalTypeDecl *type,
@@ -372,10 +364,6 @@ public:
 
   /// Adds \p Conf to LazyWitnessTables if it has not been added yet.
   void addLazyWitnessTable(const ProtocolConformance *Conf);
-
-  void addFieldTypes(ArrayRef<CanType> fieldTypes, IRGenModule *IGM) {
-    LazyFieldTypes.push_back({IGM, {fieldTypes.begin(), fieldTypes.end()}});
-  }
 
   void addClassForEagerInitialization(ClassDecl *ClassDecl);
 
@@ -814,7 +802,6 @@ public:
   void addUsedGlobal(llvm::GlobalValue *global);
   void addCompilerUsedGlobal(llvm::GlobalValue *global);
   void addObjCClass(llvm::Constant *addr, bool nonlazy);
-  void addFieldTypes(ArrayRef<CanType> fieldTypes);
   void addProtocolConformance(const NormalProtocolConformance *conformance);
 
   llvm::Constant *emitSwiftProtocols();
