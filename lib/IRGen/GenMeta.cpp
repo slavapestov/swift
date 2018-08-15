@@ -1008,27 +1008,6 @@ namespace {
     // void addLayoutInfo(); // ABI TODO: should be superseded
   };
 
-  /// Build a doubly-null-terminated list of field names.
-  ///
-  /// ABI TODO: This should be unnecessary when the fields that use it are
-  /// superseded.
-  template<typename ValueDeclRange>
-  unsigned getFieldNameString(const ValueDeclRange &fields,
-                              llvm::SmallVectorImpl<char> &out) {
-    unsigned numFields = 0;
-
-    {
-      llvm::raw_svector_ostream os(out);
-      
-      for (ValueDecl *prop : fields) {
-        os << prop->getBaseName() << '\0';
-        ++numFields;
-      }
-      // The final null terminator is provided by getAddrOfGlobalString.
-    }
-    return numFields;
-  }
-  
   /// Build the field type vector accessor for a nominal type. This is a
   /// function that lazily instantiates the type metadata for all of the
   /// types of the stored properties of an instance of a nominal type.
