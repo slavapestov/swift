@@ -1580,39 +1580,20 @@ ConstraintSystem::TypeMatchResult
 ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
                              TypeMatchOptions flags,
                              ConstraintLocatorBuilder locator) {
-  // If we're matching the input types of two function types, we have to be
-  // careful to preserve ParenType sugar.
-  bool isArgumentTupleMatch = false;
-  if (auto elt = locator.last())
-    if (elt->getKind() == ConstraintLocator::FunctionArgument)
-      isArgumentTupleMatch = true;
-
   // If we have type variables that have been bound to fixed types, look through
   // to the fixed type.
-  type1 = getFixedTypeRecursive(type1, flags, kind == ConstraintKind::Equal,
-                                isArgumentTupleMatch);
-  type2 = getFixedTypeRecursive(type2, flags, kind == ConstraintKind::Equal,
-                                isArgumentTupleMatch);
+  type1 = getFixedTypeRecursive(type1, flags, kind == ConstraintKind::Equal);
+  type2 = getFixedTypeRecursive(type2, flags, kind == ConstraintKind::Equal);
 
   auto desugar1 = type1->getDesugaredType();
   auto desugar2 = type2->getDesugaredType();
-  TypeVariableType *typeVar1, *typeVar2;
-  if (isArgumentTupleMatch) {
-    typeVar1 = dyn_cast<TypeVariableType>(type1.getPointer());
-    typeVar2 = dyn_cast<TypeVariableType>(type2.getPointer());
 
-    // If the types are obviously equivalent, we're done.
-    if (type1->hasParenSugar() == type2->hasParenSugar() &&
-        type1->isEqual(type2))
-      return getTypeMatchSuccess();
-  } else {
-    typeVar1 = desugar1->getAs<TypeVariableType>();
-    typeVar2 = desugar2->getAs<TypeVariableType>();
+  auto *typeVar1 = desugar1->getAs<TypeVariableType>();
+  auto *typeVar2 = desugar2->getAs<TypeVariableType>();
 
-    // If the types are obviously equivalent, we're done.
-    if (desugar1->isEqual(desugar2))
-      return getTypeMatchSuccess();
-  }
+  // If the types are obviously equivalent, we're done.
+  if (desugar1->isEqual(desugar2))
+    return getTypeMatchSuccess();
 
   // Local function that should be used to produce the return value whenever
   // this function was unable to resolve the constraint. It should be used
@@ -1766,14 +1747,6 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
     case ConstraintKind::FunctionInput:
     case ConstraintKind::FunctionResult:
       llvm_unreachable("Not a relational constraint");
-    }
-  }
-
-  if (isArgumentTupleMatch) {
-    if (!typeVar1 && !typeVar2) {
-      if (type1->hasParenSugar() != type2->hasParenSugar()) {
-        return getTypeMatchFailure(locator);
-      }
     }
   }
 
@@ -4661,11 +4634,11 @@ ConstraintSystem::simplifyRestrictedConstraintImpl(
     // Unwrap an inout type.
     auto obj1 = type1->getInOutObjectType();
 
-    obj1 = getFixedTypeRecursive(obj1, false, false);
+    obj1 = getFixedTypeRecursive(obj1, false);
     
     auto t2 = type2->getDesugaredType();
 
-    auto baseType1 = getFixedTypeRecursive(*isArrayType(obj1), false, false);
+    auto baseType1 = getFixedTypeRecursive(*isArrayType(obj1), false);
     auto baseType2 = getBaseTypeForPointer(*this, t2);
 
     increaseScore(ScoreKind::SK_ValueToPointerConversion);
@@ -4684,7 +4657,7 @@ ConstraintSystem::simplifyRestrictedConstraintImpl(
     // TODO: Handle different encodings based on pointer element type, such as
     // UTF16 for [U]Int16 or UTF32 for [U]Int32. For now we only interop with
     // Int8 pointers using UTF8 encoding.
-    baseType2 = getFixedTypeRecursive(baseType2, false, false);
+    baseType2 = getFixedTypeRecursive(baseType2, false);
     // If we haven't resolved the element type, generate constraints.
     if (baseType2->isTypeVariableOrMember()) {
       if (flags.contains(TMF_GenerateConstraints)) {
