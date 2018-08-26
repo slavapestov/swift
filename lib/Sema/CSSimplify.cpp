@@ -834,6 +834,9 @@ ConstraintSystem::matchTupleTypes(TupleType *tuple1, TupleType *tuple2,
                                   ConstraintLocatorBuilder locator) {
   TypeMatchOptions subflags = getDefaultDecompositionOptions(flags);
 
+  // FIXME: Remove varargs logic below once we're no longer comparing
+  // argument lists in CSRanking.
+
   // Equality and subtyping have fairly strict requirements on tuple matching,
   // requiring element names to either match up or be disjoint.
   if (kind < ConstraintKind::Conversion) {
@@ -1151,11 +1154,43 @@ ConstraintSystem::matchFunctionTypes(FunctionType *func1, FunctionType *func2,
   }
 
   // Input types can be contravariant (or equal).
-  auto result =
-      matchTypes(func2Input, func1Input, subKind, subflags,
-                 locator.withPathElement(ConstraintLocator::FunctionArgument));
-  if (result.isFailure())
-    return result;
+
+  // FIXME: Refactor the above to operate on parameter lists instead of
+  // the input types so we don't have to decompose them.
+  SmallVector<AnyFunctionType::Param, 8> func1Params;
+  AnyFunctionType::decomposeInput(func1Input, func1Params);
+  SmallVector<AnyFunctionType::Param, 8> func2Params;
+  AnyFunctionType::decomposeInput(func2Input, func2Params);
+
+  auto argumentLocator = locator.withPathElement(
+      ConstraintLocator::FunctionArgument);
+
+  if (func1Params.size() != func2Params.size())
+    return getTypeMatchFailure(argumentLocator);
+
+  for (unsigned i : indices(func1Params)) {
+    auto func1Param = func1Params[i];
+    auto func2Param = func2Params[i];
+
+    // Variadic bit must match.
+    if (func1Param.isVariadic() != func2Param.isVariadic())
+      return getTypeMatchFailure(argumentLocator);
+
+    // Ownership must match.
+    if (func1Param.getValueOwnership() != func2Param.getValueOwnership())
+      return getTypeMatchFailure(argumentLocator);
+
+    // Compare the parameter types.
+    auto result = matchTypes(func2Param.getType(),
+                             func1Param.getType(),
+                             subKind, subflags,
+                             (func1Params.size() == 1
+                              ? argumentLocator
+                              : argumentLocator.withPathElement(
+                                LocatorPathElt::getTupleElement(i))));
+    if (result.isFailure())
+      return result;
+  }
 
   // Result type can be covariant (or equal).
   return matchTypes(func1->getResult(), func2->getResult(), subKind,
