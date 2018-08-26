@@ -3488,34 +3488,37 @@ DynamicSelfType *DynamicSelfType::get(Type selfType, const ASTContext &ctx) {
   return result;
 }
 
-static RecursiveTypeProperties getFunctionRecursiveProperties(Type Input,
-                                                              Type Result) {
-//  assert(!Input->hasLValueType()
-//         && "function should not take lvalues directly as parameters");
-  
-  auto properties = Input->getRecursiveProperties()
-                  | Result->getRecursiveProperties();
+static RecursiveTypeProperties
+getFunctionRecursiveProperties(ArrayRef<AnyFunctionType::Param> params,
+                               Type result) {
+  auto properties = result->getRecursiveProperties();
+  for (auto param : params)
+    properties |= param.getPlainType()->getRecursiveProperties();
   properties &= ~RecursiveTypeProperties::IsLValue;
   return properties;
 }
 
 // For now, generic function types cannot be dependent (in fact,
-// they erase dependence) or contain type variables, and they're
-// always materializable.
+// they erase dependence) or contain type variables.
 static RecursiveTypeProperties
-getGenericFunctionRecursiveProperties(Type Input, Type Result) {
+getGenericFunctionRecursiveProperties(ArrayRef<AnyFunctionType::Param> params,
+                                      Type result) {
 //  assert(!Input->hasLValueType()
 //         && "function should not take lvalues directly as parameters");
   
   static_assert(RecursiveTypeProperties::BitWidth == 10,
                 "revisit this if you add new recursive type properties");
   RecursiveTypeProperties properties;
-  if (Input->getRecursiveProperties().hasError())
-    properties |= RecursiveTypeProperties::HasError;
-  if (Result->getRecursiveProperties().hasDynamicSelf())
+  if (result->getRecursiveProperties().hasDynamicSelf())
     properties |= RecursiveTypeProperties::HasDynamicSelf;
-  if (Result->getRecursiveProperties().hasError())
+  if (result->getRecursiveProperties().hasError())
     properties |= RecursiveTypeProperties::HasError;
+
+  for (auto param : params) {
+    if (param.getPlainType()->getRecursiveProperties().hasError())
+      properties |= RecursiveTypeProperties::HasError;
+  }
+
   return properties;
 }
 
@@ -3613,20 +3616,34 @@ bool AnyFunctionType::equalParams(CanParamArrayRef a, CanParamArrayRef b) {
   return true;
 }
 
+void FunctionType::Profile(llvm::FoldingSetNodeID &ID,
+                           ArrayRef<AnyFunctionType::Param> params,
+                           Type result,
+                           ExtInfo info) {
+  ID.AddInteger(params.size());
+  for (auto param : params) {
+    ID.AddPointer(param.getPlainType());
+    ID.AddPointer(param.getLabel().get());
+    ID.AddInteger(param.getParameterFlags().toRaw());
+  }
+  ID.AddPointer(result.getPointer());
+  ID.AddInteger(info.getFuncAttrKey());
+}
+
 FunctionType *FunctionType::get(ArrayRef<AnyFunctionType::Param> params,
                                 Type result, ExtInfo info,
                                 bool canonicalVararg) {
   auto input = composeInput(result->getASTContext(), params, canonicalVararg);
-  auto properties = getFunctionRecursiveProperties(input, result);
+  auto properties = getFunctionRecursiveProperties(params, result);
   auto arena = getArena(properties);
   uint16_t attrKey = info.getFuncAttrKey();
 
   const ASTContext &C = input->getASTContext();
 
-  FunctionType *&Entry
-    = C.getImpl().getArena(arena).FunctionTypes[{input, {result, attrKey} }];
-  if (Entry) return Entry;
-  
+  if (FunctionType *FT
+        = C.getImpl().getArena(arena).FunctionTypes.FindNodeOrInsertPos(ID,InsertPos))
+    return FT;
+
   void *mem = C.Allocate(sizeof(FunctionType) +
                            sizeof(AnyFunctionType::Param) * params.size(),
                          alignof(FunctionType), arena);
@@ -3651,11 +3668,16 @@ FunctionType::FunctionType(ArrayRef<AnyFunctionType::Param> params,
 
 void GenericFunctionType::Profile(llvm::FoldingSetNodeID &ID,
                                   GenericSignature *sig,
-                                  Type input,
+                                  ArrayRef<AnyFunctionType::Param> params,
                                   Type result,
                                   ExtInfo info) {
   ID.AddPointer(sig);
-  ID.AddPointer(input.getPointer());
+  ID.AddInteger(params.size());
+  for (auto param : params) {
+    ID.AddPointer(param.getPlainType());
+    ID.AddPointer(param.getLabel().get());
+    ID.AddInteger(param.getParameterFlags().toRaw());
+  }
   ID.AddPointer(result.getPointer());
   ID.AddInteger(info.getFuncAttrKey());
 }
@@ -3680,7 +3702,7 @@ GenericFunctionType *GenericFunctionType::get(GenericSignature *sig,
   assert(!input->hasTypeVariable() && !result->hasTypeVariable());
 
   llvm::FoldingSetNodeID id;
-  GenericFunctionType::Profile(id, sig, input, result, info);
+  GenericFunctionType::Profile(id, sig, params, result, info);
 
   const ASTContext &ctx = input->getASTContext();
 
@@ -3709,7 +3731,7 @@ GenericFunctionType *GenericFunctionType::get(GenericSignature *sig,
                              sizeof(AnyFunctionType::Param) * params.size(),
                            alignof(GenericFunctionType));
 
-  auto properties = getGenericFunctionRecursiveProperties(input, result);
+  auto properties = getGenericFunctionRecursiveProperties(params, output);
   auto funcTy = new (mem) GenericFunctionType(sig, params, input, result, info,
                                               isCanonical ? &ctx : nullptr,
                                               properties);
