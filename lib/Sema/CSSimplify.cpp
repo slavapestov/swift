@@ -759,39 +759,6 @@ ConstraintSystem::TypeMatchResult
 constraints::matchCallArguments(ConstraintSystem &cs, bool isOperator,
                                 Type argType, Type paramType,
                                 ConstraintLocatorBuilder locator) {
-
-  if (paramType->isAny()) {
-    if (argType->is<InOutType>())
-      return cs.getTypeMatchFailure(locator);
-
-    // If the param type is Any, the function can only have one argument.
-    // Check if exactly one argument was passed to this function, otherwise
-    // we obviously have a mismatch.
-    if (auto tupleArgType = dyn_cast<TupleType>(argType.getPointer())) {
-      if (tupleArgType->getNumElements() != 1 ||
-          tupleArgType->getElement(0).hasName()) {
-        return cs.getTypeMatchFailure(locator);
-      }
-    }
-
-    // Disallow assignment of noescape function to parameter of type
-    // Any. Allowing this would allow these functions to escape.
-    if (auto *fnTy = argType->getAs<AnyFunctionType>()) {
-      if (fnTy->isNoEscape()) {
-        auto *loc = cs.getConstraintLocator(locator);
-        // Allow assigned of 'no-escape' function with recorded fix.
-        if (cs.shouldAttemptFixes()) {
-          if (!cs.recordFix(MarkExplicitlyEscaping::create(cs, loc)))
-            return cs.getTypeMatchSuccess();
-        }
-
-        return cs.getTypeMatchFailure(locator);
-      }
-    }
-
-    return cs.getTypeMatchSuccess();
-  }
-
   // Extract the parameters.
   ValueDecl *callee;
   unsigned calleeLevel;
@@ -2018,7 +1985,11 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
           }
         }
 
-        increaseScore(ScoreKind::SK_EmptyExistentialConversion);
+        // We had a bug in Swift 4.2 and earlier where this penalty was
+        // not applied when passing an argument to a function with a
+        // single parameter of type 'Any'. Simulate the bug here.
+        if (!isArgumentTupleMatch)
+          increaseScore(ScoreKind::SK_EmptyExistentialConversion);
       }
 
       conversionsOrFixes.push_back(ConversionRestrictionKind::Existential);
