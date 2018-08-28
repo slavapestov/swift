@@ -5540,12 +5540,22 @@ Expr *ExprRewriter::coerceCallArguments(
   // Determine the parameter bindings.
   llvm::SmallBitVector defaultMap
     = computeDefaultMap(params, callee.getDecl(), level);
-  auto args = decomposeArgType(cs.getType(arg), argLabels);
 
+  SmallVector<AnyFunctionType::Param, 8> args;
+  AnyFunctionType::decomposeInput(cs.getType(arg), args);
   
   if (allParamsMatch)
     return arg;
-  
+
+  // Apply labels to arguments.
+  // FIXME: Pass the labels directly to matchCallArguments() instead.
+  for (auto i : indices(args)) {
+    auto arg = args[i];
+    args[i] = AnyFunctionType::Param(arg.getPlainType(),
+                                     argLabels[i],
+                                     arg.getParameterFlags());
+  }
+
   MatchCallArgumentListener listener;
   SmallVector<ParamBinding, 4> parameterBindings;
   bool failed = constraints::matchCallArguments(args, params,
