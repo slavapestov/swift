@@ -1032,20 +1032,6 @@ SolutionCompareResult ConstraintSystem::compareSolutions(
       if (type2Better)
         ++score2;
 
-      // Prefer the unlabeled form of a type.
-      auto unlabeled1 = type1->getUnlabeledType(cs.getASTContext());
-      auto unlabeled2 = type2->getUnlabeledType(cs.getASTContext());
-      if (unlabeled1->isEqual(unlabeled2)) {
-        if (type1->isEqual(unlabeled1)) {
-          ++score1;
-          continue;
-        }
-        if (type2->isEqual(unlabeled2)) {
-          ++score2;
-          continue;
-        }
-      }
-
       identical = false;
       continue;
     }
