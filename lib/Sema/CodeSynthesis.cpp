@@ -1887,25 +1887,19 @@ static void maybeAddAccessorsToBehaviorStorage(TypeChecker &TC, VarDecl *var) {
       if (mightBeMutating && valueProp->isGetterMutating())
         getter->setSelfAccessKind(SelfAccessKind::Mutating);
 
-      getter->setAccess(var->getFormalAccess());
-
       // Make a setter if the behavior property has one.
       if (valueProp->getSetter()) {
         setter = createSetterPrototype(TC, var, getter);
         if (mightBeMutating && valueProp->isSetterMutating())
           setter->setSelfAccessKind(SelfAccessKind::Mutating);
-        // TODO: max of property and implementation setter visibility?
-        setter->setAccess(var->getFormalAccess());
       }
     } else {
       // Even if we couldn't find a value property, still make up a stub
       // getter and setter, so that subsequent diagnostics make sense for a
       // computed-ish property.
       getter = createGetterPrototype(TC, var);
-      getter->setAccess(var->getFormalAccess());
       setter = createSetterPrototype(TC, var, getter);
       setter->setSelfAccessKind(SelfAccessKind::NonMutating);
-      setter->setAccess(var->getFormalAccess());
     }
 
     SmallVector<AccessorDecl*, 2> accessors;

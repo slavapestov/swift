@@ -39,8 +39,6 @@ namespace swift {
 //----------------------------------------------------------------------------//
 llvm::Expected<AccessLevel>
 AccessLevelRequest::evaluate(Evaluator &evaluator, ValueDecl *D) const {
-  assert(!D->hasAccess());
-
   // Check if the decl has an explicit access control attribute.
   if (auto *AA = D->getAttrs().getAttribute<AccessControlAttr>())
     return AA->getAccess();
@@ -65,6 +63,14 @@ AccessLevelRequest::evaluate(Evaluator &evaluator, ValueDecl *D) const {
     }
   }
 
+  DeclContext *DC = D->getDeclContext();
+
+  // Special case for generic parameters; we just give them a dummy
+  // access level.
+  if (auto genericParam = dyn_cast<GenericTypeParamDecl>(D)) {
+    return func->getFormalAccess();
+  }
+
   // Special case for associated types: inherit access from protocol.
   if (auto assocType = dyn_cast<AssociatedTypeDecl>(D)) {
     auto prot = assocType->getProtocol();
@@ -82,7 +88,6 @@ AccessLevelRequest::evaluate(Evaluator &evaluator, ValueDecl *D) const {
     }
   }
 
-  DeclContext *DC = D->getDeclContext();
   switch (DC->getContextKind()) {
   case DeclContextKind::TopLevelCodeDecl:
     // Variables declared in a top-level 'guard' statement can be accessed in
@@ -130,15 +135,13 @@ void AccessLevelRequest::noteCycleStep(DiagnosticEngine &diags) const {
 
 Optional<AccessLevel> AccessLevelRequest::getCachedResult() const {
   auto valueDecl = std::get<0>(getStorage());
-  if (valueDecl->hasAccess())
-    return valueDecl->TypeAndAccess.getInt().getValue();
-
-  return None;
+  return valueDecl->TypeAndAccess.getInt();
 }
 
 void AccessLevelRequest::cacheResult(AccessLevel value) const {
   auto valueDecl = std::get<0>(getStorage());
   valueDecl->setAccess(value);
+  TypeAndAccess.setInt(access);
 }
 
 //----------------------------------------------------------------------------//
@@ -176,10 +179,7 @@ void SetterAccessLevelRequest::noteCycleStep(DiagnosticEngine &diags) const {
 
 Optional<AccessLevel> SetterAccessLevelRequest::getCachedResult() const {
   auto abstractStorageDecl = std::get<0>(getStorage());
-  if (abstractStorageDecl->Accessors.getInt().hasValue())
-    return abstractStorageDecl->Accessors.getInt().getValue();
-
-  return None;
+  return abstractStorageDecl->Accessors.getInt();
 }
 
 void SetterAccessLevelRequest::cacheResult(AccessLevel value) const {
