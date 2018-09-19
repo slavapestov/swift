@@ -660,16 +660,6 @@ Type TypeChecker::applyGenericArguments(Type type,
     }  
   }
 
-  // Cannot extend a bound generic type.
-  if (options.is(TypeResolverContext::ExtensionBinding)) {
-    if (!options.contains(TypeResolutionFlags::SilenceErrors)) {
-      diags.diagnose(loc, diag::extension_specialization,
-               genericDecl->getName())
-        .highlight(generic->getSourceRange());
-    }
-    return ErrorType::get(ctx);
-  }
-
   // FIXME: More principled handling of circularity.
   if (!genericDecl->hasValidSignature()) {
     diags.diagnose(loc, diag::recursive_type_reference,
@@ -880,21 +870,17 @@ static Type resolveTypeDecl(TypeDecl *typeDecl, SourceLoc loc,
   auto &diags = ctx.Diags;
   auto lazyResolver = ctx.getLazyResolver();
 
-  // Don't validate nominal type declarations during extension binding.
-  if (!options.is(TypeResolverContext::ExtensionBinding) ||
-      !isa<NominalTypeDecl>(typeDecl)) {
-    // Validate the declaration.
-    if (lazyResolver)
-      lazyResolver->resolveDeclSignature(typeDecl);
+  // Validate the declaration.
+  if (lazyResolver)
+    lazyResolver->resolveDeclSignature(typeDecl);
 
-    // If we were not able to validate recursively, bail out.
-    if (!typeDecl->hasInterfaceType()) {
-      diags.diagnose(loc, diag::recursive_type_reference,
-                  typeDecl->getDescriptiveKind(), typeDecl->getName());
-      typeDecl->diagnose(diag::kind_declared_here,
-                         DescriptiveDeclKind::Type);
-      return ErrorType::get(ctx);
-    }
+  // If we were not able to validate recursively, bail out.
+  if (!typeDecl->hasInterfaceType()) {
+    diags.diagnose(loc, diag::recursive_type_reference,
+                typeDecl->getDescriptiveKind(), typeDecl->getName());
+    typeDecl->diagnose(diag::kind_declared_here,
+                       DescriptiveDeclKind::Type);
+    return ErrorType::get(ctx);
   }
 
   // Resolve the type declaration to a specific type. How this occurs
