@@ -2948,20 +2948,12 @@ NameAliasType *NameAliasType::get(TypeAliasDecl *typealias, Type parent,
   // Compute the recursive properties.
   //
   auto properties = underlying->getRecursiveProperties();
-  auto storedProperties = properties;
   if (parent) {
     properties |= parent->getRecursiveProperties();
-    if (parent->hasTypeVariable())
-      storedProperties |= RecursiveTypeProperties::HasTypeVariable;
   }
-  auto genericSig = substitutions.getGenericSignature();
-  if (genericSig) {
-    for (Type gp : genericSig->getGenericParams()) {
-      auto substGP = gp.subst(substitutions, SubstFlags::UseErrorType);
+  for (Type substGP : substitutions.getReplacementTypes()) {
+    if (substGP)
       properties |= substGP->getRecursiveProperties();
-      if (substGP->hasTypeVariable())
-        storedProperties |= RecursiveTypeProperties::HasTypeVariable;
-    }
   }
 
   // Figure out which arena this type will go into.
@@ -2978,12 +2970,14 @@ NameAliasType *NameAliasType::get(TypeAliasDecl *typealias, Type parent,
   if (auto result = types.FindNodeOrInsertPos(id, insertPos))
     return result;
 
+  bool hasSubstitutions = !substitutions.empty();
+
   // Build a new type.
   auto size = totalSizeToAlloc<Type, SubstitutionMap>(parent ? 1 : 0,
-                                                      genericSig ? 1 : 0);
+                                                      hasSubstitutions ? 1 : 0);
   auto mem = ctx.Allocate(size, alignof(NameAliasType), arena);
   auto result = new (mem) NameAliasType(typealias, parent, substitutions,
-                                        underlying, storedProperties);
+                                        underlying, properties);
   types.InsertNode(result, insertPos);
   return result;
 }

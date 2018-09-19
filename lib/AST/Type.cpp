@@ -2963,8 +2963,8 @@ static Type substType(Type derivedType,
            "should not be doing AST type-substitution on a lowered SIL type;"
            "use SILType::subst");
 
-    // Special-case handle SILBoxTypes; we want to structurally substitute the
-    // substitutions.
+    // Special-case handle SILBoxTypes; we need to visit its stored
+    // conformances, which transformRec() does not do.
     if (auto boxTy = dyn_cast<SILBoxType>(type)) {
       auto subMap = boxTy->getSubstitutions();
       auto newSubMap = subMap.subst(substitutions, lookupConformances);
@@ -2973,7 +2973,35 @@ static Type substType(Type derivedType,
                              boxTy->getLayout(),
                              newSubMap);
     }
-    
+
+    // Special-case NameAliasType; we need to visit its stored
+    // conformances, which transformRec() does not do.
+    if (auto aliasTy = dyn_cast<NameAliasType>(type)) {
+      Type oldUnderlyingType = Type(aliasTy->getSinglyDesugaredType());
+      Type newUnderlyingType = substType(oldUnderlyingType,
+                                         substitutions,
+                                         lookupConformances,
+                                         options);
+      if (!newUnderlyingType) return Type();
+
+      Type oldParentType = aliasTy->getParent();
+      Type newParentType;
+      if (oldParentType) {
+        newParentType = substType(oldParentType,
+                                  substitutions,
+                                  lookupConformances,
+                                  options);
+        if (!newParentType)
+          return Type();
+      }
+
+      auto newSubMap = aliasTy->getSubstitutionMap().subst(substitutions,
+                                                           lookupConformances);
+
+      return Type(NameAliasType::get(aliasTy->getDecl(), newParentType,
+                                     newSubMap, newUnderlyingType));
+    }
+
     // We only substitute for substitutable types and dependent member types.
     
     // For dependent member types, we may need to look up the member if the
@@ -3592,43 +3620,42 @@ case TypeKind::Id:
     auto alias = cast<NameAliasType>(base);
     Type oldUnderlyingType = Type(alias->getSinglyDesugaredType());
     Type newUnderlyingType = oldUnderlyingType.transformRec(fn);
-    if (!newUnderlyingType) return Type();
+    if (!newUnderlyingType)
+      return Type();
 
     Type oldParentType = alias->getParent();
     Type newParentType;
-    if (oldParentType && !oldParentType->hasTypeParameter() &&
-        !oldParentType->hasArchetype()) {
+    if (oldParentType) {
       newParentType = oldParentType.transformRec(fn);
-      if (!newParentType) return newUnderlyingType;
+      if (!newParentType)
+        return Type();
+
+      // If anything changed with the parent type, we lose the sugar.
+      // FIXME: This is really unfortunate.
+      if (oldParentType.getPointer() != newParentType.getPointer())
+        return newUnderlyingType;
     }
 
     auto subMap = alias->getSubstitutionMap();
-    if (auto genericSig = subMap.getGenericSignature()) {
-      for (Type gp : genericSig->getGenericParams()) {
-        Type oldReplacementType = gp.subst(subMap);
-        if (!oldReplacementType)
-          return newUnderlyingType;
+    for (Type oldReplacementType : subMap.getReplacementTypes()) {
+      if (!oldReplacementType)
+        continue;
 
-        if (oldReplacementType->hasTypeParameter() ||
-            oldReplacementType->hasArchetype())
-          return newUnderlyingType;
+      Type newReplacementType = oldReplacementType.transformRec(fn);
+      if (!newReplacementType)
+        return Type();
 
-        Type newReplacementType = oldReplacementType.transformRec(fn);
-        if (!newReplacementType)
-          return newUnderlyingType;
-
-        // If anything changed with the replacement type, we lose the sugar.
-        // FIXME: This is really unfortunate.
-        if (!newReplacementType->isEqual(oldReplacementType))
-          return newUnderlyingType;
-      }
+      // If anything changed with the replacement type, we lose the sugar.
+      // FIXME: This is really unfortunate.
+      if (oldReplacementType.getPointer() != newReplacementType.getPointer())
+        return newUnderlyingType;
     }
 
+    // If nothing changed, preserve sugar.
     if (oldUnderlyingType.getPointer() == newUnderlyingType.getPointer())
       return *this;
 
-    return NameAliasType::get(alias->getDecl(), newParentType, subMap,
-                                   newUnderlyingType);
+    return newUnderlyingType;
   }
 
   case TypeKind::Paren: {
