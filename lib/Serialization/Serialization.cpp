@@ -1595,18 +1595,12 @@ void Serializer::writeNormalConformance(
       // If there is no witness, we're done.
       if (!witness.getDecl()) return;
 
-      if (auto *genericEnv = witness.getSyntheticEnvironment()) {
-        // Generic signature.
-        auto *genericSig = genericEnv->getGenericSignature();
-        data.push_back(addGenericSignatureRef(genericSig));
-      } else {
-        data.push_back(/*null generic signature*/0);
-      }
+      data.push_back(/*null generic signature*/0);
 
       data.push_back(
-        addSubstitutionMapRef(witness.getRequirementToSyntheticSubs()));
+        addSubstitutionMapRef(SubstitutionMap()));
       data.push_back(
-        addSubstitutionMapRef(witness.getSubstitutions()));
+        addSubstitutionMapRef(witness.getSubstitutions().mapReplacementTypesOutOfContext()));
   });
 
   unsigned numSignatureConformances =
@@ -3670,14 +3664,29 @@ void Serializer::writeType(Type ty) {
     const TypeAliasDecl *typeAlias = alias->getDecl();
     auto underlyingType = typeAlias->getUnderlyingTypeLoc().getType();
 
+    auto parentTy = alias->getParent();
+    if (parentTy && parentTy->hasArchetype())
+      parentTy = parentTy->mapTypeOutOfContext();
+
+    auto subMap = alias->getSubstitutionMap();
+    if (!alias->getSinglyDesugaredType()->hasArchetype()) {
+      bool hasArchetypes = false;
+      for (auto replacement : subMap.getReplacementTypes()) {
+        if (replacement && replacement->hasArchetype())
+          hasArchetypes = true;
+      }
+      if (hasArchetypes)
+        subMap = subMap.mapReplacementTypesOutOfContext();
+    }
+
     unsigned abbrCode = DeclTypeAbbrCodes[NameAliasTypeLayout::Code];
     NameAliasTypeLayout::emitRecord(
                            Out, ScratchRecord, abbrCode,
                            addDeclRef(typeAlias, /*allowTypeAliasXRef*/true),
-                           addTypeRef(alias->getParent()),
+                           addTypeRef(parentTy),
                            addTypeRef(underlyingType),
                            addTypeRef(alias->getSinglyDesugaredType()),
-                           addSubstitutionMapRef(alias->getSubstitutionMap()));
+                           addSubstitutionMapRef(subMap));
     break;
   }
 
