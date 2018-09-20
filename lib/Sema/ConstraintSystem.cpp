@@ -1037,8 +1037,6 @@ static void bindArchetypesFromContext(
     ConstraintLocator *locatorPtr,
     const OpenedTypeMap &replacements) {
 
-  auto *genericEnv = cs.DC->getGenericEnvironmentOfContext();
-
   auto bindContextArchetype = [&](Type paramTy, Type contextTy) {
     auto found = replacements.find(cast<GenericTypeParamType>(
                                      paramTy->getCanonicalType()));
@@ -1073,6 +1071,8 @@ static void bindArchetypesFromContext(
     if (!genericSig)
       break;
 
+    auto *genericEnv = cs.DC->getGenericEnvironmentOfContext();
+
     for (auto *paramTy : genericSig->getGenericParams()) {
       Type contextTy = genericEnv->mapTypeIntoContext(paramTy);
       bindContextArchetype(paramTy, contextTy);
@@ -1093,14 +1093,14 @@ void ConstraintSystem::openGeneric(
     return;
 
   auto locatorPtr = getConstraintLocator(locator);
-  auto *genericEnv = innerDC->getGenericEnvironmentOfContext();
+  //auto *genericEnv = innerDC->getGenericEnvironmentOfContext();
 
   // Create the type variables for the generic parameters.
   for (auto gp : sig->getGenericParams()) {
-    auto contextTy = GenericEnvironment::mapTypeIntoContext(genericEnv, gp);
+    /*auto contextTy = GenericEnvironment::mapTypeIntoContext(genericEnv, gp);
     if (auto *archetype = contextTy->getAs<ArchetypeType>())
       locatorPtr = getConstraintLocator(
-          locator.withPathElement(LocatorPathElt(archetype)));
+      locator.withPathElement(LocatorPathElt(archetype)));*/
 
     auto typeVar = createTypeVariable(locatorPtr,
                                       TVO_PrefersSubtypeBinding);

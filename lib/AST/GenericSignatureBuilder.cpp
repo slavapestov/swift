@@ -5439,8 +5439,8 @@ public:
       return Action::Continue;
 
     /// Retrieve the substitution.
-    auto subMap = ty->getContextSubstitutionMap(&module, decl,
-                                                decl->getGenericEnvironment());
+    auto subMap = ty->getContextSubstitutionMap(&module, decl /*,
+                                                                decl->getGenericEnvironment()*/);
 
     // Handle the requirements.
     // FIXME: Inaccurate TypeReprs.
