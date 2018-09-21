@@ -2101,8 +2101,8 @@ static void _swift_initGenericClassObjCName(ClassMetadata *theClass) {
 
 /// Initialize the invariant superclass components of a class metadata,
 /// such as the generic type arguments, field offsets, and so on.
-static void _swift_initializeSuperclass(ClassMetadata *theClass,
-                                        ClassLayoutFlags layoutFlags) {
+static void copySuperclassMetadataToSubclass(ClassMetadata *theClass,
+                                             ClassLayoutFlags layoutFlags) {
   const ClassMetadata *theSuperclass = theClass->Superclass;
   if (theSuperclass == nullptr)
     return;
@@ -2253,6 +2253,84 @@ swift::swift_relocateClassMetadata(ClassDescriptor *description,
   return metadata;
 }
 
+static void initClassFieldOffsetVector(ClassMetadata *self,
+                                       size_t numFields,
+                                       const TypeLayout * const *fieldTypes,
+                                       size_t *fieldOffsets) {
+  // Start layout by appending to a standard heap object header.
+  size_t size, alignMask;
+
+#if SWIFT_OBJC_INTEROP
+  ClassROData *rodata = getROData(self);
+#endif
+
+  // If we have a superclass, start from its size and alignment instead.
+  if (classHasSuperclass(self)) {
+    auto *super = self->Superclass;
+
+    // This is straightforward if the superclass is Swift.
+#if SWIFT_OBJC_INTEROP
+    if (super->isTypeMetadata()) {
+#endif
+      size = super->getInstanceSize();
+      alignMask = super->getInstanceAlignMask();
+
+#if SWIFT_OBJC_INTEROP
+    // If it's Objective-C, start layout from our static notion of
+    // where the superclass starts.  Objective-C expects us to have
+    // generated a correct ivar layout, which it will simply slide if
+    // it needs to.
+    } else {
+      size = rodata->InstanceStart;
+      alignMask = 0xF; // malloc alignment guarantee
+    }
+#endif
+
+  // If we don't have a formal superclass, start with the basic heap header.
+  } else {
+    auto heapLayout = getInitialLayoutForHeapObject();
+    size = heapLayout.size;
+    alignMask = heapLayout.flags.getAlignmentMask();
+  }
+
+#if SWIFT_OBJC_INTEROP
+  // Ensure that Objective-C does layout starting from the right
+  // offset.  This needs to exactly match the superclass rodata's
+  // InstanceSize in cases where the compiler decided that we didn't
+  // really have a resilient ObjC superclass, because the compiler
+  // might hardcode offsets in that case, so we can't slide ivars.
+  // Fortunately, the cases where that happens are exactly the
+  // situations where our entire superclass hierarchy is defined
+  // in Swift.  (But note that ObjC might think we have a superclass
+  // even if Swift doesn't, because of SwiftObject.)
+  rodata->InstanceStart = size;
+#endif
+
+  // Okay, now do layout.
+  for (unsigned i = 0; i != numFields; ++i) {
+    auto *eltLayout = fieldTypes[i];
+
+    // Skip empty fields.
+    if (fieldOffsets[i] == 0 && eltLayout->size == 0)
+      continue;
+    auto offset = roundUpToAlignMask(size,
+                                     eltLayout->flags.getAlignmentMask());
+    fieldOffsets[i] = offset;
+    size = offset + eltLayout->size;
+    alignMask = std::max(alignMask, eltLayout->flags.getAlignmentMask());
+  }
+
+  // Save the final size and alignment into the metadata record.
+  assert(self->isTypeMetadata());
+  self->setInstanceSize(size);
+  self->setInstanceAlignMask(alignMask);
+
+#if SWIFT_OBJC_INTEROP
+  // Save the size into the Objective-C metadata as well.
+  rodata->InstanceSize = size;
+#endif
+}
+
 /// Initialize the field offset vector for a dependent-layout class, using the
 /// "Universal" layout strategy.
 void
@@ -2282,7 +2360,7 @@ swift::swift_initClassMetadata(ClassMetadata *self,
 #endif
 
   // Copy vtable entries and field offsets from our superclass.
-  _swift_initializeSuperclass(self, layoutFlags);
+  copySuperclassMetadataToSubclass(self, layoutFlags);
 
   // Copy the class's immediate methods from the nominal type descriptor
   // to the class metadata.
@@ -2322,41 +2400,11 @@ swift::swift_initClassMetadata(ClassMetadata *self,
     }
   }
 
-  // Start layout by appending to a standard heap object header.
-  size_t size, alignMask;
+  initClassFieldOffsetVector(self, numFields, fieldTypes, fieldOffsets);
 
 #if SWIFT_OBJC_INTEROP
   ClassROData *rodata = getROData(self);
-#endif
 
-  // If we have a superclass, start from its size and alignment instead.
-  if (classHasSuperclass(self)) {
-    // This is straightforward if the superclass is Swift.
-#if SWIFT_OBJC_INTEROP
-    if (super->isTypeMetadata()) {
-#endif
-      size = super->getInstanceSize();
-      alignMask = super->getInstanceAlignMask();
-
-#if SWIFT_OBJC_INTEROP
-    // If it's Objective-C, start layout from our static notion of
-    // where the superclass starts.  Objective-C expects us to have
-    // generated a correct ivar layout, which it will simply slide if
-    // it needs to.
-    } else {
-      size = rodata->InstanceStart;
-      alignMask = 0xF; // malloc alignment guarantee
-    }
-#endif
-
-  // If we don't have a formal superclass, start with the basic heap header.
-  } else {
-    auto heapLayout = getInitialLayoutForHeapObject();
-    size = heapLayout.size;
-    alignMask = heapLayout.flags.getAlignmentMask();
-  }
-
-#if SWIFT_OBJC_INTEROP
   // In ObjC interop mode, we have up to two places we need each correct
   // ivar offset to end up:
   //
@@ -2396,17 +2444,6 @@ swift::swift_initClassMetadata(ClassMetadata *self,
     return _globalIvarOffsets;
   };
 
-  // Ensure that Objective-C does layout starting from the right
-  // offset.  This needs to exactly match the superclass rodata's
-  // InstanceSize in cases where the compiler decided that we didn't
-  // really have a resilient ObjC superclass, because the compiler
-  // might hardcode offsets in that case, so we can't slide ivars.
-  // Fortunately, the cases where that happens are exactly the
-  // situations where our entire superclass hierarchy is defined
-  // in Swift.  (But note that ObjC might think we have a superclass
-  // even if Swift doesn't, because of SwiftObject.)
-  rodata->InstanceStart = size;
-
   // Always clone the ivar descriptors.
   if (numFields) {
     const ClassIvarList *dependentIvars = rodata->IvarList;
@@ -2444,30 +2481,6 @@ swift::swift_initClassMetadata(ClassMetadata *self,
       }
     }
   }
-#endif
-
-  // Okay, now do layout.
-  for (unsigned i = 0; i != numFields; ++i) {
-    auto *eltLayout = fieldTypes[i];
-
-    // Skip empty fields.
-    if (fieldOffsets[i] == 0 && eltLayout->size == 0)
-      continue;
-    auto offset = roundUpToAlignMask(size,
-                                     eltLayout->flags.getAlignmentMask());
-    fieldOffsets[i] = offset;
-    size = offset + eltLayout->size;
-    alignMask = std::max(alignMask, eltLayout->flags.getAlignmentMask());
-  }
-
-  // Save the final size and alignment into the metadata record.
-  assert(self->isTypeMetadata());
-  self->setInstanceSize(size);
-  self->setInstanceAlignMask(alignMask);
-
-#if SWIFT_OBJC_INTEROP
-  // Save the size into the Objective-C metadata as well.
-  rodata->InstanceSize = size;
 
   // Register this class with the runtime.  This will also cause the
   // runtime to lay us out.
