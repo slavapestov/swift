@@ -2172,8 +2172,10 @@ swift::swift_relocateClassMetadata(ClassDescriptor *description,
   auto bounds = description->getMetadataBounds();
 
   auto metadata = reinterpret_cast<ClassMetadata *>(
-      (char*) malloc(bounds.getTotalSizeInBytes()) +
-      bounds.getAddressPointInBytes());
+      (char*) getResilientMetadataAllocator().Allocate(
+        bounds.getTotalSizeInBytes(), sizeof(void*)) +
+        bounds.getAddressPointInBytes());
+
   auto fullMetadata = asFullMetadata(metadata);
   char *rawMetadata = reinterpret_cast<char*>(metadata);
 
