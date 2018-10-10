@@ -6227,8 +6227,13 @@ void GenericSignatureBuilder::checkConformanceConstraints(
     // Remove self-derived constraints.
     assert(!entry.second.empty() && "No constraints to work with?");
 
+    llvm::errs() << "checking constraints\n";
+    entry.first->dumpRef();
+    llvm::errs() << "\n";
+    llvm::errs() << "number of entries: " << entry.second.size() << "\n";
     // Remove any self-derived constraints.
     removeSelfDerived(*this, entry.second, entry.first);
+    llvm::errs() << "number of entries after removing self derived: " << entry.second.size() << "\n";
 
     checkConstraintList<ProtocolDecl *, ProtocolDecl *>(
       genericParams, entry.second,
@@ -6264,6 +6269,7 @@ void GenericSignatureBuilder::checkConformanceConstraints(
       diag::redundant_conformance_here,
       [](ProtocolDecl *proto) { return proto; },
       /*removeSelfDerived=*/false);
+    llvm::errs() << "done checking\n";
   }
 }
 
@@ -7257,6 +7263,11 @@ void GenericSignatureBuilder::enumerateRequirements(
       assert(protocolSources.count(conforms.first) == 0 &&
              "redundant protocol requirement?");
 
+      llvm::errs() << "MINIMIZING\n";
+      for (auto source : conforms.second) {
+        source.source->dump();
+      }
+      llvm::errs() << "... done\n";
       protocolSources.insert(
         {conforms.first,
          *getBestConstraintSource<ProtocolDecl *>(conforms.second,

@@ -518,6 +518,7 @@ computeGenericFuncSignature(TypeChecker &tc, AbstractFunctionDecl *func) {
 }
 
 void TypeChecker::validateGenericFuncSignature(AbstractFunctionDecl *func) {
+  llvm::errs() << "validateGenericFuncSignature("; func->dumpRef(); llvm::errs() << "\n";
   GenericSignature *sig = computeGenericFuncSignature(*this, func);
 
   checkGenericFuncSignature(*this, nullptr, func,

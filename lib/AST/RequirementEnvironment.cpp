@@ -173,17 +173,19 @@ RequirementEnvironment::RequirementEnvironment(
   }
 
   // Next, add requirements.
-  if (covariantSelf) {
-    auto paramTy = GenericTypeParamType::get(/*depth=*/0, /*index=*/0, ctx);
-    Requirement reqt(RequirementKind::Superclass, paramTy, substConcreteType);
-    builder.addRequirement(reqt, source, nullptr);
-  }
 
   if (conformanceSig) {
+    conformanceSig->dump();
     for (auto &rawReq : conformanceSig->getRequirements()) {
       if (auto req = rawReq.subst(conformanceToSyntheticTypeFn,
-                                  conformanceToSyntheticConformanceFn))
+                                  conformanceToSyntheticConformanceFn)) {
+        llvm::errs() << "===\n";
+        req->getFirstType().dump();
+        req->getSecondType().dump();
         builder.addRequirement(*req, source, nullptr);
+      } else {
+        llvm::errs() << "++++\n";
+      }
     }
   }
 
@@ -206,9 +208,23 @@ RequirementEnvironment::RequirementEnvironment(
 
   // Next, add each of the requirements (mapped from the requirement's
   // interface types into the abstract type parameters).
+  reqSig->dump();
   for (auto &rawReq : reqSig->getRequirements()) {
-    if (auto req = rawReq.subst(reqToSyntheticEnvMap))
+    if (auto req = rawReq.subst(reqToSyntheticEnvMap)) {
+      llvm::errs() << "===\n";
+      req->getFirstType().dump();
+      req->getSecondType().dump();
       builder.addRequirement(*req, source, conformanceDC->getParentModule());
+    } else {
+      llvm::errs() << "++++\n";
+    }
+  }
+
+  if (covariantSelf) {
+    auto paramTy = GenericTypeParamType::get(/*depth=*/0, /*index=*/0, ctx);
+    Requirement reqt(RequirementKind::Superclass, paramTy, substConcreteType);
+    builder.addRequirement(reqt, source, nullptr);
+    llvm::errs() << "add superclass reqt\n";
   }
 
   // Produce the generic signature and environment.
