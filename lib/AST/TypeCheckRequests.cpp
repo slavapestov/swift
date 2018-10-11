@@ -40,6 +40,18 @@ void swift::simple_display(
   simple_display(out, ext);
 }
 
+void swift::simple_display(
+       llvm::raw_ostream &out,
+       const llvm::PointerUnion<ProtocolDecl *, ExtensionDecl *> &value) {
+  if (auto proto = value.dyn_cast<ProtocolDecl *>()) {
+    proto->dumpRef(out);
+    return;
+  }
+
+  auto ext = value.get<ExtensionDecl *>();
+  simple_display(out, ext);
+}
+
 void swift::simple_display(llvm::raw_ostream &out,
                            const TypeResolutionStage &value) {
   switch (value) {

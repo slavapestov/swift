@@ -37,6 +37,10 @@ void simple_display(
        llvm::raw_ostream &out,
        const llvm::PointerUnion<TypeDecl *, ExtensionDecl *> &value);
 
+void simple_display(
+       llvm::raw_ostream &out,
+       const llvm::PointerUnion<ProtocolDecl *, ExtensionDecl *> &value);
+
 /// Request the type from the ith entry in the inheritance clause for the
 /// given declaration.
 class InheritedTypeRequest :

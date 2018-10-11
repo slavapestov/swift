@@ -557,17 +557,24 @@ resolveTypeDeclsToNominal(Evaluator &evaluator,
                           bool &anyObject);
 
 TinyPtrVector<NominalTypeDecl *>
-SelfBoundsFromWhereClauseRequest::evaluate(Evaluator &evaluator,
-                                           ExtensionDecl *ext) const {
-  auto proto = ext->getExtendedProtocolDecl();
-  assert(proto && "Not a protocol extension?");
+SelfBoundsFromWhereClauseRequest::evaluate(
+    Evaluator &evaluator,
+    llvm::PointerUnion<TypeDecl *, ExtensionDecl *> decl) const {
+  auto *typeDecl = decl.dyn_cast<TypeDecl *>();
+  auto *protoDecl = dyn_cast_or_null<ProtocolDecl>(typeDecl);
+  auto *extDecl = decl.dyn_cast<ExtensionDecl *>();
 
-  ASTContext &ctx = proto->getASTContext();
+  DeclContext *dc = protoDecl ? (DeclContext *)protoDecl : (DeclContext *)extDecl;
+  auto requirements = protoDecl ? protoDecl->getTrailingWhereClause()
+                                : extDecl->getTrailingWhereClause();
+
+  ASTContext &ctx = dc->getASTContext();
   TinyPtrVector<NominalTypeDecl *> result;
-  if (!ext->getGenericParams())
+
+  if (requirements == nullptr)
     return result;
 
-  for (const auto &req : ext->getGenericParams()->getTrailingRequirements()) {
+  for (const auto &req : requirements->getRequirements()) {
     // We only care about type constraints.
     if (req.getKind() != RequirementReprKind::TypeConstraint)
       continue;
@@ -578,7 +585,7 @@ SelfBoundsFromWhereClauseRequest::evaluate(Evaluator &evaluator,
       if (auto identTypeRepr = dyn_cast<SimpleIdentTypeRepr>(typeRepr))
         isSelfLHS = (identTypeRepr->getIdentifier() == ctx.Id_Self);
     } else if (Type type = req.getSubject()) {
-      isSelfLHS = type->isEqual(proto->getSelfInterfaceType());
+      isSelfLHS = type->isEqual(dc->getSelfInterfaceType());
     }
     if (!isSelfLHS)
       continue;
@@ -586,7 +593,7 @@ SelfBoundsFromWhereClauseRequest::evaluate(Evaluator &evaluator,
     // Resolve the right-hand side.
     DirectlyReferencedTypeDecls rhsDecls;
     if (auto typeRepr = req.getConstraintRepr()) {
-      rhsDecls = directReferencesForTypeRepr(evaluator, ctx, typeRepr, ext);
+      rhsDecls = directReferencesForTypeRepr(evaluator, ctx, typeRepr, dc);
     } else if (Type type = req.getConstraint()) {
       rhsDecls = directReferencesForType(type);
     }
@@ -814,15 +821,19 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
         SmallVector<TypeDecl *, 2> lookupDecls;
         lookupDecls.push_back(nominal);
 
-        // For a protocol extension, check whether there are additional
-        // "Self" constraints that can affect name lookup.
-        if (isa<ProtocolDecl>(nominal)) {
-          if (auto ext = dyn_cast<ExtensionDecl>(dc)) {
-            auto bounds = evaluateOrDefault(Ctx.evaluator,
-              SelfBoundsFromWhereClauseRequest{ext}, {});
-            for (auto bound : bounds)
-              lookupDecls.push_back(bound);
-          }
+        // For a protocol or protocol extension, check whether there are
+        // additional "Self" constraints that can affect name lookup.
+        if (auto *proto = dyn_cast<ProtocolDecl>(nominal)) {
+          llvm::PointerUnion<TypeDecl *, ExtensionDecl *> decl;
+          if (auto ext = dyn_cast<ExtensionDecl>(dc))
+            decl = ext;
+          else
+            decl = proto;
+
+          auto bounds = evaluateOrDefault(Ctx.evaluator,
+            SelfBoundsFromWhereClauseRequest{decl}, {});
+          for (auto bound : bounds)
+            lookupDecls.push_back(bound);
         }
 
         NLOptions options = baseNLOptions;
@@ -902,13 +913,17 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name, DeclContext *DC,
 
           // For a protocol extension, check whether there are additional
           // "Self" constraints that can affect name lookup.
-          if (isa<ProtocolDecl>(nominal)) {
-            if (auto ext = dyn_cast<ExtensionDecl>(dc)) {
-              auto bounds = evaluateOrDefault(Ctx.evaluator,
-                SelfBoundsFromWhereClauseRequest{ext}, {});
-              for (auto bound : bounds)
-                lookupDecls.push_back(bound);
-            }
+          if (auto *proto = dyn_cast<ProtocolDecl>(nominal)) {
+            llvm::PointerUnion<TypeDecl *, ExtensionDecl *> decl;
+            if (auto ext = dyn_cast<ExtensionDecl>(dc))
+              decl = ext;
+            else
+              decl = proto;
+
+            auto bounds = evaluateOrDefault(Ctx.evaluator,
+              SelfBoundsFromWhereClauseRequest{decl}, {});
+            for (auto bound : bounds)
+              lookupDecls.push_back(bound);
           }
         };
 
@@ -2543,6 +2558,8 @@ DirectlyReferencedTypeDecls UnderlyingTypeDeclsReferencedRequest::evaluate(
 llvm::Expected<ClassDecl *>
 SuperclassDeclRequest::evaluate(Evaluator &evaluator,
                                 NominalTypeDecl *subject) const {
+  auto &Ctx = subject->getASTContext();
+
   for (unsigned i : indices(subject->getInherited())) {
     // Find the inherited declarations referenced at this position.
     auto inheritedTypes = evaluateOrDefault(evaluator,
@@ -2552,7 +2569,7 @@ SuperclassDeclRequest::evaluate(Evaluator &evaluator,
     SmallVector<ModuleDecl *, 2> modulesFound;
     bool anyObject = false;
     auto inheritedNominalTypes
-      = resolveTypeDeclsToNominal(evaluator, subject->getASTContext(),
+      = resolveTypeDeclsToNominal(evaluator, Ctx,
                                   inheritedTypes, modulesFound, anyObject);
 
     // Look for a class declaration.
@@ -2561,6 +2578,18 @@ SuperclassDeclRequest::evaluate(Evaluator &evaluator,
         return classDecl;
     }
   }
+
+  // Protocols also support '... where Self : Superclass'.
+  auto *proto = dyn_cast<ProtocolDecl>(subject);
+  if (proto == nullptr)
+    return nullptr;
+
+  auto selfBounds = evaluateOrDefault(
+      Ctx.evaluator,
+      SelfBoundsFromWhereClauseRequest{proto}, {});
+  for (auto inheritedNominal : selfBounds)
+    if (auto classDecl = dyn_cast<ClassDecl>(inheritedNominal))
+      return classDecl;
 
   return nullptr;
 }
@@ -2634,6 +2663,9 @@ swift::getDirectlyInheritedNominalTypeDecls(
   auto typeDecl = decl.dyn_cast<TypeDecl *>();
   auto extDecl = decl.dyn_cast<ExtensionDecl *>();
 
+  auto &Ctx = typeDecl ? typeDecl->getASTContext()
+                       : extDecl->getASTContext();
+
   // Gather results from all of the inherited types.
   unsigned numInherited = typeDecl ? typeDecl->getInherited().size()
                                    : extDecl->getInherited().size();
@@ -2641,6 +2673,25 @@ swift::getDirectlyInheritedNominalTypeDecls(
   for (unsigned i : range(numInherited)) {
     getDirectlyInheritedNominalTypeDecls(decl, i, result, anyObject);
   }
+
+  // Dig out the source location
+  // FIXME: This is a hack. We need cooperation from
+  // SelfBoundsFromWhereClauseRequest to make this work.
+  auto *protoDecl = dyn_cast_or_null<ProtocolDecl>(typeDecl);
+  if (!protoDecl && !extDecl)
+    return result;
+
+  auto *params = (protoDecl ? protoDecl->getGenericParams()
+                            : extDecl->getGenericParams());
+  if (params == nullptr)
+    return result;
+
+  SourceLoc loc = params->getTrailingWhereClauseSourceRange().Start;
+  auto selfBounds = evaluateOrDefault(
+      Ctx.evaluator,
+      SelfBoundsFromWhereClauseRequest{decl}, {});
+  for (auto inheritedNominal : selfBounds)
+    result.emplace_back(loc, inheritedNominal);
 
   return result;
 }

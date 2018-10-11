@@ -188,7 +188,7 @@ class SelfBoundsFromWhereClauseRequest :
     public SimpleRequest<SelfBoundsFromWhereClauseRequest,
                          CacheKind::Uncached,
                          llvm::TinyPtrVector<NominalTypeDecl *>,
-                         ExtensionDecl *> {
+                         llvm::PointerUnion<TypeDecl *, ExtensionDecl *>> {
 public:
   using SimpleRequest::SimpleRequest;
 
@@ -196,8 +196,9 @@ private:
   friend SimpleRequest;
 
   // Evaluation.
-  llvm::TinyPtrVector<NominalTypeDecl *> evaluate(Evaluator &evaluator,
-                                                  ExtensionDecl *ext) const;
+  llvm::TinyPtrVector<NominalTypeDecl *> evaluate(
+      Evaluator &evaluator,
+      llvm::PointerUnion<TypeDecl *, ExtensionDecl *>) const;
 
 public:
   // Cycle handling
