@@ -16,6 +16,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "TypeChecker.h"
+#include "DerivedConformances.h"
 #include "TypoCorrection.h"
 #include "swift/AST/ExistentialLayout.h"
 #include "swift/AST/Initializer.h"
@@ -253,9 +254,18 @@ namespace {
         return;
       }
 
+      auto concrete = conformance->getConcrete();
+
+      // If we're not deriving the witness, we will find it via lookup,
+      // so don't attempt a conformance check here.
+      if (found->isProtocolRequirement() &&
+          !DerivedConformance::derivesProtocolConformance(concrete->getDeclContext(),
+                                                          concrete->getType()->getNominalOrBoundGenericNominal(),
+                                                          foundProto))
+        return;
+
       // Dig out the witness.
       ValueDecl *witness = nullptr;
-      auto concrete = conformance->getConcrete();
       if (auto assocType = dyn_cast<AssociatedTypeDecl>(found)) {
         witness = concrete->getTypeWitnessAndDecl(assocType, nullptr)
           .second;
