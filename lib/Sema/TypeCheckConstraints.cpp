@@ -613,11 +613,12 @@ resolveDeclRefExpr(UnresolvedDeclRefExpr *UDRE, DeclContext *DC) {
     //
     // Note that we allow forward references to types, because they cannot
     // capture.
-    if (Loc.isValid() && D->getLoc().isValid() &&
+    if (!isa<TypeDecl>(D) &&
+        Loc.isValid() &&
+        D->getLoc().isValid() &&
+        DC->isLocalContext() &&
         D->getDeclContext()->isLocalContext() &&
-        D->getDeclContext() == DC &&
-        Context.SourceMgr.isBeforeInBuffer(Loc, D->getLoc()) &&
-        !isa<TypeDecl>(D)) {
+        Context.SourceMgr.isBeforeInBuffer(Loc, D->getLoc())) {
       localDeclAfterUse = D;
       return false;
     }
@@ -641,7 +642,8 @@ resolveDeclRefExpr(UnresolvedDeclRefExpr *UDRE, DeclContext *DC) {
 
     while (localDeclAfterUse) {
       if (Lookup.outerResults().empty()) {
-        diagnose(Loc, diag::use_local_before_declaration, Name);
+        diagnose(Loc, diag::use_local_before_declaration,
+                 isa<FuncDecl>(innerDecl), Name);
         diagnose(innerDecl, diag::decl_declared_here, Name);
         Expr *error = new (Context) ErrorExpr(UDRE->getSourceRange());
         return error;

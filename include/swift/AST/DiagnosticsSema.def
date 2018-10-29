@@ -736,7 +736,8 @@ NOTE(object_literal_resolve_import,none,
      (StringRef, StringRef, StringRef))
 
 ERROR(use_local_before_declaration,none,
-      "use of local variable %0 before its declaration", (DeclName))
+      "use of local %select{variable|function}0 %1 before its declaration",
+      (bool, DeclName))
 ERROR(unsupported_existential_type,none,
       "protocol %0 can only be used as a generic constraint because it has "
       "Self or associated type requirements", (Identifier))

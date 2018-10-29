@@ -42,6 +42,28 @@ func test_circular() {
   let _ = obj.prop, sr8447 // expected-note {{'sr8447' declared here}} expected-error {{type annotation missing in pattern}}
 }
 
+// SR-4812
+class SR4812 {
+  public func foo() {
+    let bar = { [weak self] in
+      bar2() // expected-error {{use of local function 'bar2' before its declaration}}
+    }
+    func bar2() { // expected-note {{'bar2' declared here}}
+      bar()
+    }
+    bar()
+  }
+}
+
+// SR-9015
+func test_closure() {
+  let c = { () -> Int in
+    let a = b // expected-error {{use of local variable 'b' before its declaration}}
+    return 3
+  }()
+  let b = c // expected-note {{'b' declared here}}
+}
+
 //===----------------------------------------------------------------------===//
 // Nested scope
 //===----------------------------------------------------------------------===//
