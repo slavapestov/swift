@@ -2484,10 +2484,10 @@ IRGenModule::getAddrOfLLVMVariableOrGOTEquivalent(LinkEntity entity,
   // variables and aren't kept in the GlobalVars table.
   if (entity.isSILFunction()) {
     auto fn = getAddrOfSILFunction(entity.getSILFunction(), NotForDefinition);
-    if (entity.getSILFunction()->isDefinition()
+    /*if (entity.getSILFunction()->isDefinition()
         && !isAvailableExternally(entity.getSILFunction()->getLinkage())) {
       return {fn, ConstantReference::Direct};
-    }
+      }*/
     
     auto gotEquivalent = getOrCreateGOTEquivalent(fn, entity);
     return {gotEquivalent, ConstantReference::Indirect};
