@@ -1312,7 +1312,9 @@ public:
   ManagedValue emitCorrespondingSelfValue(ManagedValue selfValue,
                                           Expr *selfArg) {
     SILLocation loc = selfArg;
-    auto resultTy = selfArg->getType()->getCanonicalType();
+    auto resultTy = selfArg->getType()
+        ->eraseDynamicSelfType()
+        ->getCanonicalType();
     while (true) {
       // Handle archetype-to-super and derived-to-base upcasts.
       if (isa<ArchetypeToSuperExpr>(selfArg) ||
@@ -1356,21 +1358,8 @@ public:
     }
     
     if (loweredResultTy != selfValue.getType()) {
-      // Introduce dynamic Self if necessary. A class initializer receives
-      // a metatype argument that's formally the non-dynamic base class type
-      // (though always dynamically of Self type),
-      // but when invoking a protocol initializer, we need to pass it as
-      // dynamic Self.
-      if (!selfValue.getType().getASTType()->hasDynamicSelfType()
-          && loweredResultTy.getASTType()->hasDynamicSelfType()) {
-        assert(selfMetaTy);
-        selfValue = SGF.emitManagedRValueWithCleanup(
-          SGF.B.createUncheckedBitCast(loc, selfValue.forward(SGF),
-                                       loweredResultTy));
-      } else {
-        selfValue = SGF.emitManagedRValueWithCleanup(
-            SGF.B.createUpcast(loc, selfValue.forward(SGF), loweredResultTy));
-      }
+      selfValue = SGF.emitManagedRValueWithCleanup(
+        SGF.B.createUpcast(loc, selfValue.forward(SGF), loweredResultTy));
     }
     return selfValue;
   }

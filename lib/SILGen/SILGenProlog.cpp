@@ -216,13 +216,12 @@ struct ArgumentInitHelper {
     assert(ty && "no type?!");
 
     // Create an RValue by emitting destructured arguments into a basic block.
-    CanType canTy = ty->eraseDynamicSelfType()->getCanonicalType();
     EmitBBArguments argEmitter(SGF, parent, l, parameters);
 
     // Note: inouts of tuples are not exploded, so we bypass visit().
     if (isInOut)
-      return argEmitter.visitType(canTy, /*isInOut=*/true);
-    return argEmitter.visit(canTy);
+      return argEmitter.visitType(ty->getCanonicalType(), /*isInOut=*/true);
+    return argEmitter.visit(ty->getCanonicalType());
   }
 
   /// Create a SILArgument and store its value into the given Initialization,
@@ -235,17 +234,6 @@ struct ArgumentInitHelper {
 
     if (vd->isInOut()) {
       assert(argrv.getType().isAddress() && "expected inout to be address");
-    } else if (auto *metatypeTy = ty->getAs<MetatypeType>()) {
-      // This is a hack to deal with the fact that Self.Type comes in as a
-      // static metatype, but we have to downcast it to a dynamic Self
-      // metatype to get the right semantics.
-      if (metatypeTy->getInstanceType()->is<DynamicSelfType>()) {
-        auto loweredTy = SGF.getLoweredType(ty);
-        if (loweredTy != argrv.getType()) {
-          argrv = ManagedValue::forUnmanaged(
-            SGF.B.createUncheckedBitCast(loc, argrv.getValue(), loweredTy));
-        }
-      }
     } else {
       assert(vd->isImmutable() && "expected parameter to be immutable!");
       // If the variable is immutable, we can bind the value as is.
@@ -320,10 +308,7 @@ static void makeArgument(Type ty, ParamDecl *decl,
 
 void SILGenFunction::bindParameterForForwarding(ParamDecl *param,
                                      SmallVectorImpl<SILValue> &parameters) {
-  Type type = (param->hasType()
-               ? param->getType()
-               : F.mapTypeIntoContext(param->getInterfaceType()));
-  makeArgument(type->eraseDynamicSelfType(), param, parameters, *this);
+  makeArgument(param->getType(), param, parameters, *this);
 }
 
 void SILGenFunction::bindParametersForForwarding(const ParameterList *params,

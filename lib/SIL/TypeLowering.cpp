@@ -1532,6 +1532,10 @@ CanType TypeConverter::getLoweredRValueType(AbstractionPattern origType,
     
     CanType instanceType = substMeta.getInstanceType();
 
+    // Ignore dynamic self types.
+    if (instanceType->hasDynamicSelfType())
+      instanceType = instanceType->eraseDynamicSelfType()->getCanonicalType();
+
     // Regardless of thinness, metatypes are always trivial.
     return CanMetatypeType::get(instanceType, repr);
   }

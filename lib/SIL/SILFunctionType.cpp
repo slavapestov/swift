@@ -750,13 +750,12 @@ lowerCaptureContextParameters(SILModule &M, AnyFunctionRef function,
     if (capture.isDynamicSelfMetadata()) {
       ParameterConvention convention = ParameterConvention::Direct_Unowned;
       auto dynamicSelfInterfaceType =
-          loweredCaptures.getDynamicSelfType()->mapTypeOutOfContext();
-
-      auto selfMetatype = MetatypeType::get(dynamicSelfInterfaceType,
-                                            MetatypeRepresentation::Thick);
-
-      auto canSelfMetatype = selfMetatype->getCanonicalType(origGenericSig);
-      SILParameterInfo param(canSelfMetatype, convention);
+          loweredCaptures.getDynamicSelfType()
+            ->mapTypeOutOfContext()
+            ->getCanonicalType();
+      auto selfType = MetatypeType::get(dynamicSelfInterfaceType);
+      auto loweredSelfType = Types.getLoweredType(selfType);
+      SILParameterInfo param(loweredSelfType.getASTType(), convention);
       inputs.push_back(param);
 
       continue;
@@ -2455,6 +2454,15 @@ public:
     CanType substObjectType = visit(origObjectType);
     return CanType(BoundGenericType::get(origType->getDecl(), Type(),
                                          substObjectType));
+  }
+
+  /// Metatypes need DynamicSelfType stripped out.
+  CanType visitMetatypeType(CanMetatypeType origType) {
+    auto instanceType = origType->getInstanceType();
+    auto substType = instanceType.subst(Subst, Conformances)
+        ->eraseDynamicSelfType()
+        ->getCanonicalType();
+    return CanMetatypeType::get(substType, origType->getRepresentation());
   }
 
   /// Any other type is would be a valid type in the AST.  Just

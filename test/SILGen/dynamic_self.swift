@@ -224,6 +224,21 @@ class Z {
     return self.init()
   }
 
+  static func testStaticMethodMutableDynamicSelfCaptures() -> Self {
+    let fn0 = { _ = self; _ = { _ = self } }
+    fn0()
+
+    var x = self
+    let fn1 = { _ = x; _ = { _ = x } }
+    fn1()
+
+    var xx = (self, self)
+    let fn2 = { _ = xx; _ = { _ = xx } }
+    fn2()
+
+    return self.init()
+  }
+
   // Make sure the actual self value has the same lowered type as the
   // substituted result of a generic function call
   func testDynamicSelfSubstitution(_ b: Bool) -> Self {
@@ -362,6 +377,26 @@ class Generic<T> {
     // CHECK-LABEL: sil private [ossa] @$s12dynamic_self7GenericC2t3ACyxGXDyFAEXDycfU_ : $@convention(thin) <T> (@guaranteed @sil_unowned Generic<T>, @thick @dynamic_self Generic<T>.Type) -> @owned Generic<T> 
     _ = {[unowned self] in self }
     return self
+  }
+}
+
+protocol SelfReplaceable {}
+
+extension SelfReplaceable {
+  init(with fn: (Self.Type)->Self) {
+    self = fn(Self.self)
+  }
+}
+
+class SelfReplaceClass : SelfReplaceable {
+  let x: Int
+
+  required init(x: Int) {
+    self.x = x
+  }
+
+  convenience init(y: Int) {
+    self.init(with: { type in type.init(x: y) })
   }
 }
 
