@@ -3675,10 +3675,10 @@ bool SILParser::parseSILInstruction(SILBuilder &B) {
     break;
   }
   case SILInstructionKind::MetatypeInst: {
-
     CanType Ty;
     SourceLoc TyLoc;
-    if (parseASTType(Ty, TyLoc))
+    if (P.parseToken(tok::sil_dollar, diag::expected_tok_in_sil_instr, "$") ||
+        parseASTType(Ty, TyLoc))
       return true;
 
     auto MetaTy = cast<MetatypeType>(Ty);

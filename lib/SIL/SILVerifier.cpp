@@ -2221,7 +2221,7 @@ public:
     require(MetaTy->hasRepresentation(),
             "metatype instruction must have a metatype representation");
     require(MetaTy.getInstanceType()->isEqual(
-              MI->getFormalInstanceType()->eraseDynamicSelfType()),
+              MI->getFormalInstanceType()),
             "Formal type must match metatype instruction result type");
     verifyOpenedArchetype(MI, MetaTy.getInstanceType());
   }

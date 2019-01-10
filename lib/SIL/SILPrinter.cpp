@@ -1735,7 +1735,10 @@ public:
   void visitExistentialMetatypeInst(ExistentialMetatypeInst *MI) {
     *this << MI->getType() << ", " << getIDAndType(MI->getOperand());
   }
-  void visitMetatypeInst(MetatypeInst *MI) { *this << MI->getType(); }
+  void visitMetatypeInst(MetatypeInst *MI) {
+    *this << "$" << MetatypeType::get(MI->getFormalInstanceType(),
+                                      MI->getMetatypeRepresentation());
+  }
 
   void visitFixLifetimeInst(FixLifetimeInst *RI) {
     *this << getIDAndType(RI->getOperand());
