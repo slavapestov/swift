@@ -216,11 +216,11 @@ emitBridgeObjectiveCToNative(SILGenFunction &SGF,
 
   // Call the witness.
   auto metatypeParam = witnessFnTy->getParameters()[1];
-  assert(isa<MetatypeType>(metatypeParam.getType()) &&
-         cast<MetatypeType>(metatypeParam.getType()).getInstanceType()
-           == swiftValueType);
+  auto metatypeType = cast<MetatypeType>(metatypeParam.getType());
+  assert(metatypeType.getInstanceType() == swiftValueType);
   SILValue metatypeValue =
-    SGF.B.createMetatype(loc, metatypeParam.getSILStorageType());
+    SGF.B.createMetatype(loc, swiftValueType,
+                         metatypeType->getRepresentation());
 
   auto witnessCI = SGF.getConstantInfo(witnessConstant);
   CanType formalResultTy = witnessCI.LoweredType.getResult();

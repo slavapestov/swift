@@ -1432,8 +1432,12 @@ void SILSerializer::writeSILInstruction(const SILInstruction &SI) {
     break;
   }
   case SILInstructionKind::MetatypeInst: {
-    auto &MI = cast<MetatypeInst>(SI);
-    writeOneTypeLayout(MI.getKind(), MI.getType());
+    auto *MI = cast<MetatypeInst>(&SI);
+    unsigned abbrCode = SILAbbrCodes[SILMetatypeLayout::Code];
+    SILMetatypeLayout::emitRecord(Out, ScratchRecord, abbrCode,
+                                  (unsigned)MI->getKind(),
+                                  S.addTypeRef(MI->getFormalInstanceType()),
+                                  (unsigned)MI->getMetatypeRepresentation());
     break;
   }
   case SILInstructionKind::ObjCProtocolInst: {
@@ -2389,6 +2393,7 @@ void SILSerializer::writeSILBlock(const SILModule *SILMod) {
   registerSILAbbr<SILOneOperandLayout>();
   registerSILAbbr<SILOneOperandExtraAttributeLayout>();
   registerSILAbbr<SILOneTypeOneOperandLayout>();
+  registerSILAbbr<SILMetatypeLayout>();
   registerSILAbbr<SILInitExistentialLayout>();
   registerSILAbbr<SILOneTypeValuesLayout>();
   registerSILAbbr<SILTwoOperandsLayout>();
@@ -2396,7 +2401,6 @@ void SILSerializer::writeSILBlock(const SILModule *SILMod) {
   registerSILAbbr<SILTailAddrLayout>();
   registerSILAbbr<SILInstApplyLayout>();
   registerSILAbbr<SILInstNoOperandLayout>();
-  registerSILAbbr<SILOneOperandLayout>();
   registerSILAbbr<SILTwoOperandsLayout>();
 
   registerSILAbbr<VTableLayout>();

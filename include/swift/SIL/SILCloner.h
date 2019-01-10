@@ -1706,7 +1706,8 @@ SILCloner<ImplClass>::visitMetatypeInst(MetatypeInst *Inst) {
   getBuilder().setCurrentDebugScope(getOpScope(Inst->getDebugScope()));
   recordClonedInstruction(
       Inst, getBuilder().createMetatype(getOpLocation(Inst->getLoc()),
-                                        getOpType(Inst->getType())));
+                                        getOpASTType(Inst->getFormalInstanceType()),
+                                        Inst->getMetatypeRepresentation()));
 }
 
 template<typename ImplClass>

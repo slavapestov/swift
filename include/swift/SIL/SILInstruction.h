@@ -5333,8 +5333,7 @@ class MetatypeInst final
   static SILType getMetatypeType(CanType FormalType,
                                  MetatypeRepresentation Rep) {
     return SILType::getPrimitiveObjectType(
-      CanMetatypeType::get(
-        FormalType->eraseDynamicSelfType()->getCanonicalType(), Rep));
+      CanMetatypeType::get(FormalType, Rep));
   }
 
   /// Constructs a MetatypeInst
@@ -5343,7 +5342,8 @@ class MetatypeInst final
                MetatypeRepresentation Rep,
                ArrayRef<SILValue> TypeDependentOperands)
     : InstructionBaseWithTrailingOperands(TypeDependentOperands, DebugLoc,
-                                          getMetatypeType(FormalType, Rep)) {}
+                                          getMetatypeType(FormalType, Rep)),
+      FormalType(FormalType) {}
 
   static MetatypeInst *create(SILDebugLocation DebugLoc,
                               CanType FormalType,
@@ -5352,11 +5352,11 @@ class MetatypeInst final
                               SILOpenedArchetypesState &OpenedArchetypes);
 
 public:
-  CanType getFormalInstanceType() {
+  CanType getFormalInstanceType() const {
     return FormalType;
   }
 
-  MetatypeRepresentation getMetatypeRepresentation() {
+  MetatypeRepresentation getMetatypeRepresentation() const {
     return getType().castTo<MetatypeType>()->getRepresentation();
   }
 

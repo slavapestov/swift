@@ -1905,16 +1905,17 @@ CheckedCastValueBranchInst::create(SILDebugLocation DebugLoc, SILValue Operand,
       DebugLoc, Operand, TypeDependentOperands, DestTy, SuccessBB, FailureBB);
 }
 
-MetatypeInst *MetatypeInst::create(SILDebugLocation Loc, SILType Ty,
+MetatypeInst *MetatypeInst::create(SILDebugLocation Loc, CanType FormalType,
+                                   MetatypeRepresentation Rep,
                                    SILFunction *F,
                                    SILOpenedArchetypesState &OpenedArchetypes) {
   SILModule &Mod = F->getModule();
   SmallVector<SILValue, 8> TypeDependentOperands;
   collectTypeDependentOperands(TypeDependentOperands, OpenedArchetypes, *F,
-                               Ty.castTo<MetatypeType>().getInstanceType());
+                               FormalType);
   auto Size = totalSizeToAlloc<swift::Operand>(TypeDependentOperands.size());
   auto Buffer = Mod.allocateInst(Size, alignof(MetatypeInst));
-  return ::new (Buffer) MetatypeInst(Loc, Ty, TypeDependentOperands);
+  return ::new (Buffer) MetatypeInst(Loc, FormalType, Rep, TypeDependentOperands);
 }
 
 UpcastInst *UpcastInst::create(SILDebugLocation DebugLoc, SILValue Operand,

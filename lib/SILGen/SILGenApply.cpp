@@ -5388,7 +5388,7 @@ getMagicFunctionString(SILGenFunction &SGF) {
 RValue SILGenFunction::emitApplyAllocatingInitializer(SILLocation loc,
                                                       ConcreteDeclRef init,
                                                       RValue &&args,
-                                                      Type overriddenSelfType,
+                                                      CanType selfType,
                                                       SGFContext C) {
   ConstructorDecl *ctor = cast<ConstructorDecl>(init.getDecl());
 
@@ -5410,21 +5410,22 @@ RValue SILGenFunction::emitApplyAllocatingInitializer(SILLocation loc,
       initConstant.SILFnType->substGenericArgs(SGM.M, subs);
     SILType selfParamMetaTy = getSILType(substFnType->getSelfParameter());
 
-    if (overriddenSelfType) {
+    auto rep = selfParamMetaTy.castTo<MetatypeType>()->getRepresentation();
+
+    if (selfType) {
       // If the 'self' type has been overridden, form a metatype to the
       // overriding 'Self' type.
-      Type overriddenSelfMetaType =
-        MetatypeType::get(overriddenSelfType,
-                          selfParamMetaTy.castTo<MetatypeType>()
-                              ->getRepresentation());
       selfMetaTy =
-        getLoweredType(overriddenSelfMetaType->getCanonicalType());
+        SILType::getPrimitiveObjectType(
+          CanMetatypeType::get(
+            selfType->eraseDynamicSelfType()->getCanonicalType(), rep));
     } else {
       selfMetaTy = selfParamMetaTy;
+      selfType = selfParamMetaTy.castTo<MetatypeType>().getInstanceType();
     }
 
     // Form the metatype value.
-    SILValue selfMeta = B.createMetatype(loc, selfMetaTy);
+    SILValue selfMeta = B.createMetatype(loc, selfType, rep);
 
     // If the types differ, we need an upcast.
     if (selfMetaTy != selfParamMetaTy)
@@ -5450,12 +5451,12 @@ RValue SILGenFunction::emitApplyAllocatingInitializer(SILLocation loc,
   // For an inheritable initializer, determine whether we'll need to adjust the
   // result type.
   bool requiresDowncast = false;
-  if (ctor->isRequired() && overriddenSelfType) {
+  if (ctor->isRequired()) {
     CanType substResultType = substFormalType;
     substResultType = cast<FunctionType>(substResultType).getResult();
     substResultType = cast<FunctionType>(substResultType).getResult();
 
-    if (!substResultType->isEqual(overriddenSelfType))
+    if (!substResultType->isEqual(selfType))
       requiresDowncast = true;
   }
 
@@ -5484,10 +5485,9 @@ RValue SILGenFunction::emitApplyAllocatingInitializer(SILLocation loc,
   // If we need a downcast, do it down.
   if (requiresDowncast) {
     ManagedValue v = std::move(result).getAsSingleValue(*this, loc);
-    CanType canOverriddenSelfType = overriddenSelfType->getCanonicalType();
-    SILType loweredResultTy = getLoweredType(canOverriddenSelfType);
+    SILType loweredResultTy = getLoweredType(selfType);
     v = B.createUncheckedRefCast(loc, v, loweredResultTy);
-    result = RValue(*this, loc, canOverriddenSelfType, v);
+    result = RValue(*this, loc, selfType, v);
   }
 
   return result;
@@ -5557,7 +5557,7 @@ RValue SILGenFunction::emitLiteral(LiteralExpr *literal, SGFContext C) {
   RValue builtinLiteral =
     emitApplyAllocatingInitializer(literal, builtinInit,
                                    std::move(builtinLiteralArgs),
-                                   Type(),
+                                   CanType(),
                                    init ? SGFContext() : C);
 
   // If we were able to directly initialize the literal we wanted, we're done.
@@ -5567,7 +5567,8 @@ RValue SILGenFunction::emitLiteral(LiteralExpr *literal, SGFContext C) {
   relabelArgument(init, builtinLiteral);
   RValue result = emitApplyAllocatingInitializer(literal, init,
                                                  std::move(builtinLiteral),
-                                                 literal->getType(), C);
+                                        literal->getType()->getCanonicalType(),
+                                                 C);
   return result;
 }
 

@@ -1922,9 +1922,6 @@ void LifetimeChecker::processUninitializedRelease(SILInstruction *Release,
     if (Pointer->getType().isAddress())
       Pointer = B.createLoad(Loc, Pointer, LoadOwnershipQualifier::Take);
 
-    auto MetatypeTy = CanMetatypeType::get(TheMemory.MemorySILType.getASTType(),
-                                           MetatypeRepresentation::Thick);
-    auto SILMetatypeTy = SILType::getPrimitiveObjectType(MetatypeTy);
     SILValue Metatype;
 
     // A convenience initializer should never deal in partially allocated
@@ -1933,7 +1930,9 @@ void LifetimeChecker::processUninitializedRelease(SILInstruction *Release,
 
     // In a designated initializer, we know the class of the thing
     // we're cleaning up statically.
-    Metatype = B.createMetatype(Loc, SILMetatypeTy);
+    Metatype = B.createMetatype(Loc,
+                                TheMemory.MemorySILType.getASTType(),
+                                MetatypeRepresentation::Thick);
 
     // We've already destroyed any instance variables initialized by this
     // constructor, now destroy instance variables initialized by subclass

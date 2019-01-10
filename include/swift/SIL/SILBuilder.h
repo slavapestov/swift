@@ -1567,8 +1567,9 @@ public:
       getSILDebugLocation(Loc), BlockStorage, InvokeFunction, BlockType, Subs));
   }
 
-  MetatypeInst *createMetatype(SILLocation Loc, SILType Metatype) {
-    return insert(MetatypeInst::create(getSILDebugLocation(Loc), Metatype,
+  MetatypeInst *createMetatype(SILLocation Loc, CanType FormalType,
+                               MetatypeRepresentation Rep) {
+    return insert(MetatypeInst::create(getSILDebugLocation(Loc), FormalType, Rep,
                                        &getFunction(), C.OpenedArchetypes));
   }
 

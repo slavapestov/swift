@@ -77,7 +77,8 @@ public:
   // Metatype instructions use the conformances necessary to instantiate the
   // type.
 
-  MetatypeInst *createMetatype(SILLocation loc, SILType metatype);
+  MetatypeInst *createMetatype(SILLocation loc, CanType formalType,
+                               MetatypeRepresentation rep);
 
   // Generic apply instructions use the conformances necessary to form the call.
 

@@ -995,6 +995,10 @@ bool SILDeserializer::readSILInstruction(SILFunction *Fn, SILBasicBlock *BB,
                                          ConcreteTyID,
                                          NumConformances);
     break;
+  case SIL_INST_METATYPE:
+    SILMetatypeLayout::readRecord(scratch, RawOpCode,
+                                  TyID, Attr);
+    break;
   case SIL_INST_CAST:
     SILInstCastLayout::readRecord(scratch, RawOpCode, Attr,
                                   TyID, TyCategory,
@@ -1081,6 +1085,14 @@ bool SILDeserializer::readSILInstruction(SILFunction *Fn, SILBasicBlock *BB,
                        cast<SILBoxType>(MF->getType(TyID)->getCanonicalType()));
     break;
   
+  case SILInstructionKind::MetatypeInst: {
+    assert(RecordKind == SIL_INST_METATYPE && "Layout should be Metatype.");
+    MetatypeRepresentation Rep = (MetatypeRepresentation) Attr;
+    ResultVal = Builder.createMetatype(Loc,
+                                       MF->getType(TyID)->getCanonicalType(),
+                                       Rep);
+    break;
+  }
 #define ONETYPE_INST(ID)                      \
   case SILInstructionKind::ID##Inst:                   \
     assert(RecordKind == SIL_ONE_TYPE && "Layout should be OneType.");         \
@@ -1088,7 +1100,6 @@ bool SILDeserializer::readSILInstruction(SILFunction *Fn, SILBasicBlock *BB,
                   getSILType(MF->getType(TyID), (SILValueCategory)TyCategory));\
     break;
   ONETYPE_INST(AllocStack)
-  ONETYPE_INST(Metatype)
 #undef ONETYPE_INST
 #define ONETYPE_ONEOPERAND_INST(ID)           \
   case SILInstructionKind::ID##Inst:                   \

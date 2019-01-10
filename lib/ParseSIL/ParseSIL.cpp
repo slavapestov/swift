@@ -3661,25 +3661,32 @@ bool SILParser::parseSILInstruction(SILBuilder &B) {
                                addrVal);
     break;
   }
-  case SILInstructionKind::AllocStackInst:
-  case SILInstructionKind::MetatypeInst: {
+  case SILInstructionKind::AllocStackInst: {
 
     SILType Ty;
     if (parseSILType(Ty))
       return true;
 
-    if (Opcode == SILInstructionKind::AllocStackInst) {
-      SILDebugVariable VarInfo;
-      if (parseSILDebugVar(VarInfo) ||
-          parseSILDebugLocation(InstLoc, B))
-        return true;
-      ResultVal = B.createAllocStack(InstLoc, Ty, VarInfo);
-    } else {
-      assert(Opcode == SILInstructionKind::MetatypeInst);
-      if (parseSILDebugLocation(InstLoc, B))
-        return true;
-      ResultVal = B.createMetatype(InstLoc, Ty);
-    }
+    SILDebugVariable VarInfo;
+    if (parseSILDebugVar(VarInfo) ||
+        parseSILDebugLocation(InstLoc, B))
+      return true;
+    ResultVal = B.createAllocStack(InstLoc, Ty, VarInfo);
+    break;
+  }
+  case SILInstructionKind::MetatypeInst: {
+
+    CanType Ty;
+    SourceLoc TyLoc;
+    if (parseASTType(Ty, TyLoc))
+      return true;
+
+    auto MetaTy = cast<MetatypeType>(Ty);
+    if (parseSILDebugLocation(InstLoc, B))
+      return true;
+    ResultVal = B.createMetatype(InstLoc,
+                                 MetaTy.getInstanceType(),
+                                 MetaTy->getRepresentation());
     break;
   }
   case SILInstructionKind::AllocRefInst:

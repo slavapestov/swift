@@ -157,6 +157,7 @@ namespace sil_block {
     SIL_VTABLE_ENTRY,
     SIL_GLOBALVAR,
     SIL_INST_CAST, // It has a cast kind instead of an attribute.
+    SIL_INST_METATYPE,
     SIL_INIT_EXISTENTIAL,
     SIL_WITNESS_TABLE,
     SIL_WITNESS_METHOD_ENTRY,
@@ -333,6 +334,14 @@ namespace sil_block {
     TypeIDField,
     SILTypeCategoryField,
     ValueIDField
+  >;
+
+  // SIL instructions that construct metatypes.
+  using SILMetatypeLayout = BCRecordLayout<
+    SIL_INST_METATYPE,
+    SILInstOpCodeField,   // opcode
+    TypeIDField,          // formal type
+    BCFixed<2>            // metatype representation
   >;
 
   // SIL instructions that construct existential values.

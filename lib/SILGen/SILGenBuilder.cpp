@@ -55,17 +55,17 @@ SILGenBuilder::SILGenBuilder(SILGenFunction &SGF, SILBasicBlock *insertBB,
 // SILBuilder APIs directly.
 //
 
-MetatypeInst *SILGenBuilder::createMetatype(SILLocation loc, SILType metatype) {
-  auto theMetatype = metatype.castTo<MetatypeType>();
+MetatypeInst *SILGenBuilder::createMetatype(SILLocation loc, CanType formalType,
+                                            MetatypeRepresentation rep) {
   // Getting a nontrivial metatype requires forcing any conformances necessary
   // to instantiate the type.
-  switch (theMetatype->getRepresentation()) {
+  switch (rep) {
   case MetatypeRepresentation::Thin:
     break;
   case MetatypeRepresentation::Thick:
   case MetatypeRepresentation::ObjC: {
     // Walk the type recursively to look for substitutions we may need.
-    theMetatype.getInstanceType().findIf([&](Type t) -> bool {
+    formalType.findIf([&](Type t) -> bool {
       auto *decl = t->getAnyNominal();
       if (!decl)
         return false;
@@ -87,7 +87,7 @@ MetatypeInst *SILGenBuilder::createMetatype(SILLocation loc, SILType metatype) {
   }
   }
 
-  return SILBuilder::createMetatype(loc, metatype);
+  return SILBuilder::createMetatype(loc, formalType, rep);
 }
 
 ApplyInst *SILGenBuilder::createApply(SILLocation loc, SILValue fn,

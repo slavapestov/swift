@@ -878,7 +878,11 @@ emitRValueForDecl(SILLocation loc, ConcreteDeclRef declRef, Type ncRefType,
   if (isa<TypeDecl>(decl)) {
     assert(refType->is<MetatypeType>() &&
            "type declref does not have metatype type?!");
-    return getUnmanagedRValue(B.createMetatype(loc, getLoweredType(refType)));
+    auto loweredTy = getLoweredType(refType).castTo<MetatypeType>();
+    auto formalTy = refType->getMetatypeInstanceType()->getCanonicalType();
+    return getUnmanagedRValue(B.createMetatype(loc,
+                                               formalTy,
+                                               loweredTy->getRepresentation()));
   }
   
   // If this is a reference to a var, emit it as an l-value and then load.
@@ -911,7 +915,12 @@ RValue RValueEmitter::visitDeclRefExpr(DeclRefExpr *E, SGFContext C) {
 RValue RValueEmitter::visitTypeExpr(TypeExpr *E, SGFContext C) {
   assert(E->getType()->is<AnyMetatypeType>() &&
          "TypeExpr must have metatype type");
-  auto Val = SGF.B.createMetatype(E, SGF.getLoweredType(E->getType()));
+
+  auto loweredTy = SGF.getLoweredType(E->getType()).castTo<MetatypeType>();
+  auto formalTy = E->getType()->getMetatypeInstanceType()->getCanonicalType();
+  auto Val = SGF.B.createMetatype(E,
+                                  formalTy,
+                                  loweredTy->getRepresentation());
   return RValue(SGF, E, ManagedValue::forUnmanaged(Val));
 }
 
@@ -1374,7 +1383,9 @@ RValueEmitter::visitConditionalBridgeFromObjCExpr(
 
   auto metatypeType = SGF.getLoweredType(MetatypeType::get(nativeType));
   auto metatype =
-    ManagedValue::forUnmanaged(SGF.B.createMetatype(E, metatypeType));
+    ManagedValue::forUnmanaged(
+      SGF.B.createMetatype(E, nativeType->getCanonicalType(),
+                           metatypeType.castTo<MetatypeType>()->getRepresentation()));
 
   return SGF.emitApplyOfLibraryIntrinsic(E, conversion, subs,
                                          { mv, metatype }, C);
@@ -1872,7 +1883,7 @@ RValue RValueEmitter::visitIsExpr(IsExpr *E, SGFContext C) {
                     builtinArgType->getCanonicalType());
   auto result =
     SGF.emitApplyAllocatingInitializer(E, ConcreteDeclRef(init),
-                                       std::move(builtinArg), Type(),
+                                       std::move(builtinArg), CanType(),
                                        C);
   return result;
 }
@@ -1904,7 +1915,7 @@ RValue RValueEmitter::visitEnumIsCaseExpr(EnumIsCaseExpr *E,
                     builtinArgType->getCanonicalType());
   auto result =
     SGF.emitApplyAllocatingInitializer(E, ConcreteDeclRef(init),
-                                       std::move(builtinArg), Type(),
+                                       std::move(builtinArg), CanType(),
                                        C);
   return result;
 }
@@ -2156,8 +2167,10 @@ RValue RValueEmitter::visitMemberRefExpr(MemberRefExpr *E, SGFContext C) {
   if (isa<TypeDecl>(E->getMember().getDecl())) {
     // Emit the metatype for the associated type.
     visit(E->getBase());
+    auto loweredTy = SGF.getLoweredType(E->getType()).castTo<MetatypeType>();
+    auto formalTy = E->getType()->getMetatypeInstanceType()->getCanonicalType();
     SILValue MT =
-      SGF.B.createMetatype(E, SGF.getLoweredLoadableType(E->getType()));
+      SGF.B.createMetatype(E, formalTy, loweredTy->getRepresentation());
     return RValue(SGF, E, ManagedValue::forUnmanaged(MT));
   }
 
@@ -2432,7 +2445,7 @@ SILValue SILGenFunction::emitMetatypeOfValue(SILLocation loc, Expr *baseExpr) {
   }
   // Otherwise, ignore the base and return the static thin metatype.
   emitIgnoredExpr(baseExpr);
-  return B.createMetatype(loc, metaTy);
+  return B.createMetatype(loc, baseTy, MetatypeRepresentation::Thin);
 }
 
 RValue RValueEmitter::visitDynamicTypeExpr(DynamicTypeExpr *E, SGFContext C) {
@@ -3111,10 +3124,8 @@ getOrCreateKeyPathEqualsAndHash(SILGenModule &SGM,
         rhsArg = subSGF.emitManagedBufferWithCleanup(rhsBuf);
       }
 
-      auto metaty = CanMetatypeType::get(formalCanTy,
-                                         MetatypeRepresentation::Thick);
       auto metatyValue = ManagedValue::forUnmanaged(subSGF.B.createMetatype(loc,
-        SILType::getPrimitiveObjectType(metaty)));
+        formalCanTy, MetatypeRepresentation::Thick));
       SILValue isEqual;
       {
         auto equalsResultPlan = ResultPlanBuilder::computeResultPlan(subSGF,

@@ -1475,7 +1475,7 @@ public:
                                      SGFContext ctx);
 
   RValue emitApplyAllocatingInitializer(SILLocation loc, ConcreteDeclRef init,
-                                        RValue &&args, Type overriddenSelfType,
+                                        RValue &&args, CanType overriddenSelfType,
                                         SGFContext ctx);
 
   CleanupHandle emitBeginApply(SILLocation loc, ManagedValue fn,

@@ -2220,6 +2220,9 @@ public:
     auto MetaTy = MI->getType().castTo<MetatypeType>();
     require(MetaTy->hasRepresentation(),
             "metatype instruction must have a metatype representation");
+    require(MetaTy.getInstanceType()->isEqual(
+              MI->getFormalInstanceType()->eraseDynamicSelfType()),
+            "Formal type must match metatype instruction result type");
     verifyOpenedArchetype(MI, MetaTy.getInstanceType());
   }
   void checkValueMetatypeInst(ValueMetatypeInst *MI) {

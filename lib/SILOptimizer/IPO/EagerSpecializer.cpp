@@ -265,13 +265,6 @@ emitInvocation(SILBuilder &Builder,
                               EmitCleanup);
 }
 
-/// Returns the thick metatype for the given SILType.
-/// e.g. $*T -> $@thick T.Type
-static SILType getThickMetatypeType(CanType Ty) {
-  auto SwiftTy = CanMetatypeType::get(Ty, MetatypeRepresentation::Thick);
-  return SILType::getPrimitiveObjectType(SwiftTy);
-}
-
 namespace {
 /// Helper class for emitting code to dispatch to a specialized function.
 class EagerDispatch {
@@ -440,11 +433,11 @@ emitTypeCheck(SILBasicBlock *FailedTypeCheckBB, SubstitutableType *ParamTy,
   // Instantiate a thick metatype for T.Type
   auto ContextTy = GenericFunc->mapTypeIntoContext(ParamTy);
   auto GenericMT = Builder.createMetatype(
-    Loc, getThickMetatypeType(ContextTy->getCanonicalType()));
+    Loc, ContextTy->getCanonicalType(), MetatypeRepresentation::Thick);
 
   // Instantiate a thick metatype for <Specialized>.Type
   auto SpecializedMT = Builder.createMetatype(
-    Loc, getThickMetatypeType(SubTy->getCanonicalType()));
+    Loc, SubTy->getCanonicalType(), MetatypeRepresentation::Thick);
 
   auto &Ctx = Builder.getASTContext();
   auto WordTy = SILType::getBuiltinWordType(Ctx);
@@ -478,7 +471,7 @@ void EagerDispatch::emitIsTrivialCheck(SILBasicBlock *FailedTypeCheckBB,
   // Instantiate a thick metatype for T.Type
   auto ContextTy = GenericFunc->mapTypeIntoContext(ParamTy);
   auto GenericMT = Builder.createMetatype(
-      Loc, getThickMetatypeType(ContextTy->getCanonicalType()));
+      Loc, ContextTy->getCanonicalType(), MetatypeRepresentation::Thick);
   auto BoolTy = SILType::getBuiltinIntegerType(1, Ctx);
   SubstitutionMap SubMap = getSingleSubstititutionMap(GenericFunc, ContextTy);
 
@@ -502,7 +495,7 @@ void EagerDispatch::emitTrivialAndSizeCheck(SILBasicBlock *FailedTypeCheckBB,
   // Instantiate a thick metatype for T.Type
   auto ContextTy = GenericFunc->mapTypeIntoContext(ParamTy);
   auto GenericMT = Builder.createMetatype(
-    Loc, getThickMetatypeType(ContextTy->getCanonicalType()));
+    Loc, ContextTy->getCanonicalType(), MetatypeRepresentation::Thick);
 
   auto WordTy = SILType::getBuiltinWordType(Ctx);
   auto BoolTy = SILType::getBuiltinIntegerType(1, Ctx);
@@ -537,7 +530,7 @@ void EagerDispatch::emitRefCountedObjectCheck(SILBasicBlock *FailedTypeCheckBB,
   // Instantiate a thick metatype for T.Type
   auto ContextTy = GenericFunc->mapTypeIntoContext(ParamTy);
   auto GenericMT = Builder.createMetatype(
-    Loc, getThickMetatypeType(ContextTy->getCanonicalType()));
+    Loc, ContextTy->getCanonicalType(), MetatypeRepresentation::Thick);
 
   auto Int8Ty = SILType::getBuiltinIntegerType(8, Ctx);
   auto BoolTy = SILType::getBuiltinIntegerType(1, Ctx);

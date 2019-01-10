@@ -2580,10 +2580,8 @@ static void emitDiagnoseOfUnexpectedEnumCaseValue(SILGenFunction &SGF,
   assert(value.getType().isTrivial(SGF.getModule()));
 
   // Get the enum type as an Any.Type value.
-  SILType metatypeType = SGF.getLoweredType(
-      AbstractionPattern::getOpaque(),
-      MetatypeType::get(subjectTy));
-  SILValue metatype = SGF.B.createMetatype(loc, metatypeType);
+  SILValue metatype = SGF.B.createMetatype(loc, subjectTy->getCanonicalType(),
+                                           MetatypeRepresentation::Thick);
 
   // Bitcast the enum value to its raw type. (This is only safe for @objc
   // enums.)

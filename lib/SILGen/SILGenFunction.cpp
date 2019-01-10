@@ -181,13 +181,10 @@ void SILGenFunction::emitCaptures(SILLocation loc,
   
   for (auto capture : captureInfo.getCaptures()) {
     if (capture.isDynamicSelfMetadata()) {
-      // The parameter type is the static Self type, but the value we
-      // want to pass is the dynamic Self type, so upcast it.
-      auto dynamicSelfMetatype = MetatypeType::get(
-        captureInfo.getDynamicSelfType());
-      SILType dynamicSILType = getLoweredType(dynamicSelfMetatype);
-
-      SILValue value = B.createMetatype(loc, dynamicSILType);
+      SILValue value = B.createMetatype(loc,
+                                        captureInfo.getDynamicSelfType()
+                                            ->getCanonicalType(),
+                                        MetatypeRepresentation::Thick);
       capturedArgs.push_back(ManagedValue::forUnmanaged(value));
       continue;
     }
@@ -474,8 +471,6 @@ void SILGenFunction::emitArtificialTopLevel(ClassDecl *mainClass) {
     // Get the class name as a string using NSStringFromClass.
     CanType mainClassTy = mainClass->getDeclaredInterfaceType()
         ->getCanonicalType();
-    CanType mainClassMetaty = CanMetatypeType::get(mainClassTy,
-                                                   MetatypeRepresentation::ObjC);
     CanType anyObjectTy = ctx.getAnyObjectType();
     CanType anyObjectMetaTy = CanExistentialMetatypeType::get(anyObjectTy,
                                                   MetatypeRepresentation::ObjC);
@@ -499,7 +494,8 @@ void SILGenFunction::emitArtificialTopLevel(ClassDecl *mainClass) {
         IsNotDynamic);
     auto NSStringFromClass = B.createFunctionRef(mainClass, NSStringFromClassFn);
     SILValue metaTy = B.createMetatype(mainClass,
-                             SILType::getPrimitiveObjectType(mainClassMetaty));
+                                       mainClassTy,
+                                       MetatypeRepresentation::ObjC);
     metaTy = B.createInitExistentialMetatype(mainClass, metaTy,
                           SILType::getPrimitiveObjectType(anyObjectMetaTy), {});
     SILValue optNameValue = B.createApply(

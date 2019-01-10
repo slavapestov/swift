@@ -637,7 +637,8 @@ ManagedValue Transform::transformMetatype(ManagedValue meta,
        willBeRepr == MetatypeRepresentation::Thick)) {
     // If we have a thin-to-thick abstraction change, cook up new a metatype
     // value out of nothing -- thin metatypes carry no runtime state.
-    result = SGF.B.createMetatype(Loc, expectedType);
+    result = SGF.B.createMetatype(Loc, outputSubstType.getInstanceType(),
+                                  willBeRepr);
   } else {
     // Otherwise, we have a metatype subtype conversion of thick metatypes.
     assert(wasRepr == willBeRepr && "Unhandled metatype conversion");

@@ -188,9 +188,8 @@ SILInstruction *CastOptimizer::optimizeBridgedObjCToSwiftCast(
 
   auto *FuncRef = Builder.createFunctionRef(Loc, BridgedFunc);
 
-  auto MetaTy = MetatypeType::get(Target, MetatypeRepresentation::Thick);
-  auto SILMetaTy = M.Types.getTypeLowering(MetaTy).getLoweredType();
-  auto *MetaTyVal = Builder.createMetatype(Loc, SILMetaTy);
+  auto *MetaTyVal = Builder.createMetatype(Loc, Target->getCanonicalType(),
+                                           MetatypeRepresentation::Thick);
   SmallVector<SILValue, 1> Args;
 
   // Add substitutions
@@ -1165,22 +1164,20 @@ CastOptimizer::optimizeCheckedCastBranchInst(CheckedCastBranchInst *Inst) {
         if (FoundIEI->getParent() != EMI->getParent())
           return nullptr;
         // Get the type used to initialize the existential.
-        auto LoweredConcreteTy = FoundIEI->getLoweredConcreteType();
+        auto FormalConcreteTy = FoundIEI->getFormalConcreteType();
         // We don't know enough at compile time about existential
         // and generic type parameters.
-        if (LoweredConcreteTy.isAnyExistentialType() ||
-            LoweredConcreteTy.is<ArchetypeType>())
+        if (FormalConcreteTy.isAnyExistentialType() ||
+            isa<ArchetypeType>(FormalConcreteTy))
           return nullptr;
         // Get the metatype of this type.
         auto EMT = EmiTy.castTo<AnyMetatypeType>();
-        auto *MetaTy = MetatypeType::get(LoweredConcreteTy.getASTType(),
-                                         EMT->getRepresentation());
-        auto CanMetaTy = CanTypeWrapper<MetatypeType>(MetaTy);
-        auto SILMetaTy = SILType::getPrimitiveObjectType(CanMetaTy);
         SILBuilderWithScope B(Inst);
         B.getOpenedArchetypes().addOpenedArchetypeOperands(
             FoundIEI->getTypeDependentOperands());
-        auto *MI = B.createMetatype(FoundIEI->getLoc(), SILMetaTy);
+        auto *MI = B.createMetatype(FoundIEI->getLoc(),
+                                    FormalConcreteTy,
+                                    EMT->getRepresentation());
 
         auto *NewI = B.createCheckedCastBranch(
             Loc, /* isExact */ false, MI, LoweredTargetType, SuccessBB,
@@ -1229,17 +1226,15 @@ CastOptimizer::optimizeCheckedCastBranchInst(CheckedCastBranchInst *Inst) {
         // We don't know enough at compile time about existential
         // and generic type parameters.
         if (ConcreteTy.isAnyExistentialType() ||
-            ConcreteTy->is<ArchetypeType>())
+            isa<ArchetypeType>(ConcreteTy))
           return nullptr;
         // Get the SIL metatype of this type.
         auto EMT = EMI->getType().castTo<AnyMetatypeType>();
-        auto *MetaTy = MetatypeType::get(ConcreteTy, EMT->getRepresentation());
-        auto CanMetaTy = CanTypeWrapper<MetatypeType>(MetaTy);
-        auto SILMetaTy = SILType::getPrimitiveObjectType(CanMetaTy);
         SILBuilderWithScope B(Inst);
         B.getOpenedArchetypes().addOpenedArchetypeOperands(
             FoundIERI->getTypeDependentOperands());
-        auto *MI = B.createMetatype(FoundIERI->getLoc(), SILMetaTy);
+        auto *MI = B.createMetatype(FoundIERI->getLoc(), ConcreteTy,
+                                    EMT->getRepresentation());
 
         auto *NewI = B.createCheckedCastBranch(
             Loc, /* isExact */ false, MI, LoweredTargetType, SuccessBB,
@@ -1581,34 +1576,36 @@ SILInstruction *CastOptimizer::optimizeMetatypeConversion(
     ConversionInst *MCI, MetatypeRepresentation Representation) {
   SILValue Op = MCI->getOperand(0);
   // Instruction has a proper target type already.
-  SILType Ty = MCI->getType();
-  auto MetatypeTy = Op->getType().getAs<AnyMetatypeType>();
+  auto Ty = MCI->getType().castTo<AnyMetatypeType>();
 
-  if (MetatypeTy->getRepresentation() != Representation)
+  if (Op->getType().castTo<AnyMetatypeType>()->getRepresentation() != Representation)
     return nullptr;
 
   // Rematerialize the incoming metatype instruction with the outgoing type.
   auto replaceCast = [&](SingleValueInstruction *NewCast) {
-    assert(Ty.getAs<AnyMetatypeType>()->getRepresentation()
-           == NewCast->getType().getAs<AnyMetatypeType>()->getRepresentation());
+    assert(Ty->getRepresentation()
+           == NewCast->getType().castTo<AnyMetatypeType>()->getRepresentation());
     MCI->replaceAllUsesWith(NewCast);
     EraseInstAction(MCI);
     return NewCast;
   };
   if (auto *MI = dyn_cast<MetatypeInst>(Op)) {
     return replaceCast(
-        SILBuilderWithScope(MCI).createMetatype(MCI->getLoc(), Ty));
+        SILBuilderWithScope(MCI)
+            .createMetatype(MCI->getLoc(),
+                            Ty.getInstanceType(),
+                            Ty->getRepresentation()));
   }
   // For metatype instructions that require an operand, generate the new
   // metatype at the same position as the original to avoid extending the
   // lifetime of `Op` past its destroy.
   if (auto *VMI = dyn_cast<ValueMetatypeInst>(Op)) {
     return replaceCast(SILBuilderWithScope(VMI).createValueMetatype(
-        MCI->getLoc(), Ty, VMI->getOperand()));
+        MCI->getLoc(), MCI->getType(), VMI->getOperand()));
   }
   if (auto *EMI = dyn_cast<ExistentialMetatypeInst>(Op)) {
     return replaceCast(SILBuilderWithScope(EMI).createExistentialMetatype(
-        MCI->getLoc(), Ty, EMI->getOperand()));
+        MCI->getLoc(), MCI->getType(), EMI->getOperand()));
   }
   return nullptr;
 }
