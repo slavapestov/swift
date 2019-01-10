@@ -2488,19 +2488,19 @@ llvm::Value *irgen::emitClassHeapMetadataRef(IRGenFunction &IGF, CanType type,
 }
 
 /// Emit a metatype value for a known type.
-void irgen::emitMetatypeRef(IRGenFunction &IGF, CanMetatypeType type,
-                            Explosion &explosion) {
-  switch (type->getRepresentation()) {
+void irgen::emitMetatypeRef(IRGenFunction &IGF, CanType instanceType,
+                            MetatypeRepresentation rep, Explosion &explosion) {
+  switch (rep) {
   case MetatypeRepresentation::Thin:
     // Thin types have a trivial representation.
     break;
 
   case MetatypeRepresentation::Thick:
-    explosion.add(IGF.emitTypeMetadataRef(type.getInstanceType()));
+    explosion.add(IGF.emitTypeMetadataRef(instanceType));
     break;
 
   case MetatypeRepresentation::ObjC:
-    explosion.add(emitClassHeapMetadataRef(IGF, type.getInstanceType(),
+    explosion.add(emitClassHeapMetadataRef(IGF, instanceType,
                                            MetadataValueType::ObjCClass,
                                            MetadataState::Complete));
     break;

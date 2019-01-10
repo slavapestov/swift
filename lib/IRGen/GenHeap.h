@@ -151,7 +151,7 @@ llvm::Value *emitDynamicTypeOfOpaqueHeapObject(IRGenFunction &IGF,
 llvm::Value *emitDynamicTypeOfHeapObject(IRGenFunction &IGF,
                                          llvm::Value *object,
                                          MetatypeRepresentation rep,
-                                         SILType objectType,
+                                         CanType objectType,
                                          bool allowArtificialSubclasses = false);
 
 /// Given a non-tagged object pointer, load a pointer to its class object.

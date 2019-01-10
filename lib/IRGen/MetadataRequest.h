@@ -560,7 +560,8 @@ void emitCacheAccessFunction(IRGenModule &IGM,
                              bool isReadNone = true);
 
 /// Emit a declaration reference to a metatype object.
-void emitMetatypeRef(IRGenFunction &IGF, CanMetatypeType type,
+void emitMetatypeRef(IRGenFunction &IGF, CanType instanceType,
+                     MetatypeRepresentation rep,
                      Explosion &explosion);
 
 /// Emit a reference to a compile-time constant piece of type metadata, or

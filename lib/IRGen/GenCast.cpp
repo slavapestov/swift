@@ -788,7 +788,7 @@ void irgen::emitScalarExistentialDowncast(IRGenFunction &IGF,
     // Get the type metadata for the instance.
     metadataValue = emitDynamicTypeOfHeapObject(IGF, value,
                                                 MetatypeRepresentation::Thick,
-                                                srcType);
+                                                srcType.getASTType());
   }
 
   // Look up witness tables for the protocols that need them.

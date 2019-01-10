@@ -1851,10 +1851,10 @@ emitHeapMetadataRefForUnknownHeapObject(IRGenFunction &IGF,
 llvm::Value *irgen::emitDynamicTypeOfHeapObject(IRGenFunction &IGF,
                                                 llvm::Value *object,
                                                 MetatypeRepresentation repr,
-                                                SILType objectType,
+                                                CanType objectType,
                                                 bool allowArtificialSubclasses){
   switch (auto isaEncoding =
-            getIsaEncodingForType(IGF.IGM, objectType.getASTType())) {
+            getIsaEncodingForType(IGF.IGM, objectType)) {
   case IsaEncoding::Pointer:
     // Directly load the isa pointer from a pure Swift class.
     return emitLoadOfHeapMetadataRef(IGF, object, isaEncoding,
@@ -1867,7 +1867,7 @@ llvm::Value *irgen::emitDynamicTypeOfHeapObject(IRGenFunction &IGF,
     // so can be used for some purposes like satisfying type parameters in
     // generic signatures.
     if (allowArtificialSubclasses
-        && hasKnownSwiftMetadata(IGF.IGM, objectType.getASTType()))
+        && hasKnownSwiftMetadata(IGF.IGM, objectType))
       return emitLoadOfHeapMetadataRef(IGF, object, isaEncoding,
                                        /*suppressCast*/ false);
    

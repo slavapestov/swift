@@ -1961,9 +1961,10 @@ void IRGenSILFunction::visitGlobalValueInst(GlobalValueInst *i) {
 }
 
 void IRGenSILFunction::visitMetatypeInst(swift::MetatypeInst *i) {
-  auto metaTy = i->getType().castTo<MetatypeType>();
   Explosion e;
-  emitMetatypeRef(*this, metaTy, e);
+  emitMetatypeRef(*this,
+                  i->getFormalInstanceType(),
+                  i->getMetatypeRepresentation(), e);
   setLoweredExplosion(i, e);
 }
 
@@ -1979,9 +1980,9 @@ static llvm::Value *getClassBaseValue(IRGenSILFunction &IGF,
 }
 
 void IRGenSILFunction::visitValueMetatypeInst(swift::ValueMetatypeInst *i) {
-  SILType instanceTy = i->getOperand()->getType();
   auto metaTy = i->getType().castTo<MetatypeType>();
-  
+  auto instanceTy = metaTy.getInstanceType();
+
   if (metaTy->getRepresentation() == MetatypeRepresentation::Thin) {
     Explosion empty;
     setLoweredExplosion(i, empty);
@@ -1994,7 +1995,7 @@ void IRGenSILFunction::visitValueMetatypeInst(swift::ValueMetatypeInst *i) {
     e.add(emitDynamicTypeOfHeapObject(*this,
                            getClassBaseValue(*this, i->getOperand()),
                            metaTy->getRepresentation(), instanceTy));
-  } else if (auto arch = instanceTy.getAs<ArchetypeType>()) {
+  } else if (auto arch = dyn_cast<ArchetypeType>(instanceTy)) {
     if (arch->requiresClass()) {
       e.add(emitDynamicTypeOfHeapObject(*this,
                              getClassBaseValue(*this, i->getOperand()),
@@ -2010,7 +2011,7 @@ void IRGenSILFunction::visitValueMetatypeInst(swift::ValueMetatypeInst *i) {
                       "objc metatype of non-class-bounded archetype");
     }
   } else {
-    emitMetatypeRef(*this, metaTy, e);
+    emitMetatypeRef(*this, instanceTy, metaTy->getRepresentation(), e);
   }
   
   setLoweredExplosion(i, e);
