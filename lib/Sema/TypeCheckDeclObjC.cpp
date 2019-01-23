@@ -857,8 +857,8 @@ bool swift::isRepresentableInObjC(const SubscriptDecl *SD, ObjCReason Reason) {
     .highlight(TypeRange);
 
   diagnoseTypeNotRepresentableInObjC(SD->getDeclContext(),
-                                     !IndicesResult ? IndexType
-                                                    : ElementType,
+                                     !IndexResult ? IndexType
+                                                  : ElementType,
                                      TypeRange);
   describeObjCReason(SD, Reason);
 
