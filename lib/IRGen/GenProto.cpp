@@ -2834,6 +2834,9 @@ void NecessaryBindings::save(IRGenFunction &IGF, Address buffer) const {
 void NecessaryBindings::addTypeMetadata(CanType type) {
   assert(!isa<InOutType>(type));
 
+  // AST FunctionType cannot appear in lowered position.
+  assert(!isa<FunctionType>(type));
+
   // Bindings are only necessary at all if the type is dependent.
   if (!type->hasArchetype()) return;
 
@@ -2846,12 +2849,6 @@ void NecessaryBindings::addTypeMetadata(CanType type) {
   if (auto tuple = dyn_cast<TupleType>(type)) {
     for (auto elt : tuple.getElementTypes())
       addTypeMetadata(elt);
-    return;
-  }
-  if (auto fn = dyn_cast<FunctionType>(type)) {
-    for (const auto &elt : fn.getParams())
-      addTypeMetadata(elt.getOldType());
-    addTypeMetadata(fn.getResult());
     return;
   }
   if (auto metatype = dyn_cast<MetatypeType>(type)) {
