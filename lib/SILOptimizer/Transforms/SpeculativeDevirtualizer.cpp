@@ -118,14 +118,14 @@ static FullApplySite CloneApply(FullApplySite AI, SILBuilder &Builder) {
 /// Insert monomorphic inline caches for a specific class or metatype
 /// type \p SubClassTy.
 static FullApplySite speculateMonomorphicTarget(FullApplySite AI,
-                                                SILType SubType,
+                                                CanType SubType,
                                                 CheckedCastBranchInst *&CCBI) {
   CCBI = nullptr;
   // Bail if this class_method cannot be devirtualized.
   if (!canDevirtualizeClassMethod(AI, SubType))
     return FullApplySite();
 
-  if (SubType.getASTType()->hasDynamicSelfType())
+  if (SubType->hasDynamicSelfType())
     return FullApplySite();
 
   // Can't speculate begin_apply yet.
@@ -144,7 +144,9 @@ static FullApplySite speculateMonomorphicTarget(FullApplySite AI,
   SILBasicBlock *Iden = F->createBasicBlock();
   // Virt is the block containing the slow virtual call.
   SILBasicBlock *Virt = F->createBasicBlock();
-  Iden->createPhiArgument(SubType, ValueOwnershipKind::Owned);
+  Iden->createPhiArgument(
+      SILType::getPrimitiveObjectType(SubType),
+      ValueOwnershipKind::Owned);
 
   SILBasicBlock *Continue = Entry->split(It);
 
@@ -155,8 +157,10 @@ static FullApplySite speculateMonomorphicTarget(FullApplySite AI,
   ClassMethodInst *CMI = cast<ClassMethodInst>(AI.getCallee());
 
   CCBI = Builder.createCheckedCastBranch(AI.getLoc(), /*exact*/ true,
-                                       CMI->getOperand(), SubType, Iden,
-                                       Virt);
+                                      CMI->getOperand(),
+                                      SILType::getPrimitiveObjectType(SubType),
+                                      Iden,
+                                      Virt);
   It = CCBI->getIterator();
 
   SILBuilderWithScope VirtBuilder(Virt, AI.getInstruction());
@@ -381,18 +385,20 @@ static bool tryToSpeculateTarget(FullApplySite AI, ClassHierarchyAnalysis *CHA,
   // with a value whose type is closer (in the class hierarchy) to the
   // actual dynamic type.
   auto SubTypeValue = stripUpCasts(CMI->getOperand());
-  SILType SubType = SubTypeValue->getType();
+  CanType SubType = SubTypeValue->getType().getASTType();
 
   // Bail if any generic types parameters of the class instance type are
   // unbound.
   // We cannot devirtualize unbound generic calls yet.
-  if (SubType.hasArchetype())
+  if (SubType->hasArchetype())
     return false;
 
-  auto &M = CMI->getModule();
+  auto *F = CMI->getFunction();
+  auto &M = F->getModule();
+
   auto ClassType = SubType;
-  if (SubType.is<MetatypeType>())
-    ClassType = SubType.getMetatypeInstanceType(M);
+  if (auto MetaType = dyn_cast<MetatypeType>(SubType))
+      ClassType = MetaType.getInstanceType();
 
   CheckedCastBranchInst *LastCCBI = nullptr;
 
@@ -501,14 +507,11 @@ static bool tryToSpeculateTarget(FullApplySite AI, ClassHierarchyAnalysis *CHA,
     }
 
     CanType CanClassType = S->getDeclaredInterfaceType()->getCanonicalType();
-    SILType ClassType = SILType::getPrimitiveObjectType(CanClassType);
 
-    auto ClassOrMetatypeType = ClassType;
-    if (auto EMT = SubType.getAs<AnyMetatypeType>()) {
-      auto InstTy = ClassType.getASTType();
-      auto *MetaTy = MetatypeType::get(InstTy, EMT->getRepresentation());
-      auto CanMetaTy = CanMetatypeType(MetaTy);
-      ClassOrMetatypeType = SILType::getPrimitiveObjectType(CanMetaTy);
+    auto ClassOrMetatypeType = CanClassType;
+    if (auto MT = dyn_cast<MetatypeType>(SubType)) {
+      ClassOrMetatypeType = CanMetatypeType::get(CanClassType,
+                                                 MT->getRepresentation());
     }
 
     // Pass the metatype of the subclass.

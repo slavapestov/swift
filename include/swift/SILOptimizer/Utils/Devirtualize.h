@@ -44,7 +44,7 @@ class Emitter;
 /// \p Subs a container to be used for storing the set of subclasses
 void getAllSubclasses(ClassHierarchyAnalysis *CHA,
                       ClassDecl *CD,
-                      SILType ClassType,
+                      CanType ClassType,
                       SILModule &M,
                       ClassHierarchyAnalysis::ClassList &Subs);
 
@@ -70,10 +70,10 @@ ApplySite tryDevirtualizeApply(ApplySite AI,
                                OptRemark::Emitter *ORE = nullptr);
 bool canDevirtualizeApply(FullApplySite AI, ClassHierarchyAnalysis *CHA);
 bool isNominalTypeWithUnboundGenericParameters(SILType Ty, SILModule &M);
-bool canDevirtualizeClassMethod(FullApplySite AI, SILType ClassInstanceType,
+bool canDevirtualizeClassMethod(FullApplySite AI, CanType ClassInstanceType,
                                 OptRemark::Emitter *ORE = nullptr,
                                 bool isEffectivelyFinalMethod = false);
-SILFunction *getTargetClassMethod(SILModule &M, SILType ClassOrMetatypeType,
+SILFunction *getTargetClassMethod(SILModule &M, CanType ClassOrMetatypeType,
                                   MethodInst *MI);
 
 /// Devirtualize the given apply site, which is known to be devirtualizable.

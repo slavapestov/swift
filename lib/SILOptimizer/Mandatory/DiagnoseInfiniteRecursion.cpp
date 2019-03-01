@@ -57,7 +57,7 @@ static bool hasRecursiveCallInPath(SILBasicBlock &Block,
 
       auto &M = FAI.getModule();
       if (auto *CMI = dyn_cast<ClassMethodInst>(FAI.getCallee())) {
-        auto ClassType = CMI->getOperand()->getType();
+        auto ClassType = CMI->getOperand()->getType().getASTType();
 
         // FIXME: If we're not inside the module context of the method,
         // we may have to deserialize vtables.  If the serialized tables
