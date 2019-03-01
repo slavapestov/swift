@@ -262,7 +262,9 @@ static SILFunction *getGlobalGetterFunction(SILOptFunctionBuilder &FunctionBuild
     Serialized = IsSerialized;
   }
 
-  auto refType = M.Types.getLoweredType(varDecl->getInterfaceType());
+  // We ignore the category below so the resiilence expansion doesn't matter
+  auto refType = M.Types.getLoweredType(varDecl->getInterfaceType(),
+                                        ResilienceExpansion::Minimal);
 
   // Function takes no arguments and returns refType
   SILResultInfo Results[] = { SILResultInfo(refType.getASTType(),

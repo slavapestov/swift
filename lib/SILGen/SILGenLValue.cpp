@@ -207,7 +207,10 @@ static LValueTypeData getAbstractedTypeData(SILGenModule &SGM,
     accessKind,
     origFormalType,
     substFormalType,
-    SGM.Types.getLoweredType(origFormalType, substFormalType).getObjectType()
+    // We're erasing the category here so the resilience expansion
+    // doesn't matter
+    SGM.Types.getLoweredType(origFormalType, substFormalType,
+                             ResilienceExpansion::Minimal).getObjectType()
   };
 }
 

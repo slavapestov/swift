@@ -748,8 +748,7 @@ public:
   /// Lowers a Swift type to a SILType, and returns the SIL TypeLowering
   /// for that type.
   const TypeLowering &
-  getTypeLowering(Type t, ResilienceExpansion forExpansion =
-                            ResilienceExpansion::Minimal) {
+  getTypeLowering(Type t, ResilienceExpansion forExpansion) {
     AbstractionPattern pattern(getCurGenericContext(), t->getCanonicalType());
     return getTypeLowering(pattern, t, forExpansion);
   }
@@ -758,33 +757,28 @@ public:
   /// patterns of the given original type.
   const TypeLowering &getTypeLowering(AbstractionPattern origType,
                                       Type substType,
-                                      ResilienceExpansion forExpansion =
-                                        ResilienceExpansion::Minimal);
+                                      ResilienceExpansion forExpansion);
 
   /// Returns the SIL TypeLowering for an already lowered SILType. If the
   /// SILType is an address, returns the TypeLowering for the pointed-to
   /// type.
   const TypeLowering &
-  getTypeLowering(SILType t, ResilienceExpansion forExpansion =
-                               ResilienceExpansion::Minimal);
+  getTypeLowering(SILType t, ResilienceExpansion forExpansion);
 
   // Returns the lowered SIL type for a Swift type.
-  SILType getLoweredType(Type t, ResilienceExpansion forExpansion
-                           = ResilienceExpansion::Minimal) {
+  SILType getLoweredType(Type t, ResilienceExpansion forExpansion) {
     return getTypeLowering(t, forExpansion).getLoweredType();
   }
 
   // Returns the lowered SIL type for a Swift type.
   SILType getLoweredType(AbstractionPattern origType, Type substType,
-                         ResilienceExpansion forExpansion =
-                           ResilienceExpansion::Minimal) {
+                         ResilienceExpansion forExpansion) {
     return getTypeLowering(origType, substType, forExpansion)
       .getLoweredType();
   }
 
   SILType getLoweredLoadableType(Type t,
-                                 ResilienceExpansion forExpansion =
-                                   ResilienceExpansion::Minimal) {
+                                 ResilienceExpansion forExpansion) {
     const TypeLowering &ti = getTypeLowering(t, forExpansion);
     assert(
         (ti.isLoadable() || !SILModuleConventions(M).useLoweredAddresses()) &&

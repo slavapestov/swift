@@ -315,7 +315,8 @@ public:
       return;
     }
 
-    auto &substResultTL = M.Types.getTypeLowering(origType, substType);
+    auto &substResultTL = M.Types.getTypeLowering(origType, substType,
+                                                  ResilienceExpansion::Minimal);
 
     // Determine the result convention.
     ResultConvention convention;
@@ -590,7 +591,8 @@ private:
 
     unsigned origParamIndex = NextOrigParamIndex++;
 
-    auto &substTL = M.Types.getTypeLowering(origType, substType);
+    auto &substTL = M.Types.getTypeLowering(origType, substType,
+                                            ResilienceExpansion::Minimal);
     ParameterConvention convention;
     if (ownership == ValueOwnership::InOut) {
       convention = ParameterConvention::Indirect_Inout;
@@ -627,7 +629,8 @@ private:
       return false;
 
     auto foreignErrorTy =
-      M.Types.getLoweredType(Foreign.Error->getErrorParameterType());
+      M.Types.getLoweredType(Foreign.Error->getErrorParameterType(),
+                             ResilienceExpansion::Minimal);
 
     // Assume the error parameter doesn't have interesting lowering.
     Inputs.push_back(SILParameterInfo(foreignErrorTy.getASTType(),
@@ -749,7 +752,8 @@ lowerCaptureContextParameters(SILModule &M, AnyFunctionRef function,
     auto canType = type->getCanonicalType(origGenericSig);
 
     auto &loweredTL =
-        Types.getTypeLowering(AbstractionPattern(genericSig, canType), canType);
+        Types.getTypeLowering(AbstractionPattern(genericSig, canType), canType,
+                              ResilienceExpansion::Minimal);
     auto loweredTy = loweredTL.getLoweredType();
     switch (Types.getDeclCaptureKind(capture)) {
     case CaptureKind::None:
@@ -806,7 +810,8 @@ static void destructureYieldsForReadAccessor(SILModule &M,
     return;
   }
 
-  auto &tl = M.Types.getTypeLowering(origType, valueType);
+  auto &tl = M.Types.getTypeLowering(origType, valueType,
+                                     ResilienceExpansion::Minimal);
   auto convention = [&] {
     if (isFormallyPassedIndirectly(M, origType, valueType, tl))
       return ParameterConvention::Indirect_In_Guaranteed;
@@ -857,7 +862,9 @@ static void destructureYieldsForCoroutine(SILModule &M,
 
   // 'modify' yields an inout of the target type.
   if (accessor->getAccessorKind() == AccessorKind::Modify) {
-    auto loweredValueTy = M.Types.getLoweredType(origType, canValueType);
+    // FIXME: Category is not used here
+    auto loweredValueTy = M.Types.getLoweredType(origType, canValueType,
+                                                 ResilienceExpansion::Minimal);
     yields.push_back(SILYieldInfo(loweredValueTy.getASTType(),
                                   ParameterConvention::Indirect_Inout));
     return;
@@ -2411,7 +2418,11 @@ public:
     }
 
     AbstractionPattern abstraction(Sig, origType);
-    return TheSILModule.Types.getLoweredType(abstraction, substType)
+
+    // Note that by calling getASTType(), we're erasing the object/address
+    // distinction, so the resilience expansion we pass in does not matter.
+    return TheSILModule.Types.getLoweredType(abstraction, substType,
+                                             ResilienceExpansion::Minimal)
              .getASTType();
   }
 };

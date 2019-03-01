@@ -130,11 +130,15 @@ void verifyKeyPathComponent(SILModule &M,
   auto &C = M.getASTContext();
   
   auto loweredBaseTy =
-    M.Types.getLoweredType(AbstractionPattern::getOpaque(), baseTy);
+    M.Types.getLoweredType(AbstractionPattern::getOpaque(),
+                           baseTy,
+                           expansion);
   auto componentTy = component.getComponentType().subst(patternSubs)
     ->getCanonicalType();
   auto loweredComponentTy =
-    M.Types.getLoweredType(AbstractionPattern::getOpaque(), componentTy);
+    M.Types.getLoweredType(AbstractionPattern::getOpaque(),
+                           componentTy,
+                           expansion);
 
   auto checkIndexEqualsAndHash = [&]{
     if (!component.getSubscriptIndices().empty()) {
@@ -1932,7 +1936,8 @@ public:
             "Dest address should be lvalue");
     require(SI->getDest()->getType() == SI->getSrc()->getType(),
             "Store operand type and dest type mismatch");
-    require(F.getModule().isTypeABIAccessible(SI->getDest()->getType()),
+    require(F.getModule().isTypeABIAccessible(SI->getDest()->getType(),
+                                              F.getResilienceExpansion()),
             "cannot directly copy type with inaccessible ABI");
   }
 
@@ -2347,7 +2352,8 @@ public:
   void checkDestroyAddrInst(DestroyAddrInst *DI) {
     require(DI->getOperand()->getType().isAddress(),
             "Operand of destroy_addr must be address");
-    require(F.getModule().isTypeABIAccessible(DI->getOperand()->getType()),
+    require(F.getModule().isTypeABIAccessible(DI->getOperand()->getType(),
+                                              F.getResilienceExpansion()),
             "cannot directly destroy type with inaccessible ABI");
   }
 

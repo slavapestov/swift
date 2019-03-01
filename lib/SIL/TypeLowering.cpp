@@ -98,7 +98,8 @@ CaptureKind TypeConverter::getDeclCaptureKind(CapturedValue capture) {
     if (var->isImmutable() &&
         (!SILModuleConventions(M).useLoweredAddresses() ||
          // FIXME: Expansion
-         !getTypeLowering(var->getType()).isAddressOnly()))
+         !getTypeLowering(var->getType(),
+                          ResilienceExpansion::Minimal).isAddressOnly()))
       return CaptureKind::Constant;
 
     // In-out parameters are captured by address.
@@ -852,7 +853,9 @@ namespace {
       for (auto elt : tupleTy.getElementTypes()) {
         auto silElt = SILType::getPrimitiveType(elt, silTy.getCategory());
         // FIXME: Expansion
-        children.push_back(Child{index, M.Types.getTypeLowering(silElt)});
+        children.push_back(Child{index,
+                           M.Types.getTypeLowering(silElt,
+                                               ResilienceExpansion::Minimal)});
         ++index;
       }
     }
@@ -887,7 +890,9 @@ namespace {
       for (auto prop : structDecl->getStoredProperties()) {
         SILType propTy = silTy.getFieldType(prop, M);        
         // FIXME: Expansion
-        children.push_back(Child{prop, M.Types.getTypeLowering(propTy)});
+        children.push_back(Child{prop,
+                           M.Types.getTypeLowering(propTy,
+                                               ResilienceExpansion::Minimal)});
       }
     }
   };
@@ -1359,7 +1364,10 @@ static CanTupleType getLoweredTupleType(TypeConverter &tc,
     assert(Flags.getValueOwnership() == ValueOwnership::Default);
     assert(!Flags.isVariadic());
 
-    SILType silType = tc.getLoweredType(origEltType, substEltType);
+    // We ignore the category here so the resilience expansion does not
+    // matter.
+    SILType silType = tc.getLoweredType(origEltType, substEltType,
+                                        ResilienceExpansion::Minimal);
     CanType loweredSubstEltType = silType.getASTType();
 
     changed = (changed || substEltType != loweredSubstEltType ||
@@ -1388,8 +1396,12 @@ static CanType getLoweredOptionalType(TypeConverter &tc,
                                       CanType substObjectType) {
   assert(substType.getOptionalObjectType() == substObjectType);
 
+  // We ignore the category here so the resilience expansion does not
+  // matter.
   CanType loweredObjectType =
-      tc.getLoweredType(origType.getOptionalObjectType(), substObjectType)
+      tc.getLoweredType(origType.getOptionalObjectType(),
+                        substObjectType,
+                        ResilienceExpansion::Minimal)
           .getASTType();
 
   // If the object type didn't change, we don't have to rebuild anything.
@@ -1404,9 +1416,12 @@ static CanType getLoweredOptionalType(TypeConverter &tc,
 static CanType getLoweredReferenceStorageType(TypeConverter &tc,
                                               AbstractionPattern origType,
                                            CanReferenceStorageType substType) {
+  // We ignore the category here so the resilience expansion does not
+  // matter.
   CanType loweredReferentType =
     tc.getLoweredType(origType.getReferenceStorageReferentType(),
-                      substType.getReferentType())
+                      substType.getReferentType(),
+                      ResilienceExpansion::Minimal)
       .getASTType();
 
   if (loweredReferentType == substType.getReferentType())
@@ -1419,7 +1434,10 @@ static CanType getLoweredReferenceStorageType(TypeConverter &tc,
 CanSILFunctionType
 TypeConverter::getSILFunctionType(AbstractionPattern origType,
                                   CanFunctionType substType) {
-  return getLoweredType(origType, substType)
+  // We ignore the category here so the resilience expansion does not
+  // matter.
+  return getLoweredType(origType, substType,
+                        ResilienceExpansion::Minimal)
            .castTo<SILFunctionType>();
 }
 
@@ -1948,7 +1966,11 @@ SILType TypeConverter::getSubstitutedStorageType(AbstractStorageDecl *value,
     substType = substType.getReferenceStorageReferent();
   }
 
-  SILType silSubstType = getLoweredType(origType, substType).getAddressType();
+  // We ignore the category here so the resilience expansion does not
+  // matter.
+  SILType silSubstType = getLoweredType(origType, substType,
+                                        ResilienceExpansion::Minimal)
+    .getAddressType();
   substType = silSubstType.getASTType();
 
   // Type substitution preserves structural type structure, and the
@@ -2477,7 +2499,11 @@ CanSILBoxType TypeConverter::getBoxTypeForEnumElement(SILType enumType,
 
   if (boxSignature == CanGenericSignature()) {
     auto eltIntfTy = elt->getArgumentInterfaceType();
-    auto boxVarTy = getLoweredType(eltIntfTy).getASTType();
+
+    // We ignore the category here so the resilience expansion does not
+    // matter.
+    auto boxVarTy = getLoweredType(eltIntfTy,
+                                   ResilienceExpansion::Minimal).getASTType();
     auto layout = SILLayout::get(C, nullptr, SILField(boxVarTy, true));
     return SILBoxType::get(C, layout, {});
   }
@@ -2488,8 +2514,12 @@ CanSILBoxType TypeConverter::getBoxTypeForEnumElement(SILType enumType,
   // Lower the enum element's argument in the box's context.
   auto eltIntfTy = elt->getArgumentInterfaceType();
   GenericContextScope scope(*this, boxSignature);
-  auto boxVarTy = getLoweredType(getAbstractionPattern(elt), eltIntfTy)
-                      .getASTType();
+
+  // We ignore the category here so the resilience expansion does not
+  // matter.
+  auto boxVarTy = getLoweredType(getAbstractionPattern(elt),
+                                 eltIntfTy,
+                                 ResilienceExpansion::Minimal).getASTType();
   auto layout = SILLayout::get(C, boxSignature, SILField(boxVarTy, true));
 
   // Instantiate the layout with enum's substitution list.

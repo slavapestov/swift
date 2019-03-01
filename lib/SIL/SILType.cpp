@@ -138,7 +138,11 @@ SILType SILType::getFieldType(VarDecl *field, SILModule &M) const {
       baseTy->getTypeOfMember(M.getSwiftModule(),
                               field, nullptr)->getCanonicalType();
   }
-  auto loweredTy = M.Types.getLoweredType(origFieldTy, substFieldTy);
+
+  // We erase the category returned by type lowering, so the resilience
+  // expansion does not matter here.
+  auto loweredTy = M.Types.getLoweredType(origFieldTy, substFieldTy,
+                                          ResilienceExpansion::Minimal);
   if (isAddress() || getClassOrBoundGenericClass() != nullptr) {
     return loweredTy.getAddressType();
   } else {
@@ -162,11 +166,15 @@ SILType SILType::getEnumElementType(EnumElementDecl *elt, SILModule &M) const {
                    getCategory());
   }
 
+  // We erase the category returned by type lowering, so the resilience
+  // expansion does not matter here.
   auto substEltTy =
     getASTType()->getTypeOfMember(M.getSwiftModule(), elt,
                                           elt->getArgumentInterfaceType());
   auto loweredTy =
-    M.Types.getLoweredType(M.Types.getAbstractionPattern(elt), substEltTy);
+    M.Types.getLoweredType(M.Types.getAbstractionPattern(elt),
+                           substEltTy,
+                           ResilienceExpansion::Minimal);
 
   return SILType(loweredTy.getASTType(), getCategory());
 }

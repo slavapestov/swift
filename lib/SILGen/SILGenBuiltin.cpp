@@ -963,6 +963,8 @@ static ManagedValue emitBuiltinAllocWithTailElems(SILGenFunction &SGF,
   }
   ManagedValue Metatype = args[0];
   if (isa<MetatypeInst>(Metatype)) {
+    // Instance type should be a class reference so resilience expansion
+    // doesn't matter.
     auto InstanceType =
       Metatype.getType().castTo<MetatypeType>().getInstanceType();
     assert(InstanceType == RefType.getASTType() &&

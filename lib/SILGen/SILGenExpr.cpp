@@ -2698,10 +2698,14 @@ static SILFunction *getOrCreateKeyPathGetter(SILGenModule &SGM,
   SILType loweredBaseTy, loweredPropTy;
   {
     GenericContextScope scope(SGM.Types, genericSig);
+
+    // FIXME: Expansion
     loweredBaseTy = SGM.Types.getLoweredType(AbstractionPattern::getOpaque(),
-                                             baseType);
+                                             baseType,
+                                             ResilienceExpansion::Minimal);
     loweredPropTy = SGM.Types.getLoweredType(AbstractionPattern::getOpaque(),
-                                             propertyType);
+                                             propertyType,
+                                             ResilienceExpansion::Minimal);
   }
   
   auto paramConvention = ParameterConvention::Indirect_In_Guaranteed;
@@ -2828,10 +2832,14 @@ static SILFunction *getOrCreateKeyPathSetter(SILGenModule &SGM,
   SILType loweredBaseTy, loweredPropTy;
   {
     GenericContextScope scope(SGM.Types, genericSig);
+
+    // FIXME: Expansion
     loweredBaseTy = SGM.Types.getLoweredType(AbstractionPattern::getOpaque(),
-                                             baseType);
+                                             baseType,
+                                             ResilienceExpansion::Minimal);
     loweredPropTy = SGM.Types.getLoweredType(AbstractionPattern::getOpaque(),
-                                             propertyType);
+                                             propertyType,
+                                             ResilienceExpansion::Minimal);
   }
   
   auto &C = SGM.getASTContext();
@@ -3004,7 +3012,9 @@ getOrCreateKeyPathEqualsAndHash(SILGenModule &SGM,
                         ->getCanonicalType();
   RValue indexValue(indexTupleTy);
 
-  auto indexLoweredTy = SGM.Types.getLoweredType(indexTupleTy);
+  auto indexLoweredTy =
+    SGM.Types.getLoweredType(indexTupleTy,
+                             ResilienceExpansion::Minimal);
   // Get or create the equals witness
   [unsafeRawPointerTy, boolTy, genericSig, &C, &indexTypes, &equals, loc,
    &SGM, genericEnv, expansion, indexLoweredTy, indexes]{
@@ -3314,6 +3324,7 @@ getIdForKeyPathComponentComputedProperty(SILGenModule &SGM,
 static void
 lowerKeyPathSubscriptIndexTypes(
                  SILGenModule &SGM,
+                 ResilienceExpansion expansion,
                  SmallVectorImpl<IndexTypePair> &indexPatterns,
                  SubscriptDecl *subscript,
                  SubstitutionMap subscriptSubs,
@@ -3333,9 +3344,12 @@ lowerKeyPathSubscriptIndexTypes(
     if (sig) {
       indexTy = indexTy.subst(subscriptSubs);
     }
+
+    // FIXME: Expansion
     auto indexLoweredTy = SGM.Types.getLoweredType(
                                                 AbstractionPattern::getOpaque(),
-                                                indexTy);
+                                                indexTy,
+                                                ResilienceExpansion::Minimal);
     indexLoweredTy = indexLoweredTy.mapTypeOutOfContext();
     indexPatterns.push_back({indexTy->mapTypeOutOfContext()
                                     ->getCanonicalType(),
@@ -3530,7 +3544,7 @@ SILGenModule::emitKeyPathComponentForDecl(SILLocation loc,
     auto componentTy = baseSubscriptInterfaceTy.getResult();
   
     SmallVector<IndexTypePair, 4> indexTypes;
-    lowerKeyPathSubscriptIndexTypes(*this, indexTypes,
+    lowerKeyPathSubscriptIndexTypes(*this, expansion, indexTypes,
                                     decl, subs,
                                     needsGenericContext);
     

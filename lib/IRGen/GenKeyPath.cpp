@@ -1150,7 +1150,9 @@ emitKeyPathComponent(IRGenModule &IGM,
   case KeyPathPatternComponent::Kind::TupleElement:
     assert(baseTy->is<TupleType>() && "not a tuple");
 
-    SILType loweredTy = IGM.getSILTypes().getLoweredType(baseTy);
+    // FIXME: Expansion
+    SILType loweredTy = IGM.getSILTypes().getLoweredType(baseTy,
+                                                 ResilienceExpansion::Minimal);
 
     // Tuple with fixed layout
     //
