@@ -70,12 +70,12 @@ bool SILOpenedArchetypesTracker::registerUsedOpenedArchetypes(CanType Ty) {
       SILBuilder B(CurF->getEntryBlock()->begin());
       Placeholder =
           B.createGlobalAddr(ArtificialUnreachableLocation(),
-                             SILMod.Types.getLoweredType(archetypeTy));
+                             SILType::getPrimitiveAddressType(archetypeTy));
     } else {
       SILBuilder B(CurF->getEntryBlock());
       Placeholder =
           B.createGlobalAddr(ArtificialUnreachableLocation(),
-                             SILMod.Types.getLoweredType(archetypeTy));
+                             SILType::getPrimitiveAddressType(archetypeTy));
     }
     // Make it available to SILBuilder, so that instructions using this
     // archetype can be constructed.
