@@ -1616,8 +1616,8 @@ visitAllocRefDynamicInst(AllocRefDynamicInst *ARDI) {
 
   SingleValueInstruction *NewInst = nullptr;
   if (auto *MI = dyn_cast<MetatypeInst>(MDVal)) {
-    auto &Mod = ARDI->getModule();
-    auto SILInstanceTy = MI->getType().getMetatypeInstanceType(Mod);
+    auto SILInstanceTy = SILType::getPrimitiveObjectType(
+      MI->getType().castTo<MetatypeType>().getInstanceType());
     if (!SILInstanceTy.getClassOrBoundGenericClass())
       return nullptr;
 
@@ -1639,8 +1639,8 @@ visitAllocRefDynamicInst(AllocRefDynamicInst *ARDI) {
       return nullptr;
     auto *CCBI = dyn_cast<CheckedCastBranchInst>(PredBB->getTerminator());
     if (CCBI && CCBI->isExact() && ARDI->getParent() == CCBI->getSuccessBB()) {
-      auto &Mod = ARDI->getModule();
-      auto SILInstanceTy = CCBI->getCastType().getMetatypeInstanceType(Mod);
+      auto SILInstanceTy = SILType::getPrimitiveObjectType(
+        MI->getType().castTo<MetatypeType>().getInstanceType());
       if (!SILInstanceTy.getClassOrBoundGenericClass())
         return nullptr;
       NewInst = Builder.createAllocRef(ARDI->getLoc(), SILInstanceTy,
