@@ -157,19 +157,20 @@ CastOptimizer::optimizeBridgedObjCToSwiftCast(SILDynamicCastInst dynamicCast) {
 
   SILValue src = dynamicCast.getSource();
 
+  SILInstruction *Inst = dynamicCast.getInstruction();
+  auto *F = Inst->getFunction();
+
   // Check if we have a source type that is address only. We do not support that
   // today.
-  if (src->getType().isAddressOnly(mod)) {
+  if (src->getType().isAddressOnly(*F)) {
     return nullptr;
   }
 
-  SILInstruction *Inst = dynamicCast.getInstruction();
   bool isConditional = dynamicCast.isConditional();
   SILValue Dest = dynamicCast.getDest();
   CanType BridgedTargetTy = dynamicCast.getBridgedTargetType();
   SILBasicBlock *SuccessBB = dynamicCast.getSuccessBlock();
   SILBasicBlock *FailureBB = dynamicCast.getFailureBlock();
-  auto *F = Inst->getFunction();
   auto Loc = Inst->getLoc();
 
   // The conformance to _BridgedToObjectiveC is statically known.
@@ -456,6 +457,7 @@ findBridgeToObjCFunc(SILOptFunctionBuilder &functionBuilder,
 SILInstruction *
 CastOptimizer::optimizeBridgedSwiftToObjCCast(SILDynamicCastInst dynamicCast) {
   SILInstruction *Inst = dynamicCast.getInstruction();
+  const SILFunction *F = Inst->getFunction();
   CastConsumptionKind ConsumptionKind = dynamicCast.getBridgedConsumptionKind();
   bool isConditional = dynamicCast.isConditional();
   SILValue Src = dynamicCast.getSource();
@@ -467,7 +469,7 @@ CastOptimizer::optimizeBridgedSwiftToObjCCast(SILDynamicCastInst dynamicCast) {
   auto Loc = Inst->getLoc();
 
   bool AddressOnlyType = false;
-  if (!Src->getType().isLoadable(M) || !Dest->getType().isLoadable(M)) {
+  if (!Src->getType().isLoadable(*F) || !Dest->getType().isLoadable(*F)) {
     AddressOnlyType = true;
   }
 
@@ -1500,7 +1502,7 @@ SILInstruction *CastOptimizer::optimizeUnconditionalCheckedCastAddrInst(
     // mem2reg's invariants get unhappy if we don't try to
     // initialize a loadable result.
     if (!dynamicCast.getLoweredTargetType().isAddressOnly(
-            Builder.getModule())) {
+            Builder.getFunction())) {
       auto undef = SILValue(
           SILUndef::get(dynamicCast.getLoweredTargetType().getObjectType(),
                         Builder.getFunction()));
