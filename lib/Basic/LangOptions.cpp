@@ -275,3 +275,18 @@ std::pair<bool, bool> LangOptions::setTarget(llvm::Triple triple) {
 
   return { false, false };
 }
+
+bool LangOptions::doesPlatformSupportObjCMetadataUpdateCallback() const {
+  if (Target.isMacOSX())
+    return !Target.isMacOSXVersionLT(10, 14, 4);
+  if (Target.isiOS()) // also returns true on tvOS
+    return !Target.isOSVersionLT(12, 2);
+  if (Target.isWatchOS())
+    return !Target.isOSVersionLT(5, 2);
+
+  return false;
+}
+
+bool LangOptions::doesPlatformSupportObjCGetClassHook() const {
+  return doesPlatformSupportObjCMetadataUpdateCallback();
+}

@@ -4864,16 +4864,20 @@ static void inferStaticInitializeObjCMetadata(TypeChecker &tc,
   if (classDecl->getAttrs().hasAttribute<StaticInitializeObjCMetadataAttr>())
     return;
 
+  // If the deployment target supports the objc_getClass() hook, the workaround
+  // is unnecessary.
+  if (tc.Context.LangOpts.doesPlatformSupportObjCGetClassHook())
+    return;
+
   // If we know that the Objective-C metadata will be statically registered,
   // there's nothing to do.
   if (!classDecl->checkAncestry(AncestryFlags::Generic)) {
     return;
-  }
 
   // If this class isn't always available on the deployment target, don't
   // mark it as statically initialized.
   // FIXME: This is a workaround. The proper solution is for IRGen to
-  // only statically initializae the Objective-C metadata when running on
+  // only statically initialize the Objective-C metadata when running on
   // a new-enough OS.
   if (auto sourceFile = classDecl->getParentSourceFile()) {
     AvailabilityContext availableInfo = AvailabilityContext::alwaysAvailable();
@@ -5023,7 +5027,8 @@ void TypeChecker::checkConformancesInContext(DeclContext *dc,
     if (auto classDecl = dc->getSelfClassDecl()) {
       if (Context.LangOpts.EnableObjCInterop &&
           isNSCoding(conformance->getProtocol()) &&
-          !classDecl->isGenericContext()) {
+          !classDecl->isGenericContext() &&
+          !classDecl->hasClangNode()) {
         diagnoseUnstableName(*this, conformance, classDecl);
         // Infer @_staticInitializeObjCMetadata if needed.
         inferStaticInitializeObjCMetadata(*this, classDecl);
