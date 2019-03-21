@@ -106,9 +106,9 @@ FailableCastResult irgen::emitClassIdenticalCast(IRGenFunction &IGF,
   // TODO: use ObjC class references
   llvm::Value *targetMetadata;
   if ((targetMetadata =
-           tryEmitConstantHeapMetadataRef(IGF.IGM, toType.getASTType(),
-                                          /*allowUninitialized*/ false,
-                                          /*allowStub*/ false))) {
+           tryEmitConstantHeapMetadataRef(IGF.IGM,
+                                          toType.getClassOrBoundGenericClass(),
+                                          /*allowUninitialized*/ false))) {
     // ok
   } else {
     targetMetadata

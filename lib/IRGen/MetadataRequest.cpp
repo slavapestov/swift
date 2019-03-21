@@ -510,18 +510,10 @@ irgen::getRuntimeReifiedType(IRGenModule &IGM, CanType type) {
 /// ObjC reference, like superclasses or category references.
 llvm::Constant *
 irgen::tryEmitConstantHeapMetadataRef(IRGenModule &IGM,
-                                      CanType type,
-                                      bool allowDynamicUninitialized,
-                                      bool allowStub) {
-  auto theDecl = type->getClassOrBoundGenericClass();
-  assert(theDecl && "emitting constant heap metadata ref for non-class type?");
-
+                                      ClassDecl *theDecl,
+                                      bool allowDynamicUninitialized) {
   switch (IGM.getClassMetadataStrategy(theDecl)) {
   case ClassMetadataStrategy::Resilient:
-    if (allowStub && IGM.Context.LangOpts.EnableObjCResilientClassStubs) {
-      return IGM.getAddrOfObjCResilientClassStub(theDecl, NotForDefinition,
-                                            TypeMetadataAddress::AddressPoint);
-    }
     return nullptr;
 
   case ClassMetadataStrategy::Singleton:
@@ -535,11 +527,8 @@ irgen::tryEmitConstantHeapMetadataRef(IRGenModule &IGM,
     break;
   }
 
-  // For imported classes, use the ObjC class symbol.
-  if (!hasKnownSwiftMetadata(IGM, theDecl))
-    return IGM.getAddrOfObjCClass(theDecl, NotForDefinition);
-
-  return IGM.getAddrOfTypeMetadata(type);
+  return IGM.getAddrOfTypeMetadata(
+    theDecl->getDeclaredType()->getCanonicalType());
 }
 
 /// Attempts to return a constant type metadata reference for a

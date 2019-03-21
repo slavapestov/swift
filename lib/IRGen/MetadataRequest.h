@@ -591,9 +591,8 @@ CanType getRuntimeReifiedType(IRGenModule &IGM, CanType type);
 /// return a null pointer if the type's heap metadata cannot be represented
 /// by a constant.
 llvm::Constant *tryEmitConstantHeapMetadataRef(IRGenModule &IGM,
-                                               CanType type,
-                                               bool allowUninitialized,
-                                               bool allowStub);
+                                               ClassDecl *theDecl,
+                                               bool allowUninitialized);
 
 enum class MetadataValueType { ObjCClass, TypeMetadata };
 

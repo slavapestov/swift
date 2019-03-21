@@ -1205,11 +1205,15 @@ namespace {
       if (getClass()->hasClangNode())
         fields.add(IGM.getAddrOfObjCClass(getClass(), NotForDefinition));
       else {
-        auto type = getSelfType(getClass()).getASTType();
-        llvm::Constant *metadata =
-          tryEmitConstantHeapMetadataRef(IGM, type,
-                                         /*allowUninit*/ true,
-                                         /*allowStub*/ true);
+        llvm::Constant *metadata = nullptr;
+        if (getClass()->checkAncestry(AncestryFlags::ResilientOther)) {
+          metadata = IGM.getAddrOfObjCResilientClassStub(
+              getClass(), NotForDefinition,
+              TypeMetadataAddress::AddressPoint);
+        } else {
+          metadata = IGM.getAddrOfTypeMetadata(
+            getClass()->getDeclaredType()->getCanonicalType());
+        }
         assert(metadata &&
                "extended objc class doesn't have constant metadata?");
         fields.add(metadata);

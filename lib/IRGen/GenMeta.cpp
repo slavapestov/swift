@@ -2553,11 +2553,9 @@ namespace {
         return;
       }
 
-      Type type = Target->mapTypeIntoContext(Target->getSuperclass());
       auto *metadata = tryEmitConstantHeapMetadataRef(
-          IGM, type->getCanonicalType(),
-          /*allowUninit*/ false,
-          /*allowStub*/ false);
+          IGM, Target->getSuperclassDecl(),
+          /*allowUninit*/ false);
       assert(metadata != nullptr);
       B.add(metadata);
     }
