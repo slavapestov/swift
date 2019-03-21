@@ -21,6 +21,7 @@ import resilient_objc_class
 
 var ResilientClassTestSuite = TestSuite("ResilientClass")
 
+/*
 class ResilientNSObjectSubclass : ResilientNSObjectOutsideParent {}
 
 @objc protocol MyProtocol {
@@ -35,8 +36,8 @@ ResilientClassTestSuite.test("category on my class") {
   let o = ResilientNSObjectSubclass()
   expectEqual(42, (o as MyProtocol).myMethod())
 }
+*/
 
-/*
 @objc protocol AnotherProtocol {
   func anotherMethod() -> Int
 }
@@ -49,6 +50,5 @@ ResilientClassTestSuite.test("category on other class") {
   let o = ResilientNSObjectOutsideParent()
   expectEqual(69, (o as AnotherProtocol).anotherMethod())
 }
-*/
 
 runAllTests()
