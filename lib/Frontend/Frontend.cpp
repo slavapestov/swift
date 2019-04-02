@@ -312,6 +312,7 @@ bool CompilerInstance::setUpModuleLoaders() {
       return true;
     }
   }
+  MLM = ModuleLoadingMode::OnlySerialized;
 
   std::unique_ptr<SerializedModuleLoader> SML =
     SerializedModuleLoader::create(*Context, getDependencyTracker(), MLM);
