@@ -199,34 +199,6 @@ public:
             || !isa<VarDecl>(VD)
             || !cast<VarDecl>(VD)->getType()->hasRetainablePointerRepresentation()))
       checkType(VD->getInterfaceType(), VD->getLoc());
-
-    // If VD is a noescape decl, then the closure we're computing this for
-    // must also be noescape.
-    if (AFR.hasType() &&
-        !AFR.getType()->hasError() &&
-        VD->hasInterfaceType() &&
-        VD->getInterfaceType()->is<AnyFunctionType>() &&
-        VD->getInterfaceType()->castTo<AnyFunctionType>()->isNoEscape() &&
-        !capture.isNoEscape() &&
-        // Don't repeatedly diagnose the same thing.
-        Diagnosed.insert(VD).second) {
-
-      // Otherwise, diagnose this as an invalid capture.
-      bool isDecl = AFR.getAbstractFunctionDecl() != nullptr;
-
-      TC.diagnose(Loc, isDecl ? diag::decl_closure_noescape_use
-                              : diag::closure_noescape_use,
-                  VD->getBaseName().getIdentifier());
-
-      // If we're a parameter, emit a helpful fixit to add @escaping
-      auto paramDecl = dyn_cast<ParamDecl>(VD);
-      if (paramDecl) {
-        TC.diagnose(paramDecl->getStartLoc(), diag::noescape_parameter,
-                    paramDecl->getName())
-            .fixItInsert(paramDecl->getTypeLoc().getSourceRange().Start,
-                         "@escaping ");
-      }
-    }
   }
 
   bool shouldWalkIntoLazyInitializers() override {
@@ -733,28 +705,6 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
                           AFR);
   if (AFR.getBody())
     AFR.getBody()->walk(finder);
-
-  unsigned inoutCount = 0;
-  for (auto C : Captures) {
-    if (auto PD = dyn_cast<ParamDecl>(C.getDecl()))
-      if (PD->isInOut())
-        inoutCount++;
-  }
-
-  if (inoutCount > 0) {
-    if (auto e = AFR.getAbstractFunctionDecl()) {
-      for (auto returnOccurrence : getEscapingFunctionAsReturnValue(e)) {
-        diagnose(returnOccurrence->getReturnLoc(),
-          diag::nested_function_escaping_inout_capture);
-      }
-      auto occurrences = getEscapingFunctionAsArgument(e);
-      for (auto occurrence : occurrences) {
-        diagnose(occurrence->getLoc(),
-          diag::nested_function_with_implicit_capture_argument,
-          inoutCount > 1);
-      }
-    }
-  }
 
   if (AFR.hasType() && !AFR.isObjC()) {
     finder.checkType(AFR.getType(), getCaptureLoc(AFR));
