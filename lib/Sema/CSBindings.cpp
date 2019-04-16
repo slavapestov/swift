@@ -304,10 +304,6 @@ ConstraintSystem::getPotentialBindingForRelationalConstraint(
   // whether the parameter is a function type and if so whether it
   // should be allowed to escape. As a result we allow anything
   // passed in to escape.
-  if (auto *fnTy = type->getAs<AnyFunctionType>())
-    if (typeVar->getImpl().getGenericParameter() && !shouldAttemptFixes())
-      type = fnTy->withExtInfo(fnTy->getExtInfo().withNoEscape(false));
-
   if (!typeVar->getImpl().canBindToNoEscape() && type->isNoEscape()) {
     if (shouldAttemptFixes())
       return None;
