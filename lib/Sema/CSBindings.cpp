@@ -308,6 +308,19 @@ ConstraintSystem::getPotentialBindingForRelationalConstraint(
     if (typeVar->getImpl().getGenericParameter() && !shouldAttemptFixes())
       type = fnTy->withExtInfo(fnTy->getExtInfo().withNoEscape(false));
 
+  if (!typeVar->getImpl().canBindToNoEscape() && type->isNoEscape()) {
+    if (shouldAttemptFixes())
+      return None;
+
+    type = type.transform([&](Type t) -> Type {
+      if (auto *fnTy = dyn_cast<FunctionType>(t.getPointer())) {
+        if (fnTy->isNoEscape())
+          return fnTy->withExtInfo(fnTy->getExtInfo().withNoEscape(false));
+      }
+      return t;
+    });
+  }
+
   // Check whether we can perform this binding.
   // FIXME: this has a super-inefficient extraneous simplifyType() in it.
   if (auto boundType = checkTypeOfBinding(typeVar, type)) {
