@@ -5545,11 +5545,15 @@ Decl *SwiftDeclConverter::importEnumCaseAlias(
   if (!importIntoDC)
     importIntoDC = importedEnum;
 
+  if (!original->hasInterfaceType())
+    Impl.SwiftContext.getLazyResolver()->resolveDeclSignature(original);
+
   // Construct the original constant. Enum constants without payloads look
   // like simple values, but actually have type 'MyEnum.Type -> MyEnum'.
   auto constantRef =
       new (Impl.SwiftContext) DeclRefExpr(original, DeclNameLoc(),
                                           /*implicit*/ true);
+  constantRef->setType(original->getInterfaceType());
   Type importedEnumTy = importedEnum->getDeclaredInterfaceType();
   auto typeRef = TypeExpr::createImplicit(importedEnumTy, Impl.SwiftContext);
   auto instantiate = new (Impl.SwiftContext)
@@ -8190,7 +8194,7 @@ ClangImporter::Implementation::createConstant(Identifier name, DeclContext *dc,
     // Create the expression node.
     StringRef printedValueCopy(context.AllocateCopy(printedValue));
     if (value.getKind() == clang::APValue::Int) {
-      if (type->getCanonicalType()->isBool()) {
+      if (type->isBool()) {
         expr = new (context) BooleanLiteralExpr(value.getInt().getBoolValue(),
                                                 SourceLoc(),
                                                 /**Implicit=*/true);

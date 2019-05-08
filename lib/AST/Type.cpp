@@ -2875,6 +2875,10 @@ Type ProtocolCompositionType::get(const ASTContext &C,
 
 FunctionType *
 GenericFunctionType::substGenericArgs(SubstitutionMap subs) {
+  if (!Type(this).subst(subs)) {
+    dump();
+    subs.dump();
+  }
   auto substFn = Type(this).subst(subs)->castTo<AnyFunctionType>();
   return FunctionType::get(substFn->getParams(),
                            substFn->getResult(), getExtInfo());
