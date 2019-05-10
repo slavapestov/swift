@@ -6,15 +6,15 @@
 
 // RUN: cp %S/Inputs/custom-modules/module.map %t/module.map
 
-// RUN: %target-swift-frontend(mock-sdk: %clang-importer-sdk) -typecheck %s -module-name resilient -emit-objc-header-path %t/resilient.h -I %t -enable-library-evolution
+// RUN: %target-swift-frontend(mock-sdk: %clang-importer-sdk) -typecheck %s -module-name resilient -emit-objc-header-path %t/resilient.h -I %t -enable-library-evolution -target x86_64-apple-macosx10.14
 // RUN: %FileCheck %s --check-prefix=NO-STUBS < %t/resilient.h
 // RUN: %check-in-clang %t/resilient.h -I %t
 
-// RUN: %target-swift-frontend(mock-sdk: %clang-importer-sdk) -typecheck %s -module-name resilient -emit-objc-header-path %t/resilient.h -I %t -enable-library-evolution -enable-resilient-objc-class-stubs
+// RUN: %target-swift-frontend(mock-sdk: %clang-importer-sdk) -typecheck %s -module-name resilient -emit-objc-header-path %t/resilient.h -I %t -enable-library-evolution -target x86_64-apple-macosx10.15
 // RUN: %FileCheck %s < %t/resilient.h
 // RUN: %check-in-clang %t/resilient.h -I %t
 
-// REQUIRES: objc_interop
+// REQUIRES: OS=macosx
 
 import Foundation
 import resilient_objc_class
