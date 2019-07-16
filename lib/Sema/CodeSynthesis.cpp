@@ -2008,7 +2008,6 @@ void swift::triggerAccessorSynthesis(TypeChecker &TC,
     if (!accessor->hasBody()) {
       maybeMarkTransparent(accessor, TC.Context);
       accessor->setBodySynthesizer(&synthesizeAccessorBody);
-      TC.DeclsToFinalize.insert(accessor);
     }
   });
 }
