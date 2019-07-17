@@ -946,9 +946,12 @@ static bool contextAllowsPatternBindingWithoutVariables(DeclContext *dc) {
   return true;
 }
 
-static VarDecl *getStoredPropertyFor(VarDecl *var) {
+static VarDecl *getStoredPropertyFor(VarDecl *var, bool lowered) {
   if (var->isStatic())
     return nullptr;
+
+  if (lowered)
+    return (var->hasStorage() ? var : nullptr);
 
   if (var->isLazyStorageProperty())
     return nullptr;
@@ -983,18 +986,26 @@ static VarDecl *getStoredPropertyFor(VarDecl *var) {
   return var;
 }
 
+static bool hasStoredProperties(NominalTypeDecl *decl) {
+  return (isa<StructDecl>(decl) ||
+          (isa<ClassDecl>(decl) && !decl->hasClangNode()));
+}
+
 llvm::Expected<ArrayRef<VarDecl *>>
 StoredPropertiesRequest::evaluate(Evaluator &evaluator,
                                   NominalTypeDecl *decl) const {
-  if (isa<EnumDecl>(decl) ||
-      isa<ProtocolDecl>(decl) ||
-      (isa<ClassDecl>(decl) && decl->hasClangNode()))
+  if (!hasStoredProperties(decl))
     return ArrayRef<VarDecl *>();
 
   SmallVector<VarDecl *, 4> results;
+
+  // Unless we're in a source file we don't have to do anything
+  // special to lower lazy properties and properties wrappers.
+  bool lowered = !isa<SourceFile>(decl->getModuleScopeContext());
+
   for (auto *member : decl->getMembers()) {
     if (auto *var = dyn_cast<VarDecl>(member))
-      if (auto *storage = getStoredPropertyFor(var))
+      if (auto *storage = getStoredPropertyFor(var, lowered))
         results.push_back(storage);
   }
 
@@ -1004,15 +1015,18 @@ StoredPropertiesRequest::evaluate(Evaluator &evaluator,
 llvm::Expected<ArrayRef<Decl *>>
 StoredPropertiesAndMissingMembersRequest::evaluate(Evaluator &evaluator,
                                                    NominalTypeDecl *decl) const {
-  if (isa<EnumDecl>(decl) ||
-      isa<ProtocolDecl>(decl) ||
-      (isa<ClassDecl>(decl) && decl->hasClangNode()))
+  if (!hasStoredProperties(decl))
     return ArrayRef<Decl *>();
 
   SmallVector<Decl *, 4> results;
+
+  // Unless we're in a source file we don't have to do anything
+  // special to lower lazy properties and properties wrappers.
+  bool lowered = !isa<SourceFile>(decl->getModuleScopeContext());
+
   for (auto *member : decl->getMembers()) {
     if (auto *var = dyn_cast<VarDecl>(member))
-      if (auto *storage = getStoredPropertyFor(var))
+      if (auto *storage = getStoredPropertyFor(var, lowered))
         results.push_back(storage);
 
     if (auto missing = dyn_cast<MissingMemberDecl>(member))
