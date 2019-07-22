@@ -443,7 +443,7 @@ static EnumDecl *lookupEvaluatedCodingKeysEnum(ASTContext &C,
 ///
 /// \param keyType The key type to bind to the container type.
 ///
-/// \param isLet Whether to declare the variable as immutable.
+/// \param introducer Whether to declare the variable as immutable.
 static VarDecl *createKeyedContainer(ASTContext &C, DeclContext *DC,
                                      NominalTypeDecl *keyedContainerDecl,
                                      Type keyType,
