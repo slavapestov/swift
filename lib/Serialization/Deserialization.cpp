@@ -2426,8 +2426,13 @@ public:
     for (TypeID dependencyID : dependencyIDs) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
+        // Type aliases never introduce missing members in the parent context.
+        DeclDeserializationError::Flags errorFlags;
+        unsigned numVTableEntries = 0;
+
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()));
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -2559,8 +2564,13 @@ public:
            rawInheritedAndDependencyIDs.slice(numInheritedTypes)) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
+        // Structs never introduce missing members in the parent context.
+        DeclDeserializationError::Flags errorFlags;
+        unsigned numVTableEntries = 0;
+
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()));
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -2640,10 +2650,11 @@ public:
         getActualCtorInitializerKind(storedInitKind);
 
     DeclDeserializationError::Flags errorFlags;
+    unsigned numVTableEntries = 0;
     if (initKind == CtorInitializerKind::Designated)
       errorFlags |= DeclDeserializationError::DesignatedInitializer;
     if (needsNewVTableEntry) {
-      errorFlags |= DeclDeserializationError::NeedsVTableEntry;
+      numVTableEntries = 1;
       DeclAttributes attrs;
       attrs.setRawAttributeChain(DAttrs);
     }
@@ -2651,14 +2662,16 @@ public:
     auto overridden = MF.getDeclChecked(overriddenID);
     if (!overridden) {
       llvm::consumeError(overridden.takeError());
-      return llvm::make_error<OverrideError>(name, errorFlags);
+      return llvm::make_error<OverrideError>(
+          name, errorFlags, numVTableEntries);
     }
 
     for (auto dependencyID : argNameAndDependencyIDs.slice(numArgNames)) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()), errorFlags);
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -2741,6 +2754,7 @@ public:
     TypeID interfaceTypeID;
     ModuleFile::AccessorRecord accessors;
     DeclID overriddenID, opaqueReturnTypeID;
+    unsigned numVTableEntries;
     ArrayRef<uint64_t> arrayFieldIDs;
 
     decls_block::VarLayout::readRecord(scratch, nameID, contextID,
@@ -2757,14 +2771,32 @@ public:
                                        rawAccessLevel, rawSetterAccessLevel,
                                        opaqueReturnTypeID,
                                        numBackingProperties,
+                                       numVTableEntries,
                                        arrayFieldIDs);
 
     Identifier name = MF.getIdentifier(nameID);
 
+    auto getErrorFlags = [&]() {
+      // Stored properties in classes still impact class object layout because
+      // their offset is computed and stored in the field offset vector.
+      DeclDeserializationError::Flags errorFlags;
+
+      if (!isStatic) {
+        auto actualReadImpl = getActualReadImplKind(readImpl);
+        if (actualReadImpl && *actualReadImpl == ReadImplKind::Stored) {
+          errorFlags |= DeclDeserializationError::Flag::NeedsFieldOffsetVectorEntry;
+        }
+      }
+
+      return errorFlags;
+    };
+
     Expected<Decl *> overridden = MF.getDeclChecked(overriddenID);
     if (!overridden) {
       llvm::consumeError(overridden.takeError());
-      return llvm::make_error<OverrideError>(name);
+
+      return llvm::make_error<OverrideError>(
+          name, getErrorFlags(), numVTableEntries);
     }
 
     // Extract the accessor IDs.
@@ -2780,19 +2812,9 @@ public:
     for (TypeID dependencyID : arrayFieldIDs) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
-        // Stored properties in classes still impact class object layout because
-        // their offset is computed and stored in the field offset vector.
-        DeclDeserializationError::Flags flags;
-
-        if (!isStatic) {
-          auto actualReadImpl = getActualReadImplKind(readImpl);
-          if (actualReadImpl && *actualReadImpl == ReadImplKind::Stored) {
-            flags |= DeclDeserializationError::Flag::NeedsFieldOffsetVectorEntry;
-          }
-        }
-
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()), flags);
+            name, takeErrorInfo(dependency.takeError()),
+            getErrorFlags(), numVTableEntries);
       }
     }
 
@@ -2990,22 +3012,21 @@ public:
                                           nameAndDependencyIDs);
     } else {
       decls_block::AccessorLayout::readRecord(scratch, contextID, isImplicit,
-                                          isStatic, rawStaticSpelling, isObjC,
-                                          rawMutModifier,
-                                          hasForcedStaticDispatch, throws,
-                                          genericEnvID,
-                                          resultInterfaceTypeID,
-                                          overriddenID,
-                                          accessorStorageDeclID,
-                                          rawAccessorKind,
-                                          rawAccessLevel,
-                                          needsNewVTableEntry,
-                                          nameAndDependencyIDs);
+                                              isStatic, rawStaticSpelling, isObjC,
+                                              rawMutModifier,
+                                              hasForcedStaticDispatch, throws,
+                                              genericEnvID,
+                                              resultInterfaceTypeID,
+                                              overriddenID,
+                                              accessorStorageDeclID,
+                                              rawAccessorKind,
+                                              rawAccessLevel,
+                                              needsNewVTableEntry,
+                                              nameAndDependencyIDs);
     }
 
     DeclDeserializationError::Flags errorFlags;
-    if (needsNewVTableEntry)
-      errorFlags |= DeclDeserializationError::NeedsVTableEntry;
+    unsigned numVTableEntries = needsNewVTableEntry ? 1 : 0;
 
     // Parse the accessor-specific fields.
     AbstractStorageDecl *storage = nullptr;
@@ -3017,7 +3038,8 @@ public:
               dyn_cast_or_null<AbstractStorageDecl>(storageResult.get()))) {
         // FIXME: "TypeError" isn't exactly correct for this.
         return llvm::make_error<TypeError>(
-            DeclName(), takeErrorInfo(storageResult.takeError()), errorFlags);
+            DeclName(), takeErrorInfo(storageResult.takeError()),
+            errorFlags, numVTableEntries);
       }
 
       if (auto accessorKindResult = getActualAccessorKind(rawAccessorKind)) {
@@ -3074,7 +3096,8 @@ public:
         });
       }
       if (!canIgnoreMissingOverriddenDecl)
-        return llvm::make_error<OverrideError>(name, errorFlags);
+        return llvm::make_error<OverrideError>(
+            name, errorFlags, numVTableEntries);
 
       overridden = nullptr;
     }
@@ -3083,7 +3106,8 @@ public:
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()), errorFlags);
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -3323,10 +3347,15 @@ public:
 
     for (TypeID dependencyID :
            rawInheritedAndDependencyIDs.slice(numInheritedTypes)) {
+      // Protocols never introduce missing members in the parent context.
+      DeclDeserializationError::Flags errorFlags;
+      unsigned numVTableEntries = 0;
+
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()));
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -3538,8 +3567,13 @@ public:
            rawInheritedAndDependencyIDs.slice(numInheritedTypes)) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
+        // Classes never introduce missing members in the parent context.
+        DeclDeserializationError::Flags errorFlags;
+        unsigned numVTableEntries = 0;
+
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()));
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -3616,8 +3650,13 @@ public:
            rawInheritedAndDependencyIDs.slice(numInherited)) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
+        // Enums never introduce missing members in the parent context.
+        DeclDeserializationError::Flags errorFlags;
+        unsigned numVTableEntries = 0;
+
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()));
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -3688,8 +3727,14 @@ public:
     for (TypeID dependencyID : argNameAndDependencyIDs.slice(numArgNames+1)) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
+        // FIXME: Should we still add a missing member here, so that switch
+        // over the enum is not considered exhaustive?
+        DeclDeserializationError::Flags errorFlags;
+        unsigned numVTableEntries = 0;
+
         return llvm::make_error<TypeError>(
-          name, takeErrorInfo(dependency.takeError()));
+          name, takeErrorInfo(dependency.takeError()),
+          errorFlags, numVTableEntries);
       }
     }
 
@@ -3746,6 +3791,7 @@ public:
     uint8_t rawAccessLevel, rawSetterAccessLevel, rawStaticSpelling;
     uint8_t opaqueReadOwnership, readImpl, writeImpl, readWriteImpl;
     unsigned numArgNames, numAccessors;
+    unsigned numVTableEntries;
     ArrayRef<uint64_t> argNameAndDependencyIDs;
 
     decls_block::SubscriptLayout::readRecord(scratch, contextID,
@@ -3760,6 +3806,7 @@ public:
                                              rawSetterAccessLevel,
                                              rawStaticSpelling, numArgNames,
                                              opaqueReturnTypeID,
+                                             numVTableEntries,
                                              argNameAndDependencyIDs);
     // Resolve the name ids.
     SmallVector<Identifier, 2> argNames;
@@ -3777,14 +3824,19 @@ public:
     Expected<Decl *> overridden = MF.getDeclChecked(overriddenID);
     if (!overridden) {
       llvm::consumeError(overridden.takeError());
-      return llvm::make_error<OverrideError>(name);
+
+      DeclDeserializationError::Flags errorFlags;
+      return llvm::make_error<OverrideError>(
+          name, errorFlags, numVTableEntries);
     }
 
     for (TypeID dependencyID : argNameAndDependencyIDs) {
       auto dependency = MF.getTypeChecked(dependencyID);
       if (!dependency) {
+        DeclDeserializationError::Flags errorFlags;
         return llvm::make_error<TypeError>(
-            name, takeErrorInfo(dependency.takeError()));
+            name, takeErrorInfo(dependency.takeError()),
+            errorFlags, numVTableEntries);
       }
     }
 
@@ -5413,19 +5465,14 @@ Decl *handleErrorAndSupplyMissingClassMember(ASTContext &context,
   auto handleMissingClassMember = [&](const DeclDeserializationError &error) {
     if (error.isDesignatedInitializer())
       containingClass->setHasMissingDesignatedInitializers();
-    if (error.needsVTableEntry())
+    if (error.getNumberOfVTableEntries() > 0)
       containingClass->setHasMissingVTableEntries();
 
-    if (error.getName().getBaseName() == DeclBaseName::createConstructor()) {
-      suppliedMissingMember = MissingMemberDecl::forInitializer(
-          context, containingClass, error.getName(), error.needsVTableEntry());
-    } else if (error.needsVTableEntry()) {
-      suppliedMissingMember = MissingMemberDecl::forMethod(
-          context, containingClass, error.getName(), error.needsVTableEntry());
-    } else if (error.needsFieldOffsetVectorEntry()) {
-      suppliedMissingMember = MissingMemberDecl::forStoredProperty(
-          context, containingClass, error.getName());
-    }
+    suppliedMissingMember = MissingMemberDecl::create(
+        context, containingClass, error.getName(),
+        error.getNumberOfVTableEntries(),
+        error.needsFieldOffsetVectorEntry());
+
     // FIXME: Handle other kinds of missing members: properties,
     // subscripts, and methods that don't need vtable entries.
   };
@@ -5440,20 +5487,14 @@ Decl *handleErrorAndSupplyMissingProtoMember(ASTContext &context,
 
   auto handleMissingProtocolMember =
       [&](const DeclDeserializationError &error) {
-        if (error.needsVTableEntry())
+        if (error.getNumberOfVTableEntries() > 0)
           containingProto->setHasMissingRequirements(true);
 
-        if (error.getName().getBaseName() == DeclBaseName::createConstructor()) {
-          suppliedMissingMember = MissingMemberDecl::forInitializer(
-              context, containingProto, error.getName(),
-              error.needsVTableEntry());
-              return;
-        }
-        if (error.needsVTableEntry()) {
-          suppliedMissingMember = MissingMemberDecl::forMethod(
-              context, containingProto, error.getName(),
-              error.needsVTableEntry());
-        }
+        assert(error.needsFieldOffsetVectorEntry() == 0);
+        suppliedMissingMember = MissingMemberDecl::create(
+            context, containingProto, error.getName(),
+            error.getNumberOfVTableEntries(), 0);
+
         // FIXME: Handle other kinds of missing members: properties,
         // subscripts, and methods that don't need vtable entries.
       };
