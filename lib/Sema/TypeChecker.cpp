@@ -444,6 +444,7 @@ void swift::performTypeChecking(SourceFile &SF, TopLevelContext &TLC,
         // Immediately perform global name-binding etc.
         TC.typeCheckTopLevelCodeDecl(TLCD);
         TC.contextualizeTopLevelCode(TLC, TLCD);
+        TC.checkTopLevelCodeCaptures(TLCD);
       } else {
         TC.typeCheckDecl(D);
       }

@@ -682,3 +682,12 @@ void TypeChecker::checkPatternBindingCaptures(NominalTypeDecl *typeDecl) {
     }
   }
 }
+
+void TypeChecker::checkTopLevelCodeCaptures(TopLevelCodeDecl *TLCD) {
+  FindCapturedVars finder(TLCD->DeclContext::getASTContext(),
+                          TLCD->getLoc(),
+                          TLCD,
+                          /*NoEscape=*/false,
+                          /*ObjC=*/false);
+  TLCD->getBody()->walk(finder);
+}

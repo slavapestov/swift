@@ -1435,6 +1435,9 @@ public:
   /// Check for invalid captures from stored property initializers.
   static void checkPatternBindingCaptures(NominalTypeDecl *typeDecl);
 
+  /// Compute captures of closures nested inside top-level code.
+  static void checkTopLevelCodeCaptures(TopLevelCodeDecl *TLCD);
+
   /// Change the context of closures in the given initializer
   /// expression to the given context.
   ///
