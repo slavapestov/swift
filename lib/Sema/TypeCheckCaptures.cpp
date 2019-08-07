@@ -372,13 +372,6 @@ public:
   bool walkToDeclPre(Decl *D) override {
     if (auto *AFD = dyn_cast<AbstractFunctionDecl>(D)) {
       propagateCaptures(AFD, AFD->getLoc());
-
-      // Can default parameter initializers capture state?  That seems like
-      // a really bad idea.
-      for (auto *param : *AFD->getParameters())
-        if (auto E = param->getDefaultValue())
-          E->walk(*this);
-
       return false;
     }
 
@@ -607,6 +600,12 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
                           AFR.isKnownNoEscape(),
                           AFR.isObjC());
   AFR.getBody()->walk(finder);
+
+  if (auto *AFD = AFR.getAbstractFunctionDecl()) {
+    for (auto *param : *AFD->getParameters())
+      if (auto E = param->getDefaultValue())
+        E->walk(finder);
+  }
 
   if (AFR.hasType() && !AFR.isObjC()) {
     finder.checkType(AFR.getType(), AFR.getLoc());
