@@ -593,13 +593,22 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
 
   PrettyStackTraceAnyFunctionRef trace("computing captures for", AFR);
 
+  // Force the body if its delayed. We need it below anyway.
+  auto *body = AFR.getBody();
+
+  // Make sure we don't see functions that have not been type checked yet.
+  if (auto *AFD = AFR.getAbstractFunctionDecl()) {
+    assert(AFD->getBodyKind() != AbstractFunctionDecl::BodyKind::Parsed);
+    (void) AFD;
+  }
+
   auto &Context = AFR.getAsDeclContext()->getASTContext();
   FindCapturedVars finder(Context,
                           AFR.getLoc(),
                           AFR.getAsDeclContext(),
                           AFR.isKnownNoEscape(),
                           AFR.isObjC());
-  AFR.getBody()->walk(finder);
+  body->walk(finder);
 
   if (auto *AFD = AFR.getAbstractFunctionDecl()) {
     for (auto *param : *AFD->getParameters())
