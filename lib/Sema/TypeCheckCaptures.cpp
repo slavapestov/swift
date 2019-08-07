@@ -329,9 +329,6 @@ public:
   }
 
   void propagateCaptures(AnyFunctionRef innerClosure, SourceLoc captureLoc) {
-    if (innerClosure.getAsDeclContext()->getParent() != CurDC)
-      return;
-
     TypeChecker::computeCaptures(innerClosure);
 
     auto &captureInfo = innerClosure.getCaptureInfo();
@@ -602,22 +599,13 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
 
   PrettyStackTraceAnyFunctionRef trace("computing captures for", AFR);
 
-  // Force the body if its delayed. We need it below anyway.
-  auto *body = AFR.getBody();
-
-  // Make sure we don't see functions that have not been type checked yet.
-  if (auto *AFD = AFR.getAbstractFunctionDecl()) {
-    assert(AFD->getBodyKind() != AbstractFunctionDecl::BodyKind::Parsed);
-    (void) AFD;
-  }
-
   auto &Context = AFR.getAsDeclContext()->getASTContext();
   FindCapturedVars finder(Context,
                           AFR.getLoc(),
                           AFR.getAsDeclContext(),
                           AFR.isKnownNoEscape(),
                           AFR.isObjC());
-  body->walk(finder);
+  AFR.getBody()->walk(finder);
 
   if (auto *AFD = AFR.getAbstractFunctionDecl()) {
     for (auto *param : *AFD->getParameters())
