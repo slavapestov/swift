@@ -329,6 +329,9 @@ public:
   }
 
   void propagateCaptures(AnyFunctionRef innerClosure, SourceLoc captureLoc) {
+    if (innerClosure.getAsDeclContext()->getParent() != CurDC)
+      return;
+
     TypeChecker::computeCaptures(innerClosure);
 
     auto &captureInfo = innerClosure.getCaptureInfo();
@@ -372,6 +375,12 @@ public:
   bool walkToDeclPre(Decl *D) override {
     if (auto *AFD = dyn_cast<AbstractFunctionDecl>(D)) {
       propagateCaptures(AFD, AFD->getLoc());
+      return false;
+    }
+
+    if (auto *NTD = dyn_cast<NominalTypeDecl>(D)) {
+      // We'll visit the members of the nominal type when we type check
+      // the nominal type.
       return false;
     }
 
