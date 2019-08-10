@@ -1025,11 +1025,15 @@ populateLookupTableEntryFromExtensions(ASTContext &ctx,
   if (!ignoreNewExtensions) {
     for (auto e : nominal->getExtensions()) {
       if (e->wasDeserialized() || e->hasClangNode()) {
+        assert(!e->hasUnparsedMembers());
         if (populateLookupTableEntryFromLazyIDCLoader(ctx, table,
                                                       name, e)) {
           return true;
         }
       } else {
+        if (e->hasUnparsedMembers())
+          e->loadAllMembers();
+
         populateLookupTableEntryFromCurrentMembersWithoutLoading(ctx, table,
                                                                  name, e);
       }
@@ -1054,6 +1058,8 @@ void NominalTypeDecl::prepareLookupTable(bool ignoreNewExtensions) {
   }
 
   if (hasLazyMembers()) {
+    assert(!hasUnparsedMembers());
+
     // Lazy members: if the table needs population, populate the table _only
     // from those members already in the IDC member list_ such as implicits or
     // globals-as-members, then update table entries from the extensions that

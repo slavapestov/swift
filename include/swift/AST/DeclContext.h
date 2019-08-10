@@ -701,7 +701,14 @@ class IterableDeclContext {
   /// detect when a member has been added. A bit would suffice,
   /// but would be more fragile, The scope code could count the members each
   /// time, but I think it's a better trade to just keep a count here.
-  unsigned memberCount = 0;
+  unsigned MemberCount : 31;
+
+  /// Whether delayed parsing detect a possible operator function definition in
+  /// the body of this context.
+  unsigned HasOperatorDeclarations : 1;
+
+  /// Whether parsing the members of this context has been delayed.
+  unsigned HasUnparsedMembers : 1;
 
   template<class A, class B, class C>
   friend struct ::llvm::cast_convert_val;
@@ -713,11 +720,32 @@ class IterableDeclContext {
 
 public:
   IterableDeclContext(IterableDeclContextKind kind)
-    : LastDeclAndKind(nullptr, kind) { }
+    : LastDeclAndKind(nullptr, kind) {
+    MemberCount = 0;
+    HasOperatorDeclarations = 0;
+    HasUnparsedMembers = 0;
+  }
 
   /// Determine the kind of iterable context we have.
   IterableDeclContextKind getIterableContextKind() const {
     return LastDeclAndKind.getInt();
+  }
+
+  bool hasUnparsedMembers() const {
+    return HasUnparsedMembers;
+  }
+
+  void setHasUnparsedMembers() {
+    HasUnparsedMembers = 1;
+  }
+
+  bool hasOperatorDeclarations() const {
+    return HasOperatorDeclarations;
+  }
+
+  void setHasOperatorDeclarations() {
+    assert(hasUnparsedMembers());
+    HasOperatorDeclarations = 1;
   }
 
   /// Retrieve the set of members in this context.
@@ -732,8 +760,8 @@ public:
   /// is inserted immediately after the hint.
   void addMember(Decl *member, Decl *hint = nullptr);
 
-  /// See \c memberCount
-  unsigned getMemberCount() const { return memberCount; }
+  /// See \c MemberCount
+  unsigned getMemberCount() const { return MemberCount; }
 
   /// Check whether there are lazily-loaded members.
   bool hasLazyMembers() const {

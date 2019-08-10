@@ -2510,9 +2510,13 @@ static void diagnoseOperatorFixityAttributes(Parser &P,
   }
 }
 
-static unsigned skipUntilMatchingRBrace(Parser &P, bool &HasPoundDirective,
+static unsigned skipUntilMatchingRBrace(Parser &P,
+                                        bool &HasPoundDirective,
+                                        bool &HasOperatorDeclarations,
                                         SyntaxParsingContext *&SyntaxContext) {
   HasPoundDirective = false;
+  HasOperatorDeclarations = false;
+
   bool isRootCtx = SyntaxContext->isRoot();
   SyntaxParsingContext BlockItemListContext(SyntaxContext,
                                             SyntaxKind::CodeBlockItemList);
@@ -2523,7 +2527,18 @@ static unsigned skipUntilMatchingRBrace(Parser &P, bool &HasPoundDirective,
                                         SyntaxKind::CodeBlockItem);
   SyntaxParsingContext BodyContext(SyntaxContext, SyntaxKind::TokenList);
   unsigned OpenBraces = 1;
+
+  bool LastTokenWasFunc = false;
+
   while (OpenBraces != 0 && P.Tok.isNot(tok::eof)) {
+    // Detect 'func' followed by an operator identifier.
+    if (LastTokenWasFunc) {
+      LastTokenWasFunc = false;
+      HasOperatorDeclarations |= P.Tok.isAnyOperator();
+    } else {
+      LastTokenWasFunc = P.Tok.is(tok::kw_func);
+    }
+
     HasPoundDirective |= P.Tok.isAny(tok::pound_sourceLocation, tok::pound_line,
       tok::pound_if, tok::pound_else, tok::pound_endif, tok::pound_elseif);
     if (P.consumeIf(tok::l_brace)) {
@@ -3669,8 +3684,7 @@ bool Parser::parseDeclList(SourceLoc LBLoc, SourceLoc &RBLoc,
   return !RBLoc.isValid();
 }
 
-bool Parser::canDelayMemberDeclParsing() {
-  return false;
+bool Parser::canDelayMemberDeclParsing(bool &HasOperatorDeclarations) {
   // If explicitly disabled, respect the flag.
   if (!DelayBodyParsing)
     return false;
@@ -3683,7 +3697,10 @@ bool Parser::canDelayMemberDeclParsing() {
   // we can't lazily parse.
   BacktrackingScope BackTrack(*this);
   bool HasPoundDirective;
-  skipUntilMatchingRBrace(*this, HasPoundDirective, SyntaxContext);
+  skipUntilMatchingRBrace(*this,
+                          HasPoundDirective,
+                          HasOperatorDeclarations,
+                          SyntaxContext);
   if (!HasPoundDirective)
     BackTrack.cancelBacktrack();
   return !BackTrack.willBacktrack();
@@ -3692,6 +3709,7 @@ bool Parser::canDelayMemberDeclParsing() {
 bool Parser::delayParsingDeclList(SourceLoc LBLoc, SourceLoc &RBLoc,
                                   SourceLoc PosBeforeLB,
                                   ParseDeclOptions Options,
+                                  bool HasOperatorDeclarations,
                                   IterableDeclContext *IDC) {
   bool error = false;
 
@@ -3701,6 +3719,10 @@ bool Parser::delayParsingDeclList(SourceLoc LBLoc, SourceLoc &RBLoc,
     RBLoc = Tok.getLoc();
     error = true;
   }
+
+  IDC->setHasUnparsedMembers();
+  if (HasOperatorDeclarations)
+    IDC->setHasOperatorDeclarations();
   State->delayDeclList(IDC, Options.toRaw(), CurDeclContext, { LBLoc, RBLoc },
                         PosBeforeLB);
   return error;
@@ -3769,8 +3791,11 @@ Parser::parseDeclExtension(ParseDeclOptions Flags, DeclAttributes &Attributes) {
     ContextChange CC(*this, ext);
     Scope S(this, ScopeKind::Extension);
     ParseDeclOptions Options(PD_HasContainerType | PD_InExtension);
-    if (canDelayMemberDeclParsing()) {
-      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options, ext))
+
+    bool HasOperatorDeclarations;
+    if (canDelayMemberDeclParsing(HasOperatorDeclarations)) {
+      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options,
+                               HasOperatorDeclarations, ext))
         status.setIsParseError();
     } else {
       if (parseDeclList(LBLoc, RBLoc, diag::expected_rbrace_extension,
@@ -4398,7 +4423,10 @@ static unsigned skipBracedBlock(Parser &P,
   SyntaxParsingContext CodeBlockContext(SyntaxContext, SyntaxKind::CodeBlock);
   P.consumeToken(tok::l_brace);
   bool HasPoundDirectives;
-  unsigned OpenBraces = skipUntilMatchingRBrace(P, HasPoundDirectives,
+  bool HasOperatorDeclarations;
+  unsigned OpenBraces = skipUntilMatchingRBrace(P,
+                                                HasPoundDirectives,
+                                                HasOperatorDeclarations,
                                                 SyntaxContext);
   if (P.consumeIf(tok::r_brace))
     OpenBraces--;
@@ -5701,8 +5729,11 @@ ParserResult<EnumDecl> Parser::parseDeclEnum(ParseDeclOptions Flags,
   } else {
     Scope S(this, ScopeKind::EnumBody);
     ParseDeclOptions Options(PD_HasContainerType | PD_AllowEnumElement | PD_InEnum);
-    if (canDelayMemberDeclParsing()) {
-      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options, ED))
+
+    bool HasOperatorDeclarations;
+    if (canDelayMemberDeclParsing(HasOperatorDeclarations)) {
+      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options,
+                               HasOperatorDeclarations, ED))
         Status.setIsParseError();
     } else {
       if (parseDeclList(LBLoc, RBLoc, diag::expected_rbrace_enum,
@@ -5983,12 +6014,15 @@ ParserResult<StructDecl> Parser::parseDeclStruct(ParseDeclOptions Flags,
     // Parse the body.
     Scope S(this, ScopeKind::StructBody);
     ParseDeclOptions Options(PD_HasContainerType | PD_InStruct);
-    if (canDelayMemberDeclParsing()) {
-      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options, SD))
+
+    bool HasOperatorDeclarations;
+    if (canDelayMemberDeclParsing(HasOperatorDeclarations)) {
+      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options,
+                               HasOperatorDeclarations, SD))
         Status.setIsParseError();
     } else {
       if (parseDeclList(LBLoc, RBLoc, diag::expected_rbrace_struct,
-                        Options,SD))
+                        Options, SD))
         Status.setIsParseError();
     }
   }
@@ -6101,8 +6135,11 @@ ParserResult<ClassDecl> Parser::parseDeclClass(ParseDeclOptions Flags,
     Scope S(this, ScopeKind::ClassBody);
     ParseDeclOptions Options(PD_HasContainerType | PD_AllowDestructor |
                              PD_InClass);
-    if (canDelayMemberDeclParsing()) {
-      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options, CD))
+
+    bool HasOperatorDeclarations;
+    if (canDelayMemberDeclParsing(HasOperatorDeclarations)) {
+      if (delayParsingDeclList(LBLoc, RBLoc, PosBeforeLB, Options,
+                               HasOperatorDeclarations, CD))
         Status.setIsParseError();
     } else {
       if (parseDeclList(LBLoc, RBLoc, diag::expected_rbrace_class,
@@ -6200,8 +6237,11 @@ parseDeclProtocol(ParseDeclOptions Flags, DeclAttributes &Attributes) {
       ParseDeclOptions Options(PD_HasContainerType |
                                PD_DisallowInit |
                                PD_InProtocol);
-      if (canDelayMemberDeclParsing()) {
-        if (delayParsingDeclList(LBraceLoc, RBraceLoc, PosBeforeLB, Options, Proto))
+
+      bool HasOperatorDeclarations;
+      if (canDelayMemberDeclParsing(HasOperatorDeclarations)) {
+        if (delayParsingDeclList(LBraceLoc, RBraceLoc, PosBeforeLB, Options,
+                                 HasOperatorDeclarations, Proto))
           Status.setIsParseError();
       } else {
         if (parseDeclList(LBraceLoc, RBraceLoc, diag::expected_rbrace_protocol,

@@ -887,11 +887,12 @@ public:
 
   void parseDeclListDelayed(IterableDeclContext *IDC);
 
-  bool canDelayMemberDeclParsing();
+  bool canDelayMemberDeclParsing(bool &HasOperatorDeclarations);
 
   bool delayParsingDeclList(SourceLoc LBLoc, SourceLoc &RBLoc,
                             SourceLoc PosBeforeLB,
                             ParseDeclOptions Options,
+                            bool HasOperatorDeclarations,
                             IterableDeclContext *IDC);
 
   ParserResult<TypeDecl> parseDeclTypeAlias(ParseDeclOptions Flags,

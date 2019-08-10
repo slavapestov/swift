@@ -146,7 +146,7 @@ class swift::SourceLookupCache {
   bool MemberCachePopulated = false;
 
   template<typename Range>
-  void doPopulateCache(Range decls, bool onlyOperators);
+  void addToUnqualifiedLookupCache(Range decls, bool onlyOperators);
   template<typename Range>
   void addToMemberCache(Range decls);
   void populateMemberCache(const SourceFile &SF);
@@ -186,16 +186,19 @@ SourceLookupCache &SourceFile::getCache() const {
 }
 
 template<typename Range>
-void SourceLookupCache::doPopulateCache(Range decls,
-                                        bool onlyOperators) {
+void SourceLookupCache::addToUnqualifiedLookupCache(Range decls,
+                                                    bool onlyOperators) {
   for (Decl *D : decls) {
-    if (auto *VD = dyn_cast<ValueDecl>(D))
+    if (auto *VD = dyn_cast<ValueDecl>(D)) {
       if (onlyOperators ? VD->isOperator() : VD->hasName()) {
         // Cache the value under both its compound name and its full name.
         TopLevelValues.add(VD);
       }
+    }
+
     if (auto *NTD = dyn_cast<NominalTypeDecl>(D))
-      doPopulateCache(NTD->getMembers(), true);
+      if (!NTD->hasUnparsedMembers() || NTD->hasOperatorDeclarations())
+        addToUnqualifiedLookupCache(NTD->getMembers(), true);
 
     // Avoid populating the cache with the members of invalid extension
     // declarations.  These members can be used to point validation inside of
@@ -203,7 +206,8 @@ void SourceLookupCache::doPopulateCache(Range decls,
     if (D->isInvalid()) continue;
 
     if (auto *ED = dyn_cast<ExtensionDecl>(D))
-      doPopulateCache(ED->getMembers(), true);
+      if (!ED->hasUnparsedMembers() || ED->hasOperatorDeclarations())
+        addToUnqualifiedLookupCache(ED->getMembers(), true);
   }
 }
 
@@ -234,14 +238,17 @@ void SourceLookupCache::addToMemberCache(Range decls) {
 
 /// Populate our cache on the first name lookup.
 SourceLookupCache::SourceLookupCache(const SourceFile &SF) {
-  doPopulateCache(llvm::makeArrayRef(SF.Decls), false);
+  FrontendStatsTracer tracer(SF.getASTContext().Stats,
+                             "source-file-populate-cache");
+  addToUnqualifiedLookupCache(SF.Decls, false);
 }
 
 SourceLookupCache::SourceLookupCache(const ModuleDecl &M) {
-  FrontendStatsTracer tracer(M.getASTContext().Stats, "source-file-populate-cache");
+  FrontendStatsTracer tracer(M.getASTContext().Stats,
+                             "module-populate-cache");
   for (const FileUnit *file : M.getFiles()) {
     auto &SF = *cast<SourceFile>(file);
-    doPopulateCache(llvm::makeArrayRef(SF.Decls), false);
+    addToUnqualifiedLookupCache(SF.Decls, false);
   }
 }
 
@@ -327,8 +334,9 @@ void SourceLookupCache::lookupClassMember(AccessPathTy accessPath,
                                           DeclName name,
                                           SmallVectorImpl<ValueDecl*> &results,
                                           const SourceFile &SF) {
-  if (!MemberCachePopulated)
+  if (!MemberCachePopulated) {
     populateMemberCache(SF);
+  }
   
   assert(accessPath.size() <= 1 && "can only refer to top-level decls");
   
@@ -554,6 +562,7 @@ void SourceFile::lookupClassMembers(ModuleDecl::AccessPathTy accessPath,
 void ModuleDecl::lookupClassMember(AccessPathTy accessPath,
                                    DeclName name,
                                    SmallVectorImpl<ValueDecl*> &results) const {
+  FrontendStatsTracer tracer(getASTContext().Stats, "lookup-class-member");
   FORWARD(lookupClassMember, (accessPath, name, results));
 }
 
