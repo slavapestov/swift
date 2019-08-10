@@ -147,7 +147,8 @@ class swift::SourceLookupCache {
 
   template<typename Range>
   void doPopulateCache(Range decls, bool onlyOperators);
-  void addToMemberCache(DeclRange decls);
+  template<typename Range>
+  void addToMemberCache(Range decls);
   void populateMemberCache(const SourceFile &SF);
 public:
   typedef ModuleDecl::AccessPathTy AccessPathTy;
@@ -207,29 +208,26 @@ void SourceLookupCache::doPopulateCache(Range decls,
 }
 
 void SourceLookupCache::populateMemberCache(const SourceFile &SF) {
-  for (const Decl *D : SF.Decls) {
-    if (const auto *NTD = dyn_cast<NominalTypeDecl>(D)) {
-      addToMemberCache(NTD->getMembers());
-    } else if (const auto *ED = dyn_cast<ExtensionDecl>(D)) {
-      addToMemberCache(ED->getMembers());
-    }
-  }
-
+  FrontendStatsTracer tracer(SF.getASTContext().Stats,
+                             "populate-class-member-cache");
+  addToMemberCache(SF.Decls);
   MemberCachePopulated = true;
 }
 
-void SourceLookupCache::addToMemberCache(DeclRange decls) {
+template <typename Range>
+void SourceLookupCache::addToMemberCache(Range decls) {
   for (Decl *D : decls) {
-    auto VD = dyn_cast<ValueDecl>(D);
-    if (!VD)
-      continue;
+    if (auto *NTD = dyn_cast<NominalTypeDecl>(D)) {
+      if (NTD->mayContainMembersAccessedByDynamicLookup())
+          addToMemberCache(NTD->getMembers());
 
-    if (auto NTD = dyn_cast<NominalTypeDecl>(VD)) {
-      assert(!VD->canBeAccessedByDynamicLookup() &&
-             "inner types cannot be accessed by dynamic lookup");
-      addToMemberCache(NTD->getMembers());
-    } else if (VD->canBeAccessedByDynamicLookup()) {
-      ClassMembers.add(VD);
+    } else if (auto *ED = dyn_cast<ExtensionDecl>(D)) {
+      if (ED->mayContainMembersAccessedByDynamicLookup())
+        addToMemberCache(ED->getMembers());
+
+    } else if (auto *VD = dyn_cast<ValueDecl>(D)) {
+      if (VD->canBeAccessedByDynamicLookup())
+        ClassMembers.add(VD);
     }
   }
 }

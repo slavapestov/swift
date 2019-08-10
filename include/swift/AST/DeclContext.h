@@ -459,6 +459,10 @@ public:
   /// are used.
   ResilienceExpansion getResilienceExpansion() const;
 
+  /// Returns true if this context may possibly contain members visible to
+  /// AnyObject dynamic lookup.
+  bool mayContainMembersAccessedByDynamicLookup() const;
+
   /// Returns true if lookups within this context could affect downstream files.
   ///
   /// \param functionsAreNonCascading If true, functions are considered non-
