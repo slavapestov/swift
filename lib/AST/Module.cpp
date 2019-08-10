@@ -522,14 +522,12 @@ void ModuleDecl::lookupMember(SmallVectorImpl<ValueDecl*> &results,
 void ModuleDecl::lookupObjCMethods(
        ObjCSelector selector,
        SmallVectorImpl<AbstractFunctionDecl *> &results) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "lookup-objc-methods");
   FORWARD(lookupObjCMethods, (selector, results));
 }
 
 void BuiltinUnit::lookupValue(ModuleDecl::AccessPathTy accessPath, DeclName name,
                               NLKind lookupKind,
                               SmallVectorImpl<ValueDecl*> &result) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "builtin-unit-lookup-value");
   getCache().lookupValue(name.getBaseIdentifier(), lookupKind, *this, result);
 }
 
@@ -542,15 +540,12 @@ void BuiltinUnit::lookupObjCMethods(
 void SourceFile::lookupValue(ModuleDecl::AccessPathTy accessPath, DeclName name,
                              NLKind lookupKind,
                              SmallVectorImpl<ValueDecl*> &result) const {
-    abort();
-  //FrontendStatsTracer tracer(getASTContext().Stats, "source-file-lookup-value");
   getCache().lookupValue(accessPath, name, lookupKind, result);
 }
 
 void ModuleDecl::lookupVisibleDecls(AccessPathTy AccessPath,
                                 VisibleDeclConsumer &Consumer,
                                 NLKind LookupKind) const {
-    abort();
   FORWARD(lookupVisibleDecls, (AccessPath, Consumer, LookupKind));
 }
 
@@ -562,7 +557,6 @@ void SourceFile::lookupVisibleDecls(ModuleDecl::AccessPathTy AccessPath,
 
 void ModuleDecl::lookupClassMembers(AccessPathTy accessPath,
                                 VisibleDeclConsumer &consumer) const {
-    abort();
   FORWARD(lookupClassMembers, (accessPath, consumer));
 }
 
@@ -574,7 +568,6 @@ void SourceFile::lookupClassMembers(ModuleDecl::AccessPathTy accessPath,
 void ModuleDecl::lookupClassMember(AccessPathTy accessPath,
                                    DeclName name,
                                    SmallVectorImpl<ValueDecl*> &results) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "lookup-class-member");
   FORWARD(lookupClassMember, (accessPath, name, results));
 }
 
@@ -594,12 +587,10 @@ void SourceFile::lookupObjCMethods(
 }
 
 void ModuleDecl::getLocalTypeDecls(SmallVectorImpl<TypeDecl*> &Results) const {
-    abort();
   FORWARD(getLocalTypeDecls, (Results));
 }
 
 void ModuleDecl::getTopLevelDecls(SmallVectorImpl<Decl*> &Results) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "get-top-level-decls");
   FORWARD(getTopLevelDecls, (Results));
 }
 
@@ -609,7 +600,6 @@ void SourceFile::getTopLevelDecls(SmallVectorImpl<Decl*> &Results) const {
 
 void ModuleDecl::getPrecedenceGroups(
        SmallVectorImpl<PrecedenceGroupDecl*> &Results) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "get-precedence-groups");
   FORWARD(getPrecedenceGroups, (Results));
 }
 
@@ -649,7 +639,6 @@ TypeDecl *SourceFile::lookupLocalType(llvm::StringRef mangledName) const {
 
 void ModuleDecl::getDisplayDecls(SmallVectorImpl<Decl*> &Results) const {
   // FIXME: Should this do extra access control filtering?
-    abort();
   FORWARD(getDisplayDecls, (Results));
 }
 
@@ -1035,7 +1024,6 @@ static Optional<OP_DECL *>
 lookupOperatorDeclForName(ModuleDecl *M, SourceLoc Loc, Identifier Name,
                           OperatorMap<OP_DECL *> SourceFile::*OP_MAP)
 {
-  FrontendStatsTracer tracer(M->getASTContext().Stats, "lookup-operator-decl-for-name");
   OP_DECL *result = nullptr;
   for (const FileUnit *File : M->getFiles()) {
     auto next = lookupOperatorDeclForName(*File, Loc, Name, false, OP_MAP);
@@ -1085,7 +1073,6 @@ LOOKUP_OPERATOR(PrecedenceGroup)
 
 void ModuleDecl::getImportedModules(SmallVectorImpl<ImportedModule> &modules,
                                     ModuleDecl::ImportFilter filter) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "get-imported-modules");
   FORWARD(getImportedModules, (modules, filter));
 }
 

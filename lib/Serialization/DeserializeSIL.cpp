@@ -448,8 +448,6 @@ SILDeserializer::readSILFunctionChecked(DeclID FID, SILFunction *existingFn,
       (cacheEntry.isDeserialized() && declarationOnly))
     return cacheEntry.get();
 
-  FrontendStatsTracer tracer(SILMod.getASTContext().Stats, "read-sil-function");
-
   BCOffsetRAII restoreOffset(SILCursor);
   SILCursor.JumpToBit(cacheEntry.getOffset());
 

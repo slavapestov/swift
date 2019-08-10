@@ -365,8 +365,6 @@ ArrayRef<ValueDecl *> ModuleNameLookup<LookupStrategy>::lookupInModuleUncached(
     const DeclContext *moduleScopeContext,
     ArrayRef<ModuleDecl::ImportedModule> extraImports) {
 
-  FrontendStatsTracer tracer(module->getASTContext().Stats, "lookup-in-module-uncached");
-
   // Do the lookup.
   SmallVector<ValueDecl *, 4> localDecls;
   getDerived()->doLocalLookup(module, accessPath, localDecls);
@@ -376,14 +374,10 @@ ArrayRef<ValueDecl *> ModuleNameLookup<LookupStrategy>::lookupInModuleUncached(
     });
   }
 
-  FrontendStatsTracer tracer2(module->getASTContext().Stats, "lookup-in-module-crap");
-
   // Record the decls by overload signature.
   const size_t initialCount = decls.size();
   typename LookupStrategy::OverloadSetTy overloads;
   const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
-
-  FrontendStatsTracer tracer3(module->getASTContext().Stats, "lookup-in-module-junk");
 
   // If needed, search for decls in re-exported modules as well.
   if (!canReturnEarly) {
@@ -403,8 +397,6 @@ ArrayRef<ValueDecl *> ModuleNameLookup<LookupStrategy>::lookupInModuleUncached(
     const DeclContext *moduleScopeContextForReexports = moduleScopeContext;
     if (moduleScopeContext && moduleScopeContext->getParentModule() != module)
       moduleScopeContextForReexports = nullptr;
-
-  FrontendStatsTracer tracer4(module->getASTContext().Stats, "lookup-in-module-shit");
 
     collectLookupResultsFromImports(decls, reexports, accessPath,
                                     moduleScopeContextForReexports, overloads);
@@ -462,9 +454,6 @@ void namelookup::lookupInModule(ModuleDecl *startModule,
                                 LazyResolver *typeResolver,
                                 const DeclContext *moduleScopeContext,
                                 ArrayRef<ModuleDecl::ImportedModule> extraImports) {
-  auto &ctx = startModule->getASTContext();
-  FrontendStatsTracer tracer(ctx.Stats, "lookup-in-module");
-
   assert(moduleScopeContext && moduleScopeContext->isModuleScopeContext());
   LookupByName lookup(typeResolver, startModule, resolutionKind, name,
                       lookupKind);

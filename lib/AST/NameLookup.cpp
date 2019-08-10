@@ -1453,9 +1453,6 @@ bool DeclContext::lookupQualified(ArrayRef<NominalTypeDecl *> typeDecls,
   using namespace namelookup;
   assert(decls.empty() && "additive lookup not supported");
 
-  auto &ctx = getASTContext();
-  FrontendStatsTracer tracer(ctx.Stats, "lookup-qualified");
-
   // Configure lookup and dig out the tracker.
   ReferencedNameTracker *tracker = nullptr;
   bool isLookupCascading;
@@ -1488,6 +1485,7 @@ bool DeclContext::lookupQualified(ArrayRef<NominalTypeDecl *> typeDecls,
 
   // Visit all of the nominal types we know about, discovering any others
   // we need along the way.
+  auto &ctx = getASTContext();
   auto typeResolver = ctx.getLazyResolver();
   bool wantProtocolMembers = (options & NL_ProtocolMembers);
   while (!stack.empty()) {
@@ -1591,14 +1589,12 @@ bool DeclContext::lookupQualified(ModuleDecl *module, DeclName member,
                                   SmallVectorImpl<ValueDecl *> &decls) const {
   using namespace namelookup;
 
-  ASTContext &ctx = getASTContext();
-  FrontendStatsTracer tracer(ctx.Stats, "lookup-qualified");
-
   // Configure lookup and dig out the tracker.
   ReferencedNameTracker *tracker = nullptr;
   bool isLookupCascading;
   configureLookup(this, options, tracker, isLookupCascading);
 
+  ASTContext &ctx = getASTContext();
   auto topLevelScope = getModuleScopeContext();
   if (module == topLevelScope->getParentModule()) {
     if (tracker) {

@@ -2755,8 +2755,6 @@ void ClangModuleUnit::lookupValue(ModuleDecl::AccessPathTy accessPath,
   if (clangModule && clangModule->isSubModule())
     return;
 
-  FrontendStatsTracer(getASTContext().Stats, "clang-module-unit-lookup-value");
-
   VectorDeclConsumer vectorWriter(results);
   FilteringVisibleDeclConsumer filteringConsumer(vectorWriter, this);
 

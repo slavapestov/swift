@@ -465,8 +465,6 @@ ProtocolConformanceRef ModuleFile::readConformance(
   auto next = Cursor.advance(AF_DontPopBlockAtEnd);
   assert(next.Kind == llvm::BitstreamEntry::Record);
 
-  FrontendStatsTracer(getContext().Stats, "read-conformance");
-
   if (getContext().Stats)
     getContext().Stats->getFrontendCounters().NumConformancesDeserialized++;
 
@@ -4342,8 +4340,6 @@ llvm::Error DeclDeserializer::deserializeDeclAttributes() {
 
 Expected<Decl *>
 DeclDeserializer::getDeclCheckedImpl() {
-  FrontendStatsTracer tracer(ctx.Stats, "deserialize-decl");
-
   if (auto s = ctx.Stats)
     s->getFrontendCounters().NumDeclsDeserialized++;
 
@@ -5386,8 +5382,6 @@ Expected<Type> ModuleFile::getTypeChecked(TypeID TID) {
 }
 
 Expected<Type> TypeDeserializer::getTypeCheckedImpl() {
-  FrontendStatsTracer tracer(ctx.Stats, "deserialize-type");
-
   if (auto s = ctx.Stats)
     s->getFrontendCounters().NumTypesDeserialized++;
 
@@ -5592,9 +5586,6 @@ ModuleFile::loadAssociatedTypeDefault(const swift::AssociatedTypeDecl *ATD,
 void ModuleFile::finishNormalConformance(NormalProtocolConformance *conformance,
                                          uint64_t contextData) {
   using namespace decls_block;
-
-  auto &ctx = getAssociatedModule()->getASTContext();
-  FrontendStatsTracer tracer(ctx.Stats, "finish-normal-conformance");
 
   PrettyStackTraceModuleFile traceModule("While reading from", *this);
   PrettyStackTraceConformance trace(getAssociatedModule()->getASTContext(),
