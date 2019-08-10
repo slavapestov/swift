@@ -118,7 +118,7 @@ BuiltinUnit::BuiltinUnit(ModuleDecl &M)
 
 SourceFile::~SourceFile() = default;
 
-class SourceFile::LookupCache {
+class swift::SourceLookupCache {
   /// A lookup map for value decls. When declarations are added they are added
   /// under all variants of the name they can be found under.
   class DeclMap {
@@ -152,7 +152,8 @@ class SourceFile::LookupCache {
 public:
   typedef ModuleDecl::AccessPathTy AccessPathTy;
   
-  LookupCache(const SourceFile &SF);
+  SourceLookupCache(const SourceFile &SF);
+  SourceLookupCache(const ModuleDecl &Mod);
 
   /// Throw away as much memory as possible.
   void invalidate();
@@ -175,8 +176,6 @@ public:
 
   SmallVector<ValueDecl *, 0> AllVisibleValues;
 };
-using SourceLookupCache = SourceFile::LookupCache;
-
 SourceLookupCache &SourceFile::getCache() const {
   if (!Cache) {
     const_cast<SourceFile *>(this)->Cache =
@@ -236,8 +235,16 @@ void SourceLookupCache::addToMemberCache(DeclRange decls) {
 }
 
 /// Populate our cache on the first name lookup.
-SourceLookupCache::LookupCache(const SourceFile &SF) {
+SourceLookupCache::SourceLookupCache(const SourceFile &SF) {
   doPopulateCache(llvm::makeArrayRef(SF.Decls), false);
+}
+
+SourceLookupCache::SourceLookupCache(const ModuleDecl &M) {
+  FrontendStatsTracer tracer(M.getASTContext().Stats, "source-file-populate-cache");
+  for (const FileUnit *file : M.getFiles()) {
+    auto &SF = *cast<SourceFile>(file);
+    doPopulateCache(llvm::makeArrayRef(SF.Decls), false);
+  }
 }
 
 void SourceLookupCache::lookupValue(AccessPathTy AccessPath, DeclName Name,
@@ -400,9 +407,36 @@ void ModuleDecl::removeFile(FileUnit &existingFile) {
   for (const FileUnit *file : getFiles()) \
     file->name args;
 
+SourceLookupCache &ModuleDecl::getSourceLookupCache() const {
+  if (!Cache) {
+    const_cast<ModuleDecl *>(this)->Cache =
+        llvm::make_unique<SourceLookupCache>(*this);
+  }
+  return *Cache;
+}
+
 void ModuleDecl::lookupValue(AccessPathTy AccessPath, DeclName Name,
                              NLKind LookupKind, 
                              SmallVectorImpl<ValueDecl*> &Result) const {
+  auto files = getFiles();
+  bool hasSource = false;
+  for (auto file : files) {
+    if (isa<SourceFile>(file)) hasSource = true;
+  }
+  if (hasSource) {
+    for (auto file : files) {
+      if (!isa<SourceFile>(file)) {
+        file->dumpContext();
+        abort();
+      }
+    }
+  }
+  if (files.size() > 1 && isa<SourceFile>(files[0])) {
+    FrontendStatsTracer tracer(getASTContext().Stats, "source-file-lookup-value");
+    getSourceLookupCache().lookupValue(AccessPath, Name, LookupKind, Result);
+    return;
+  }
+
   FORWARD(lookupValue, (AccessPath, Name, LookupKind, Result));
 }
 
@@ -1056,14 +1090,34 @@ SourceFile::getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &modu
     else
       requiredKind = ModuleDecl::ImportFilterKind::Private;
 
-    if (filter.contains(requiredKind))
+    if (filter.contains(requiredKind)) {
+      // Filter out duplicate imports; they have no semantic effect.
+      auto iter = std::find_if(modules.begin(), modules.end(),
+        [&](ModuleDecl::ImportedModule existing) {
+          return (existing.second == desc.module.second &&
+                  ModuleDecl::isSameAccessPath(existing.first,
+                                               desc.module.first));
+        });
+      if (iter != modules.end())
+        continue;
+
       modules.push_back(desc.module);
+    }
   }
 }
 
 void ModuleDecl::getImportedModulesForLookup(
     SmallVectorImpl<ImportedModule> &modules) const {
-  FORWARD(getImportedModulesForLookup, (modules));
+  if (!ImportedModuleCache) {
+    SmallVector<ImportedModule, 8> result;
+    FrontendStatsTracer tracer(getASTContext().Stats,
+                               "get-imported-modules-for-lookup");
+    FORWARD(getImportedModulesForLookup, (result));
+    const_cast<ModuleDecl *>(this)->ImportedModuleCache = result;
+  }
+
+  std::copy(ImportedModuleCache->begin(), ImportedModuleCache->end(),
+            std::back_inserter(modules));
 }
 
 bool ModuleDecl::isSameAccessPath(AccessPathTy lhs, AccessPathTy rhs) {

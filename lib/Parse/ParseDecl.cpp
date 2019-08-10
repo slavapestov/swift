@@ -3670,6 +3670,7 @@ bool Parser::parseDeclList(SourceLoc LBLoc, SourceLoc &RBLoc,
 }
 
 bool Parser::canDelayMemberDeclParsing() {
+  return false;
   // If explicitly disabled, respect the flag.
   if (!DelayBodyParsing)
     return false;

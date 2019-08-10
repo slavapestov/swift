@@ -60,7 +60,6 @@ namespace swift {
   class InfixOperatorDecl;
   class LazyResolver;
   class LinkLibrary;
-  class LookupCache;
   class ModuleLoader;
   class NominalTypeDecl;
   class EnumElementDecl;
@@ -80,6 +79,7 @@ namespace swift {
   class VisibleDeclConsumer;
   class SyntaxParsingCache;
   class ASTScope;
+  class SourceLookupCache;
 
   namespace syntax {
   class SourceFileSyntax;
@@ -203,6 +203,13 @@ private:
   DebuggerClient *DebugClient = nullptr;
 
   SmallVector<FileUnit *, 2> Files;
+
+  std::unique_ptr<SourceLookupCache> Cache;
+  SourceLookupCache &getSourceLookupCache() const;
+
+  /// We cache the result of getImportedModulesForLookup() to avoid an O(n)
+  /// iteration over all files in the module.
+  Optional<SmallVector<ImportedModule, 8>> ImportedModuleCache;
 
   /// Tracks the file that will generate the module's entry point, either
   /// because it contains a class marked with \@UIApplicationMain
@@ -913,7 +920,6 @@ static inline unsigned alignOfFileUnit() {
 /// IR generation.
 class SourceFile final : public FileUnit {
 public:
-  class LookupCache;
   class Impl;
   struct SourceFileSyntaxInfo;
 
@@ -962,8 +968,8 @@ public:
   };
 
 private:
-  std::unique_ptr<LookupCache> Cache;
-  LookupCache &getCache() const;
+  std::unique_ptr<SourceLookupCache> Cache;
+  SourceLookupCache &getCache() const;
 
   /// This is the list of modules that are imported by this module.
   ///
