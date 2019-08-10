@@ -1630,6 +1630,7 @@ ModuleFile::~ModuleFile() { }
 
 void ModuleFile::lookupValue(DeclName name,
                              SmallVectorImpl<ValueDecl*> &results) {
+  FrontendStatsTracer tracer(getContext().Stats, "module-file-lookup-value");
   PrettyStackTraceModuleFile stackEntry(*this);
 
   if (TopLevelDecls) {
