@@ -417,18 +417,6 @@ void ModuleDecl::lookupValue(AccessPathTy AccessPath, DeclName Name,
                              NLKind LookupKind, 
                              SmallVectorImpl<ValueDecl*> &Result) const {
   auto files = getFiles();
-  bool hasSource = false;
-  for (auto file : files) {
-    if (isa<SourceFile>(file)) hasSource = true;
-  }
-  if (hasSource) {
-    for (auto file : files) {
-      if (!isa<SourceFile>(file)) {
-        file->dumpContext();
-        abort();
-      }
-    }
-  }
   if (files.size() > 1 && isa<SourceFile>(files[0])) {
     FrontendStatsTracer tracer(getASTContext().Stats, "source-file-lookup-value");
     getSourceLookupCache().lookupValue(AccessPath, Name, LookupKind, Result);
