@@ -2681,7 +2681,7 @@ bool ValueDecl::canBeAccessedByDynamicLookup() const {
     return false;
 
   // Dynamic lookup can only find @objc members.
-  if (!isObjC())
+  if (!getAttrs().hasAttribute<ObjCAttr>())
     return false;
 
   return true;
