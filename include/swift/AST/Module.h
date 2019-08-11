@@ -196,6 +196,18 @@ public:
     void printForward(raw_ostream &out) const;
   };
 
+  /// \sa getImportedModules
+  enum class ImportFilterKind {
+    /// Include imports declared with `@_exported`.
+    Public = 1 << 0,
+    /// Include "regular" imports with no special annotation.
+    Private = 1 << 1,
+    /// Include imports declared with `@_implementationOnly`.
+    ImplementationOnly = 1 << 2
+  };
+  /// \sa getImportedModules
+  using ImportFilter = OptionSet<ImportFilterKind>;
+
 private:
   /// If non-NULL, a plug-in that should be used when performing external
   /// lookups.
@@ -209,7 +221,11 @@ private:
 
   /// We cache the result of getImportedModulesForLookup() to avoid an O(n)
   /// iteration over all files in the module.
-  Optional<SmallVector<ImportedModule, 8>> ImportedModuleCache;
+  using ImportedModules = ArrayRef<ImportedModule>;
+  Optional<ImportedModules> ImportedModulesForLookupCache;
+
+  SmallVector<std::pair<ImportFilter, ImportedModules>, 4>
+    ImportedModulesCache;
 
   /// Tracks the file that will generate the module's entry point, either
   /// because it contains a class marked with \@UIApplicationMain
@@ -454,18 +470,6 @@ public:
   void lookupObjCMethods(
          ObjCSelector selector,
          SmallVectorImpl<AbstractFunctionDecl *> &results) const;
-
-  /// \sa getImportedModules
-  enum class ImportFilterKind {
-    /// Include imports declared with `@_exported`.
-    Public = 1 << 0,
-    /// Include "regular" imports with no special annotation.
-    Private = 1 << 1,
-    /// Include imports declared with `@_implementationOnly`.
-    ImplementationOnly = 1 << 2
-  };
-  /// \sa getImportedModules
-  using ImportFilter = OptionSet<ImportFilterKind>;
 
   /// Looks up which modules are imported by this module.
   ///

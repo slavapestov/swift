@@ -34,6 +34,7 @@
 #include "swift/AST/ProtocolConformance.h"
 #include "swift/AST/TypeCheckRequests.h"
 #include "swift/Basic/Compiler.h"
+#include "swift/Basic/OptionSet.h"
 #include "swift/Basic/SourceManager.h"
 #include "swift/Basic/Statistic.h"
 #include "swift/Demangling/ManglingMacros.h"
@@ -149,7 +150,6 @@ class swift::SourceLookupCache {
   void addToUnqualifiedLookupCache(Range decls, bool onlyOperators);
   template<typename Range>
   void addToMemberCache(Range decls);
-  void populateMemberCache(const SourceFile &SF);
 public:
   typedef ModuleDecl::AccessPathTy AccessPathTy;
   
@@ -166,14 +166,15 @@ public:
                           VisibleDeclConsumer &Consumer,
                           NLKind LookupKind);
   
+  void populateMemberCache(const SourceFile &SF);
+  void populateMemberCache(const ModuleDecl &Mod);
+
   void lookupClassMembers(AccessPathTy AccessPath,
-                          VisibleDeclConsumer &consumer,
-                          const SourceFile &SF);
+                          VisibleDeclConsumer &consumer);
                           
   void lookupClassMember(AccessPathTy accessPath,
                          DeclName name,
-                         SmallVectorImpl<ValueDecl*> &results,
-                         const SourceFile &SF);
+                         SmallVectorImpl<ValueDecl*> &results);
 
   SmallVector<ValueDecl *, 0> AllVisibleValues;
 };
@@ -212,9 +213,27 @@ void SourceLookupCache::addToUnqualifiedLookupCache(Range decls,
 }
 
 void SourceLookupCache::populateMemberCache(const SourceFile &SF) {
+  if (MemberCachePopulated)
+    return;
+
   FrontendStatsTracer tracer(SF.getASTContext().Stats,
-                             "populate-class-member-cache");
+                             "populate-source-file-class-member-cache");
   addToMemberCache(SF.Decls);
+  MemberCachePopulated = true;
+}
+
+void SourceLookupCache::populateMemberCache(const ModuleDecl &Mod) {
+  if (MemberCachePopulated)
+    return;
+
+  FrontendStatsTracer tracer(Mod.getASTContext().Stats,
+                             "populate-module-class-member-cache");
+
+  for (const FileUnit *file : Mod.getFiles()) {
+    auto &SF = *cast<SourceFile>(file);
+    addToMemberCache(SF.Decls);
+  }
+
   MemberCachePopulated = true;
 }
 
@@ -294,11 +313,7 @@ void SourceLookupCache::lookupVisibleDecls(AccessPathTy AccessPath,
 }
 
 void SourceLookupCache::lookupClassMembers(AccessPathTy accessPath,
-                                           VisibleDeclConsumer &consumer,
-                                           const SourceFile &SF) {
-  if (!MemberCachePopulated)
-    populateMemberCache(SF);
-  
+                                           VisibleDeclConsumer &consumer) {
   assert(accessPath.size() <= 1 && "can only refer to top-level decls");
   
   if (!accessPath.empty()) {
@@ -332,12 +347,7 @@ void SourceLookupCache::lookupClassMembers(AccessPathTy accessPath,
 
 void SourceLookupCache::lookupClassMember(AccessPathTy accessPath,
                                           DeclName name,
-                                          SmallVectorImpl<ValueDecl*> &results,
-                                          const SourceFile &SF) {
-  if (!MemberCachePopulated) {
-    populateMemberCache(SF);
-  }
-  
+                                          SmallVectorImpl<ValueDecl*> &results) {
   assert(accessPath.size() <= 1 && "can only refer to top-level decls");
   
   auto iter = ClassMembers.find(name);
@@ -556,20 +566,33 @@ void ModuleDecl::lookupClassMembers(AccessPathTy accessPath,
 
 void SourceFile::lookupClassMembers(ModuleDecl::AccessPathTy accessPath,
                                     VisibleDeclConsumer &consumer) const {
-  getCache().lookupClassMembers(accessPath, consumer, *this);
+  auto &cache = getCache();
+  cache.populateMemberCache(*this);
+  cache.lookupClassMembers(accessPath, consumer);
 }
 
 void ModuleDecl::lookupClassMember(AccessPathTy accessPath,
                                    DeclName name,
                                    SmallVectorImpl<ValueDecl*> &results) const {
-  FrontendStatsTracer tracer(getASTContext().Stats, "lookup-class-member");
+  auto files = getFiles();
+  if (files.size() > 1 && isa<SourceFile>(files[0])) {
+    FrontendStatsTracer tracer(getASTContext().Stats, "source-file-lookup-class-member");
+    auto &cache = getSourceLookupCache();
+    cache.populateMemberCache(*this);
+    cache.lookupClassMember(accessPath, name, results);
+    return;
+  }
+
   FORWARD(lookupClassMember, (accessPath, name, results));
 }
 
 void SourceFile::lookupClassMember(ModuleDecl::AccessPathTy accessPath,
                                    DeclName name,
                                    SmallVectorImpl<ValueDecl*> &results) const {
-  getCache().lookupClassMember(accessPath, name, results, *this);
+  FrontendStatsTracer tracer(getASTContext().Stats, "source-file-lookup-class-member");
+  auto &cache = getCache();
+  cache.populateMemberCache(*this);
+  cache.lookupClassMember(accessPath, name, results);
 }
 
 void SourceFile::lookupObjCMethods(
@@ -1068,7 +1091,24 @@ LOOKUP_OPERATOR(PrecedenceGroup)
 
 void ModuleDecl::getImportedModules(SmallVectorImpl<ImportedModule> &modules,
                                     ModuleDecl::ImportFilter filter) const {
-  FORWARD(getImportedModules, (modules, filter));
+  for (auto cached : ImportedModulesCache) {
+    if (cached.first.containsOnly(filter)) {
+      std::copy(cached.second.begin(), cached.second.end(),
+                std::back_inserter(modules));
+      return;
+    }
+  }
+
+  auto &ctx = getASTContext();
+
+  SmallVector<ImportedModule, 8> result;
+  FrontendStatsTracer tracer(ctx.Stats, "get-imported-modules");
+  FORWARD(getImportedModules, (result, filter));
+
+  const_cast<ModuleDecl *>(this)->ImportedModulesCache.emplace_back(
+      filter, ctx.AllocateCopy(result));
+  std::copy(result.begin(), result.end(),
+            std::back_inserter(modules));
 }
 
 void
@@ -1103,15 +1143,19 @@ SourceFile::getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &modu
 
 void ModuleDecl::getImportedModulesForLookup(
     SmallVectorImpl<ImportedModule> &modules) const {
-  if (!ImportedModuleCache) {
+  if (!ImportedModulesForLookupCache) {
+    auto &ctx = getASTContext();
+
     SmallVector<ImportedModule, 8> result;
-    FrontendStatsTracer tracer(getASTContext().Stats,
+    FrontendStatsTracer tracer(ctx.Stats,
                                "get-imported-modules-for-lookup");
     FORWARD(getImportedModulesForLookup, (result));
-    const_cast<ModuleDecl *>(this)->ImportedModuleCache = result;
+    const_cast<ModuleDecl *>(this)->ImportedModulesForLookupCache =
+      ctx.AllocateCopy(result);
   }
 
-  std::copy(ImportedModuleCache->begin(), ImportedModuleCache->end(),
+  std::copy(ImportedModulesForLookupCache->begin(),
+            ImportedModulesForLookupCache->end(),
             std::back_inserter(modules));
 }
 
