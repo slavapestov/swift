@@ -1031,9 +1031,6 @@ populateLookupTableEntryFromExtensions(ASTContext &ctx,
           return true;
         }
       } else {
-        if (e->hasUnparsedMembers())
-          e->loadAllMembers();
-
         populateLookupTableEntryFromCurrentMembersWithoutLoading(ctx, table,
                                                                  name, e);
       }
@@ -1191,6 +1188,14 @@ TinyPtrVector<ValueDecl *> NominalTypeDecl::lookupDirect(
       if (!ignoreNewExtensions) {
         for (auto E : getExtensions())
           (void)E->getMembers();
+      }
+    } else {
+      // We still have to parse any unparsed extensions.
+      if (!ignoreNewExtensions) {
+        for (auto *e : getExtensions()) {
+          if (e->hasUnparsedMembers())
+            e->loadAllMembers();
+        }
       }
     }
 
