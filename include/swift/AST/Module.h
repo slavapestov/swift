@@ -60,7 +60,6 @@ namespace swift {
   class InfixOperatorDecl;
   class LazyResolver;
   class LinkLibrary;
-  class LookupCache;
   class ModuleLoader;
   class NominalTypeDecl;
   class EnumElementDecl;
@@ -80,6 +79,7 @@ namespace swift {
   class VisibleDeclConsumer;
   class SyntaxParsingCache;
   class ASTScope;
+  class SourceLookupCache;
 
   namespace syntax {
   class SourceFileSyntax;
@@ -196,6 +196,18 @@ public:
     void printForward(raw_ostream &out) const;
   };
 
+  /// \sa getImportedModules
+  enum class ImportFilterKind {
+    /// Include imports declared with `@_exported`.
+    Public = 1 << 0,
+    /// Include "regular" imports with no special annotation.
+    Private = 1 << 1,
+    /// Include imports declared with `@_implementationOnly`.
+    ImplementationOnly = 1 << 2
+  };
+  /// \sa getImportedModules
+  using ImportFilter = OptionSet<ImportFilterKind>;
+
 private:
   /// If non-NULL, a plug-in that should be used when performing external
   /// lookups.
@@ -203,6 +215,17 @@ private:
   DebuggerClient *DebugClient = nullptr;
 
   SmallVector<FileUnit *, 2> Files;
+
+  std::unique_ptr<SourceLookupCache> Cache;
+  SourceLookupCache &getSourceLookupCache() const;
+
+  /// We cache the result of getImportedModulesForLookup() to avoid an O(n)
+  /// iteration over all files in the module.
+  using ImportedModules = ArrayRef<ImportedModule>;
+  Optional<ImportedModules> ImportedModulesForLookupCache;
+
+  SmallVector<std::pair<ImportFilter, ImportedModules>, 4>
+    ImportedModulesCache;
 
   /// Tracks the file that will generate the module's entry point, either
   /// because it contains a class marked with \@UIApplicationMain
@@ -378,6 +401,12 @@ public:
                           VisibleDeclConsumer &Consumer,
                           NLKind LookupKind) const;
 
+  /// This is a hack for 'main' file parsing and the integrated REPL.
+  ///
+  /// FIXME: Refactor main file parsing to not pump the parser incrementally.
+  /// FIXME: Remove the integrated REPL.
+  void clearLookupCache();
+
   /// @{
 
   /// Look up the given operator in this module.
@@ -447,18 +476,6 @@ public:
   void lookupObjCMethods(
          ObjCSelector selector,
          SmallVectorImpl<AbstractFunctionDecl *> &results) const;
-
-  /// \sa getImportedModules
-  enum class ImportFilterKind {
-    /// Include imports declared with `@_exported`.
-    Public = 1 << 0,
-    /// Include "regular" imports with no special annotation.
-    Private = 1 << 1,
-    /// Include imports declared with `@_implementationOnly`.
-    ImplementationOnly = 1 << 2
-  };
-  /// \sa getImportedModules
-  using ImportFilter = OptionSet<ImportFilterKind>;
 
   /// Looks up which modules are imported by this module.
   ///
@@ -913,7 +930,6 @@ static inline unsigned alignOfFileUnit() {
 /// IR generation.
 class SourceFile final : public FileUnit {
 public:
-  class LookupCache;
   class Impl;
   struct SourceFileSyntaxInfo;
 
@@ -962,8 +978,8 @@ public:
   };
 
 private:
-  std::unique_ptr<LookupCache> Cache;
-  LookupCache &getCache() const;
+  std::unique_ptr<SourceLookupCache> Cache;
+  SourceLookupCache &getCache() const;
 
   /// This is the list of modules that are imported by this module.
   ///
@@ -1118,6 +1134,10 @@ public:
 
   bool isImportedImplementationOnly(const ModuleDecl *module) const;
 
+  /// This is a hack for 'main' file parsing and the integrated REPL.
+  ///
+  /// FIXME: Refactor main file parsing to not pump the parser incrementally.
+  /// FIXME: Remove the integrated REPL.
   void clearLookupCache();
 
   void cacheVisibleDecls(SmallVectorImpl<ValueDecl *> &&globals) const;
