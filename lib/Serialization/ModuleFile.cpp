@@ -1790,7 +1790,9 @@ void ModuleFile::getImportedModules(
     }
 
     assert(dep.isLoaded());
-    results.push_back(dep.Import);
+
+    if (llvm::find(results, dep.Import) == results.end())
+      results.push_back(dep.Import);
   }
 }
 

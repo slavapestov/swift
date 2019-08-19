@@ -3266,9 +3266,14 @@ void ClangModuleUnit::getImportedModules(
   if (filter.containsOnly(ModuleDecl::ImportFilterKind::ImplementationOnly))
     return;
 
-  if (filter.contains(ModuleDecl::ImportFilterKind::Private))
-    if (auto stdlib = owner.getStdlibModule())
-      imports.push_back({ModuleDecl::AccessPathTy(), stdlib});
+  if (filter.contains(ModuleDecl::ImportFilterKind::Private)) {
+    if (auto stdlib = owner.getStdlibModule()) {
+      ModuleDecl::ImportedModule stdlibImport
+        = {ModuleDecl::AccessPathTy(), stdlib};
+      if (llvm::find(imports, stdlibImport) == imports.end())
+        imports.push_back(stdlibImport);
+    }
+  }
 
   SmallVector<clang::Module *, 8> imported;
   if (!clangModule) {
@@ -3297,7 +3302,8 @@ void ClangModuleUnit::getImportedModules(
       // FIXME: The parent module isn't exactly a private import, but it is
       // needed for link dependencies.
       if (clangModule->Parent)
-        imported.push_back(clangModule->Parent);
+        if (llvm::find(imported, clangModule->Parent) == imported.end())
+          imported.push_back(clangModule->Parent);
     }
   }
 
@@ -3313,8 +3319,11 @@ void ClangModuleUnit::getImportedModules(
       if (importTopLevel != importMod) {
         if (!clangModule || importTopLevel != clangModule->getTopLevelModule()){
           auto topLevelWrapper = owner.getWrapperForModule(importTopLevel);
-          imports.push_back({ ModuleDecl::AccessPathTy(),
-                              topLevelWrapper->getParentModule() });
+          ModuleDecl::ImportedModule newImport =
+            { ModuleDecl::AccessPathTy(),
+              topLevelWrapper->getParentModule() };
+          if (llvm::find(imports, newImport) == imports.end())
+            imports.push_back(newImport);
         }
       }
       actualMod = wrapper->getParentModule();
@@ -3323,7 +3332,9 @@ void ClangModuleUnit::getImportedModules(
     }
 
     assert(actualMod && "Missing imported overlay");
-    imports.push_back({ModuleDecl::AccessPathTy(), actualMod});
+    ModuleDecl::ImportedModule newImport = {ModuleDecl::AccessPathTy(), actualMod};
+    if (llvm::find(imports, newImport) == imports.end())
+      imports.push_back(newImport);
   }
 }
 
@@ -3332,13 +3343,14 @@ void ClangModuleUnit::getImportedModulesForLookup(
 
   // Reuse our cached list of imports if we have one.
   if (importedModulesForLookup.hasValue()) {
-    imports.append(importedModulesForLookup->begin(),
-                   importedModulesForLookup->end());
+    for (auto cached : *importedModulesForLookup) {
+      if (llvm::find(imports, cached) == imports.end())
+        imports.push_back(cached);
+    }
     return;
   }
 
-  size_t firstImport = imports.size();
-
+  SmallVector<ModuleDecl::ImportedModule, 8> result;
   SmallVector<clang::Module *, 8> imported;
   const clang::Module *topLevel;
   ModuleDecl *topLevelOverlay = getOverlayModule();
@@ -3399,12 +3411,21 @@ void ClangModuleUnit::getImportedModulesForLookup(
       actualMod = wrapper->getParentModule();
 
     assert(actualMod && "Missing imported overlay");
-    imports.push_back({ModuleDecl::AccessPathTy(), actualMod});
+    ModuleDecl::ImportedModule newImport
+      = {ModuleDecl::AccessPathTy(), actualMod};
+    if (llvm::find(result, newImport) == result.end())
+      result.push_back(newImport);
   }
 
   // Cache our results for use next time.
-  auto importsToCache = llvm::makeArrayRef(imports).slice(firstImport);
+  // FIXME....
+  auto importsToCache = llvm::makeArrayRef(result);
   importedModulesForLookup = getASTContext().AllocateCopy(importsToCache);
+
+  for (auto cached : importedModulesForLookup) {
+    if (llvm::find(imports, cached) == imports.end())
+      imports.push_back(cached);
+  }
 }
 
 void ClangImporter::getMangledName(raw_ostream &os,
