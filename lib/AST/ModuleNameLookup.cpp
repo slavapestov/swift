@@ -424,15 +424,69 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
     FileUnit *file) {
   assert(file);
 
-  // Add private imports to the extra search list.
-  SmallVector<ModuleDecl::ImportedModule, 8> extraImports;
+  // Do the lookup into our own module.
+  auto *module = file->getParentModule();
 
-  ModuleDecl::ImportFilter importFilter;
-  importFilter |= ModuleDecl::ImportFilterKind::Private;
-  importFilter |= ModuleDecl::ImportFilterKind::ImplementationOnly;
-  file->getImportedModules(extraImports, importFilter);
+  SmallVector<ValueDecl *, 4> localDecls;
+  getDerived()->doLocalLookup(module, /*accessPath=*/{}, localDecls);
+  if (respectAccessControl) {
+    llvm::erase_if(localDecls, [=](ValueDecl *VD) {
+      return !VD->isAccessibleFrom(file);
+    });
+  }
 
-  lookupInModule(decls, file->getParentModule(), {}, file, extraImports);
+  // Record the decls by overload signature.
+  const size_t initialCount = decls.size();
+  typename LookupStrategy::OverloadSetTy overloads;
+  const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
+
+  // If needed, search for decls in imported modules as well.
+  if (!canReturnEarly) {
+    SmallVector<ModuleDecl::ImportedModule, 8> topLevelImports;
+    SmallVector<ModuleDecl::ImportedModule, 8> transitiveImports;
+
+    file->getImportedModulesForLookupRecursive(topLevelImports,
+                                               transitiveImports);
+
+    // FIXME: scoped vs unscoped
+
+    for (auto topLevelImport : topLevelImports) {
+      auto accessPath = topLevelImport.first;
+
+      SmallVector<ValueDecl *, 4> localDecls;
+      getDerived()->doLocalLookup(module, accessPath, localDecls);
+      if (respectAccessControl) {
+        llvm::erase_if(localDecls, [=](ValueDecl *VD) {
+          return !VD->isAccessibleFrom(file);
+        });
+      }
+
+      const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
+    }
+
+    for (auto transitiveImport : transitiveImports) {
+      auto accessPath = transitiveImport.first;
+
+      SmallVector<ValueDecl *, 4> localDecls;
+      getDerived()->doLocalLookup(module, accessPath, localDecls);
+      if (respectAccessControl) {
+        llvm::erase_if(localDecls, [=](ValueDecl *VD) {
+          return !VD->isAccessibleFrom(nullptr);
+        });
+      }
+
+      const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
+    }
+  }
+
+  // Remove duplicated declarations, which can happen when the same module is
+  // imported indirectly through two intermediate modules.
+  llvm::SmallPtrSet<ValueDecl *, 4> knownDecls;
+  decls.erase(std::remove_if(decls.begin() + initialCount, decls.end(),
+                             [&](ValueDecl *d) -> bool {
+                               return !knownDecls.insert(d).second;
+                             }),
+              decls.end());
 }
 
 template <typename LookupStrategy>
