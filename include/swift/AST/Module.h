@@ -207,6 +207,11 @@ private:
   std::unique_ptr<SourceLookupCache> Cache;
   SourceLookupCache &getSourceLookupCache() const;
 
+  /// We cache the result of getImportedModulesForLookup() to avoid an O(n)
+  /// iteration over all files in the module.
+  using ImportedModules = ArrayRef<ImportedModule>;
+  Optional<ImportedModules> ImportedModulesForLookupCache;
+
   /// Tracks the file that will generate the module's entry point, either
   /// because it contains a class marked with \@UIApplicationMain
   /// or \@NSApplicationMain, or because it is a script file.

@@ -1144,14 +1144,37 @@ SourceFile::getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &modu
     else
       requiredKind = ModuleDecl::ImportFilterKind::Private;
 
-    if (filter.contains(requiredKind))
-      modules.push_back(desc.module);
+    if (filter.contains(requiredKind)) {
+      // Filter out duplicate imports; they have no semantic effect.
+      if (llvm::find(modules, desc.module) == modules.end())
+        modules.push_back(desc.module);
+    }
   }
 }
 
 void ModuleDecl::getImportedModulesForLookup(
     SmallVectorImpl<ImportedModule> &modules) const {
-  FORWARD(getImportedModulesForLookup, (modules));
+  if (!hasResolvedImports()) {
+    // FIXME: For now, we can end up here before performNameBinding()
+    // has run on all source files in the module, so don't cache the
+    // result in that case.
+    FORWARD(getImportedModulesForLookup, (modules));
+    return;
+  }
+
+  if (!ImportedModulesForLookupCache) {
+    auto &ctx = getASTContext();
+
+    SmallVector<ImportedModule, 8> result;
+    FrontendStatsTracer tracer(ctx.Stats,
+                               "get-imported-modules-for-lookup");
+    FORWARD(getImportedModulesForLookup, (result));
+    const_cast<ModuleDecl *>(this)->ImportedModulesForLookupCache =
+      ctx.AllocateCopy(result);
+  }
+
+  llvm::copy(*ImportedModulesForLookupCache,
+             std::back_inserter(modules));
 }
 
 bool ModuleDecl::isSameAccessPath(AccessPathTy lhs, AccessPathTy rhs) {
