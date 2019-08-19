@@ -1184,7 +1184,7 @@ void SourceFile::getImportedModulesForLookupRecursive(
     if (!visited.insert(topLevelImport).second)
       continue;
 
-    topLevelImports.push_back(topLeveLimport);
+    topLevelImports.push_back(topLevelImport);
     topLevelImport.second->getImportedModulesForLookup(stack);
   }
 
