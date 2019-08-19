@@ -1166,6 +1166,8 @@ void FileUnit::getImportedModulesForLookupRecursive(
     return;
   }
 
+  auto *module = getParentModule();
+
   // Add private imports from this file unit.
   SmallVector<ImportedModule, 8> topLevelImportsWithDuplicates;
 
@@ -1175,7 +1177,7 @@ void FileUnit::getImportedModulesForLookupRecursive(
   getImportedModules(topLevelImportsWithDuplicates, filterForSourceFileImports);
 
   ImportFilter filterForModuleImports = ModuleDecl::ImportFilterKind::Public;
-  getImportedModules(topLevelImportsWithDuplicates, filterForModuleImports);
+  module->getImportedModules(topLevelImportsWithDuplicates, filterForModuleImports);
 
   llvm::SmallSet<ImportedModule, 32, ModuleDecl::OrderImportedModules> visited;
   SmallVector<ImportedModule, 32> stack;

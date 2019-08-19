@@ -452,9 +452,10 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
 
     for (auto topLevelImport : topLevelImports) {
       auto accessPath = topLevelImport.first;
+      auto *otherModule = topLevelImport.second;
 
       SmallVector<ValueDecl *, 4> localDecls;
-      getDerived()->doLocalLookup(module, accessPath, localDecls);
+      getDerived()->doLocalLookup(otherModule, accessPath, localDecls);
       if (respectAccessControl) {
         llvm::erase_if(localDecls, [=](ValueDecl *VD) {
           return !VD->isAccessibleFrom(file);
@@ -466,9 +467,10 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
 
     for (auto transitiveImport : transitiveImports) {
       auto accessPath = transitiveImport.first;
+      auto *otherModule = transitiveImport.second;
 
       SmallVector<ValueDecl *, 4> localDecls;
-      getDerived()->doLocalLookup(module, accessPath, localDecls);
+      getDerived()->doLocalLookup(otherModule, accessPath, localDecls);
       if (respectAccessControl) {
         llvm::erase_if(localDecls, [=](ValueDecl *VD) {
           return !VD->isAccessibleFrom(nullptr);
