@@ -1152,6 +1152,58 @@ SourceFile::getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &modu
   }
 }
 
+void SourceFile::getImportedModulesForLookupRecursive(
+    SmallVectorImpl<ModuleDecl::ImportedModule> &topLevelImports,
+    SmallVectorImpl<ModuleDecl::ImportedModule> &transitiveImports) const {
+  using ImportedModule = ModuleDecl::ImportedModule;
+  using ImportFilter = ModuleDecl::ImportFilter;
+
+  if (ImportedModulesForLookupRecursiveCache) {
+    llvm::copy(ImportedModulesForLookupRecursiveCache->first,
+               std::back_inserter(topLevelImports));
+    llvm::copy(ImportedModulesForLookupRecursiveCache->second,
+               std::back_inserter(transitiveImports));
+    return;
+  }
+
+  // Add private imports from the source file.
+  SmallVector<ImportedModule, 8> topLevelImportsWithDuplicates;
+
+  ImportFilter filterForSourceFileImports;
+  filterForSourceFileImports |= ModuleDecl::ImportFilterKind::Private;
+  filterForSourceFileImports |= ModuleDecl::ImportFilterKind::ImplementationOnly;
+  getImportedModules(topLevelImportsWithDuplicates, filterForSourceFileImports);
+
+  ImportFilter filterForModuleImports = ModuleDecl::ImportFilterKind::Public;
+  getImportedModules(topLevelImportsWithDuplicates, filterForModuleImports);
+
+  llvm::SmallSet<ImportedModule, 32, ModuleDecl::OrderImportedModules> visited;
+  SmallVector<ImportedModule, 32> stack;
+
+  for (auto topLevelImport : topLevelImportsWithDuplicates) {
+    if (!visited.insert(topLevelImport).second)
+      continue;
+
+    topLevelImports.push_back(topLeveLimport);
+    topLevelImport.second->getImportedModulesForLookup(stack);
+  }
+
+  while (!stack.empty()) {
+    auto next = stack.pop_back_val();
+
+    if (!visited.insert(next).second)
+      continue;
+
+    transitiveImports.push_back(next);
+    next.second->getImportedModulesForLookup(stack);
+  }
+
+  auto &ctx = getASTContext();
+  const_cast<SourceFile *>(this)->ImportedModulesForLookupRecursiveCache
+      = std::make_pair(ctx.AllocateCopy(topLevelImports),
+                       ctx.AllocateCopy(transitiveImports));
+}
+
 void ModuleDecl::getImportedModulesForLookup(
     SmallVectorImpl<ImportedModule> &modules) const {
   if (!hasResolvedImports()) {

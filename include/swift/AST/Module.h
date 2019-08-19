@@ -209,8 +209,7 @@ private:
 
   /// We cache the result of getImportedModulesForLookup() to avoid an O(n)
   /// iteration over all files in the module.
-  using ImportedModules = ArrayRef<ImportedModule>;
-  Optional<ImportedModules> ImportedModulesForLookupCache;
+  Optional<ArrayRef<ImportedModule>> ImportedModulesForLookupCache;
 
   /// Tracks the file that will generate the module's entry point, either
   /// because it contains a class marked with \@UIApplicationMain
@@ -1082,6 +1081,14 @@ public:
   OperatorMap<PrefixOperatorDecl*> PrefixOperators;
   OperatorMap<PrecedenceGroupDecl*> PrecedenceGroups;
 
+  using ImportedModule = ModuleDecl::ImportedModule;
+
+  /// Caches the result of getImportedModulesForLookupRecursive().
+  /// - First element: the top-level imports
+  /// - Second element is their transitive public imports.
+  Optional<std::pair<ArrayRef<ImportedModule>, ArrayRef<ImportedModule>>>
+    ImportedModulesForLookupRecursiveCache;
+
   /// Describes what kind of file this is, which can affect some type checking
   /// and other behavior.
   const SourceFileKind Kind;
@@ -1171,11 +1178,23 @@ public:
   getOpaqueReturnTypeDecls(SmallVectorImpl<OpaqueTypeDecl*> &results) const override;
 
   virtual void
-  getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &imports,
+  getImportedModules(SmallVectorImpl<ImportedModule> &imports,
                      ModuleDecl::ImportFilter filter) const override;
 
   virtual void
   collectLinkLibraries(ModuleDecl::LinkLibraryCallback callback) const override;
+
+  /// Returns all modules transitively visible from the current source file.
+  ///
+  /// The topLevelImports consists of the source file's private and
+  /// implementation-only imports together with the module's (all source files)
+  /// public imports.
+  ///
+  /// The transitiveImports is the set of all public imports reachable from
+  /// the above.
+  void getImportedModulesForLookupRecursive(
+      SmallVectorImpl<ImportedModule> &topLevelImports,
+      SmallVectorImpl<ImportedModule> &transitiveImports) const;
 
   Identifier getDiscriminatorForPrivateValue(const ValueDecl *D) const override;
   Identifier getPrivateDiscriminator() const { return PrivateDiscriminator; }
