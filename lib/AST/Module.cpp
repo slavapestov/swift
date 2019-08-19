@@ -34,6 +34,7 @@
 #include "swift/AST/ProtocolConformance.h"
 #include "swift/AST/TypeCheckRequests.h"
 #include "swift/Basic/Compiler.h"
+#include "swift/Basic/OptionSet.h"
 #include "swift/Basic/SourceManager.h"
 #include "swift/Basic/Statistic.h"
 #include "swift/Demangling/ManglingMacros.h"
@@ -1127,7 +1128,30 @@ LOOKUP_OPERATOR(PrecedenceGroup)
 
 void ModuleDecl::getImportedModules(SmallVectorImpl<ImportedModule> &modules,
                                     ModuleDecl::ImportFilter filter) const {
-  FORWARD(getImportedModules, (modules, filter));
+  if (!hasResolvedImports()) {
+    // FIXME: For now, we can end up here before performNameBinding()
+    // has run on all source files in the module, so don't cache the
+    // result in that case.
+    FORWARD(getImportedModules, (modules, filter));
+    return;
+  }
+
+  for (auto cached : ImportedModulesCache) {
+    if (cached.first.containsOnly(filter)) {
+      llvm::copy(cached.second, std::back_inserter(modules));
+      return;
+    }
+  }
+
+  auto &ctx = getASTContext();
+
+  SmallVector<ImportedModule, 8> result;
+  FrontendStatsTracer tracer(ctx.Stats, "get-imported-modules");
+  FORWARD(getImportedModules, (result, filter));
+
+  const_cast<ModuleDecl *>(this)->ImportedModulesCache.emplace_back(
+      filter, ctx.AllocateCopy(result));
+  llvm::copy(result, std::back_inserter(modules));
 }
 
 void
