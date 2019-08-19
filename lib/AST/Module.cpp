@@ -1152,7 +1152,7 @@ SourceFile::getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &modu
   }
 }
 
-void SourceFile::getImportedModulesForLookupRecursive(
+void FileUnit::getImportedModulesForLookupRecursive(
     SmallVectorImpl<ModuleDecl::ImportedModule> &topLevelImports,
     SmallVectorImpl<ModuleDecl::ImportedModule> &transitiveImports) const {
   using ImportedModule = ModuleDecl::ImportedModule;
@@ -1166,7 +1166,7 @@ void SourceFile::getImportedModulesForLookupRecursive(
     return;
   }
 
-  // Add private imports from the source file.
+  // Add private imports from this file unit.
   SmallVector<ImportedModule, 8> topLevelImportsWithDuplicates;
 
   ImportFilter filterForSourceFileImports;
@@ -1195,11 +1195,30 @@ void SourceFile::getImportedModulesForLookupRecursive(
       continue;
 
     transitiveImports.push_back(next);
-    next.second->getImportedModulesForLookup(stack);
+
+    SmallVector<ImportedModule, 32> reexports;
+    next.second->getImportedModulesForLookup(reexports);
+    for (auto reexport : reexports) {
+      ModuleDecl::AccessPathTy combinedAccessPath;
+      if (reexport.first.empty()) {
+        combinedAccessPath = next.first;
+      } else if (!next.first.empty() &&
+                 !ModuleDecl::isSameAccessPath(next.first, reexport.first)) {
+        // If we ever allow importing non-top-level decls, it's possible the
+        // rule above isn't what we want.
+        assert(reexport.first.size() == 1 && "import of non-top-level decl");
+        continue;
+      } else {
+        combinedAccessPath = reexport.first;
+      }
+
+      reexport.first = combinedAccessPath;
+      stack.push_back(reexport);
+    }
   }
 
   auto &ctx = getASTContext();
-  const_cast<SourceFile *>(this)->ImportedModulesForLookupRecursiveCache
+  const_cast<FileUnit *>(this)->ImportedModulesForLookupRecursiveCache
       = std::make_pair(ctx.AllocateCopy(topLevelImports),
                        ctx.AllocateCopy(transitiveImports));
 }

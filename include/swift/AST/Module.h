@@ -654,6 +654,13 @@ class FileUnit : public DeclContext {
   // FIXME: Stick this in a PointerIntPair.
   const FileUnitKind Kind;
 
+  /// Caches the result of getImportedModulesForLookupRecursive().
+  /// - First element: the top-level imports
+  /// - Second element is their transitive public imports.
+  Optional<std::pair<ArrayRef<ModuleDecl::ImportedModule>,
+                     ArrayRef<ModuleDecl::ImportedModule>>>
+    ImportedModulesForLookupRecursiveCache;
+
 protected:
   FileUnit(FileUnitKind kind, ModuleDecl &M)
     : DeclContext(DeclContextKind::FileUnit, &M), Kind(kind) {
@@ -814,6 +821,18 @@ public:
       SmallVectorImpl<ModuleDecl::ImportedModule> &imports) const {
     return getImportedModules(imports, ModuleDecl::ImportFilterKind::Public);
   }
+
+  /// Returns all modules transitively visible from the current source file.
+  ///
+  /// The topLevelImports consists of the source file's private and
+  /// implementation-only imports together with the module's (all source files)
+  /// public imports.
+  ///
+  /// The transitiveImports is the set of all public imports reachable from
+  /// the above.
+  void getImportedModulesForLookupRecursive(
+      SmallVectorImpl<ModuleDecl::ImportedModule> &topLevelImports,
+      SmallVectorImpl<ModuleDecl::ImportedModule> &transitiveImports) const;
 
   /// Generates the list of libraries needed to link this file, based on its
   /// imports.
@@ -1081,14 +1100,6 @@ public:
   OperatorMap<PrefixOperatorDecl*> PrefixOperators;
   OperatorMap<PrecedenceGroupDecl*> PrecedenceGroups;
 
-  using ImportedModule = ModuleDecl::ImportedModule;
-
-  /// Caches the result of getImportedModulesForLookupRecursive().
-  /// - First element: the top-level imports
-  /// - Second element is their transitive public imports.
-  Optional<std::pair<ArrayRef<ImportedModule>, ArrayRef<ImportedModule>>>
-    ImportedModulesForLookupRecursiveCache;
-
   /// Describes what kind of file this is, which can affect some type checking
   /// and other behavior.
   const SourceFileKind Kind;
@@ -1178,23 +1189,11 @@ public:
   getOpaqueReturnTypeDecls(SmallVectorImpl<OpaqueTypeDecl*> &results) const override;
 
   virtual void
-  getImportedModules(SmallVectorImpl<ImportedModule> &imports,
+  getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &imports,
                      ModuleDecl::ImportFilter filter) const override;
 
   virtual void
   collectLinkLibraries(ModuleDecl::LinkLibraryCallback callback) const override;
-
-  /// Returns all modules transitively visible from the current source file.
-  ///
-  /// The topLevelImports consists of the source file's private and
-  /// implementation-only imports together with the module's (all source files)
-  /// public imports.
-  ///
-  /// The transitiveImports is the set of all public imports reachable from
-  /// the above.
-  void getImportedModulesForLookupRecursive(
-      SmallVectorImpl<ImportedModule> &topLevelImports,
-      SmallVectorImpl<ImportedModule> &transitiveImports) const;
 
   Identifier getDiscriminatorForPrivateValue(const ValueDecl *D) const override;
   Identifier getPrivateDiscriminator() const { return PrivateDiscriminator; }
