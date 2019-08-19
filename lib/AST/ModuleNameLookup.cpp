@@ -109,7 +109,13 @@ public:
       : resolutionKind(resolutionKind),
         respectAccessControl(!ctx.isAccessControlDisabled()) {}
 
-  /// Performs a qualified lookup into the given module and, if necessary, its
+  /// Performs a top-level lookup into the given source file and, if necessary, its
+  /// imports, observing proper shadowing rules.
+  ///
+  /// The results are appended to \p decls.
+  void lookupInSourceFile(SmallVectorImpl<ValueDecl *> &decls, SourceFile *sf);
+
+  /// Performs a top-level lookup into the given module and, if necessary, its
   /// reexports, observing proper shadowing rules.
   ///
   /// The results are appended to \p decls.
@@ -413,6 +419,23 @@ ArrayRef<ValueDecl *> ModuleNameLookup<LookupStrategy>::lookupInModuleUncached(
 }
 
 template <typename LookupStrategy>
+void ModuleNameLookup<LookupStrategy>::lookupInSourceFile(
+    SmallVectorImpl<ValueDecl *> &decls,
+    SourceFile *sf) {
+  assert(sf);
+
+  // Add private imports to the extra search list.
+  SmallVector<ModuleDecl::ImportedModule, 8> extraImports;
+
+  ModuleDecl::ImportFilter importFilter;
+  importFilter |= ModuleDecl::ImportFilterKind::Private;
+  importFilter |= ModuleDecl::ImportFilterKind::ImplementationOnly;
+  sf->getImportedModules(extraImports, importFilter);
+
+  lookupInModule(decls, sf->getParentModule(), {}, sf, extraImports);
+}
+
+template <typename LookupStrategy>
 void ModuleNameLookup<LookupStrategy>::lookupInModule(
     SmallVectorImpl<ValueDecl *> &decls,
     ModuleDecl *module, ModuleDecl::AccessPathTy accessPath,
@@ -441,6 +464,22 @@ void ModuleNameLookup<LookupStrategy>::lookupInModule(
       lookupInModuleUncached(decls, module, accessPath, moduleScopeContext,
                              extraImports);
   cache.try_emplace(cacheKey, lookupResults);
+}
+
+void namelookup::lookupInSourceFile(SourceFile *sf,
+                                    DeclName name,
+                                    SmallVectorImpl<ValueDecl *> &decls,
+                                    NLKind lookupKind,
+                                    ResolutionKind resolutionKind) {
+  auto &ctx = sf->getASTContext();
+  auto *stats = ctx.Stats;
+  if (stats)
+    stats->getFrontendCounters().NumLookupInSourceFile++;
+
+  FrontendStatsTracer tracer(stats, "lookup-in-source-file");
+
+  LookupByName lookup(ctx, resolutionKind, name, lookupKind);
+  lookup.lookupInSourceFile(decls, sf);
 }
 
 void namelookup::lookupInModule(ModuleDecl *startModule,

@@ -421,6 +421,18 @@ enum class ResolutionKind {
   TypesOnly
 };
 
+/// Performs a lookup into the given source file and, if necessary, its
+/// parent module and imports, observing proper shadowing rules.
+///
+/// \param sf The source file that will contain the name.
+/// \param name The name to look up.
+/// \param[out] decls Any found decls will be added to this vector.
+/// \param lookupKind Whether this lookup is qualified or unqualified.
+/// \param resolutionKind What sort of decl is expected.
+void lookupInSourceFile(SourceFile *sf, DeclName name,
+                        SmallVectorImpl<ValueDecl *> &decls,
+                        NLKind lookupKind, ResolutionKind resolutionKind);
+
 /// Performs a lookup into the given module and, if necessary, its
 /// reexports, observing proper shadowing rules.
 ///
