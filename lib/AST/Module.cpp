@@ -1152,19 +1152,61 @@ SourceFile::getImportedModules(SmallVectorImpl<ModuleDecl::ImportedModule> &modu
   }
 }
 
-void FileUnit::getImportedModulesForLookupRecursive(
-    SmallVectorImpl<ModuleDecl::ImportedModule> &topLevelImports,
-    SmallVectorImpl<ModuleDecl::ImportedModule> &transitiveImports) const {
+namespace {
+
+struct ImportSet : public llvm::FoldingSetNode {
+  ArrayRef<ModuleDecl::ImportedModule> imports;
+  ArrayRef<ModuleDecl::ImportedModule> topLevelImports;
+  ArrayRef<ModuleDecl::ImportedModule> transitiveImports;
+
+  void Profile(llvm::FoldingSetNodeID &id) const {
+    Profile(id, imports);
+  }
+
+  static void Profile(llvm::FoldingSetNodeID &id, ArrayRef<ModuleDecl::ImportedModule> imports) {
+    id.AddInteger(imports.size());
+    for (auto import : imports) {
+      id.AddInteger(import.first.size());
+      for (auto elt : import.first)
+        id.AddPointer(elt.first.getAsOpaquePointer());
+      id.AddPointer(import.second);
+    }
+  }
+};
+
+llvm::FoldingSet<ImportSet> ImportSets;
+
+ImportSet *getImportSet(ASTContext &ctx, ArrayRef<ModuleDecl::ImportedModule> imports) {
+  llvm::FoldingSetNodeID id;
+  ImportSet::Profile(id, imports);
+
+  void *insertPos;
+
+  if (auto result = ImportSets.FindNodeOrInsertPos(id, insertPos))
+    return result;
+
+  //auto mem = ctx.Allocate(sizeof(ImportSet));
+  auto result
+    = new ImportSet();
+  result->imports = ctx.AllocateCopy(imports);
+  ImportSets.InsertNode(result, insertPos); 
+
+  return result;
+}
+
+}
+
+std::pair<ArrayRef<ModuleDecl::ImportedModule>,
+          ArrayRef<ModuleDecl::ImportedModule>>
+FileUnit::getImportedModulesForLookupRecursive() const {
   using ImportedModule = ModuleDecl::ImportedModule;
   using ImportFilter = ModuleDecl::ImportFilter;
 
-  if (ImportedModulesForLookupRecursiveCache) {
-    llvm::copy(ImportedModulesForLookupRecursiveCache->first,
-               std::back_inserter(topLevelImports));
-    llvm::copy(ImportedModulesForLookupRecursiveCache->second,
-               std::back_inserter(transitiveImports));
-    return;
-  }
+  if (ImportedModulesForLookupRecursiveCache.hasValue())
+    return *ImportedModulesForLookupRecursiveCache;
+
+  FrontendStatsTracer tracer(getASTContext().Stats,
+                             "get-imported-modules-for-lookup-recursive");
 
   auto *module = getParentModule();
 
@@ -1177,11 +1219,33 @@ void FileUnit::getImportedModulesForLookupRecursive(
   getImportedModules(topLevelImportsWithDuplicates, filterForSourceFileImports);
 
   ImportFilter filterForModuleImports = ModuleDecl::ImportFilterKind::Public;
-  module->getImportedModules(topLevelImportsWithDuplicates, filterForModuleImports);
+  module->getImportedModulesForLookup(topLevelImportsWithDuplicates); //, filterForModuleImports);
+  //module->getImportedModules(topLevelImportsWithDuplicates, filterForModuleImports);
+
+  auto &ctx = getASTContext();
+
+  ///////////
+  llvm::FoldingSetNodeID id;
+  ImportSet::Profile(id, topLevelImportsWithDuplicates);
+
+  void *insertPos;
+
+  if (auto result = ImportSets.FindNodeOrInsertPos(id, insertPos)) {
+    const_cast<FileUnit *>(this)->ImportedModulesForLookupRecursiveCache
+      = std::make_pair(result->topLevelImports, result->transitiveImports);
+    return *ImportedModulesForLookupRecursiveCache;
+  }
+
+  //auto mem = ctx.Allocate(sizeof(ImportSet));
+  auto result = new ImportSet();
+  ImportSets.InsertNode(result, insertPos); 
+
+  result->imports = ctx.AllocateCopy(topLevelImportsWithDuplicates);
 
   llvm::SmallSet<ImportedModule, 32, ModuleDecl::OrderImportedModules> visited;
   SmallVector<ImportedModule, 32> stack;
 
+  SmallVector<ModuleDecl::ImportedModule, 32> topLevelImports;
   for (auto topLevelImport : topLevelImportsWithDuplicates) {
     if (!visited.insert(topLevelImport).second)
       continue;
@@ -1190,6 +1254,7 @@ void FileUnit::getImportedModulesForLookupRecursive(
     topLevelImport.second->getImportedModulesForLookup(stack);
   }
 
+  SmallVector<ModuleDecl::ImportedModule, 32> transitiveImports;
   while (!stack.empty()) {
     auto next = stack.pop_back_val();
 
@@ -1219,10 +1284,15 @@ void FileUnit::getImportedModulesForLookupRecursive(
     }
   }
 
-  auto &ctx = getASTContext();
+  result->topLevelImports = ctx.AllocateCopy(topLevelImports);
+  result->transitiveImports = ctx.AllocateCopy(transitiveImports);
+
+  //auto &ctx = getASTContext();
   const_cast<FileUnit *>(this)->ImportedModulesForLookupRecursiveCache
-      = std::make_pair(ctx.AllocateCopy(topLevelImports),
-                       ctx.AllocateCopy(transitiveImports));
+      = std::make_pair(result->topLevelImports,
+                       result->transitiveImports);
+
+  return *ImportedModulesForLookupRecursiveCache;
 }
 
 void ModuleDecl::getImportedModulesForLookup(

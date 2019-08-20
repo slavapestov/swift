@@ -51,11 +51,12 @@ class ModuleNameLookup {
   using ModuleLookupCacheKey = std::pair<ModuleDecl::ImportedModule,
                                          const DeclContext * /*lookupScope*/>;
   using ModuleLookupCache = llvm::SmallDenseMap<ModuleLookupCacheKey,
-                                                TinyPtrVector<ValueDecl *>, 32>;
+                                                TinyPtrVector<ValueDecl *>, 1>;
 
   ModuleLookupCache cache;
   const ResolutionKind resolutionKind;
   const bool respectAccessControl;
+  ASTContext &ctx;
 
   LookupStrategy *getDerived() {
     static_assert(std::is_base_of<ModuleNameLookup<LookupStrategy>,
@@ -107,7 +108,7 @@ class ModuleNameLookup {
 public:
   ModuleNameLookup(ASTContext &ctx, ResolutionKind resolutionKind)
       : resolutionKind(resolutionKind),
-        respectAccessControl(!ctx.isAccessControlDisabled()) {}
+        respectAccessControl(!ctx.isAccessControlDisabled()), ctx(ctx) {}
 
   /// Performs a top-level lookup into the given file unit and, if necessary, its
   /// imports, observing proper shadowing rules.
@@ -265,6 +266,7 @@ bool ModuleNameLookup<LookupStrategy>::recordImportDecls(
     ArrayRef<ValueDecl *> newDecls,
     OverloadSetTy<CRTPWorkaround> &overloads) {
 
+  FrontendStatsTracer tracer(ctx.Stats, "record-import-decls");
   static_assert(
       std::is_same<decltype(overloads),
                    typename LookupStrategy::OverloadSetTy &>::value,
@@ -427,6 +429,7 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
   // Do the lookup into our own module.
   auto *module = file->getParentModule();
 
+  bool respectAccessControl = true;
   SmallVector<ValueDecl *, 4> localDecls;
   getDerived()->doLocalLookup(module, /*accessPath=*/{}, localDecls);
   if (respectAccessControl) {
@@ -442,11 +445,11 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
 
   // If needed, search for decls in imported modules as well.
   if (!canReturnEarly) {
-    SmallVector<ModuleDecl::ImportedModule, 8> topLevelImports;
-    SmallVector<ModuleDecl::ImportedModule, 8> transitiveImports;
+    ArrayRef<ModuleDecl::ImportedModule> topLevelImports;
+    ArrayRef<ModuleDecl::ImportedModule> transitiveImports;
 
-    file->getImportedModulesForLookupRecursive(topLevelImports,
-                                               transitiveImports);
+    std::tie(topLevelImports, transitiveImports)
+      = file->getImportedModulesForLookupRecursive();
 
     // FIXME: scoped vs unscoped
 

@@ -824,15 +824,13 @@ public:
 
   /// Returns all modules transitively visible from the current source file.
   ///
-  /// The topLevelImports consists of the source file's private and
-  /// implementation-only imports together with the module's (all source files)
-  /// public imports.
+  /// - First element: the source file's private and implementation-only
+  ///   imports together with the module's (all source files) public imports.
   ///
-  /// The transitiveImports is the set of all public imports reachable from
-  /// the above.
-  void getImportedModulesForLookupRecursive(
-      SmallVectorImpl<ModuleDecl::ImportedModule> &topLevelImports,
-      SmallVectorImpl<ModuleDecl::ImportedModule> &transitiveImports) const;
+  /// - Second element: the set of all public imports reachable from the above.
+  std::pair<ArrayRef<ModuleDecl::ImportedModule>,
+            ArrayRef<ModuleDecl::ImportedModule>>
+  getImportedModulesForLookupRecursive() const;
 
   /// Generates the list of libraries needed to link this file, based on its
   /// imports.
