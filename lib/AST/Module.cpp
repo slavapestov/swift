@@ -1229,16 +1229,16 @@ FileUnit::getImportedModulesForLookupRecursive() const {
   ImportSet::Profile(id, topLevelImportsWithDuplicates);
 
   void *insertPos;
-
+/*
   if (auto result = ImportSets.FindNodeOrInsertPos(id, insertPos)) {
     const_cast<FileUnit *>(this)->ImportedModulesForLookupRecursiveCache
       = std::make_pair(result->topLevelImports, result->transitiveImports);
     return *ImportedModulesForLookupRecursiveCache;
   }
-
+*/
   //auto mem = ctx.Allocate(sizeof(ImportSet));
   auto result = new ImportSet();
-  ImportSets.InsertNode(result, insertPos); 
+  //ImportSets.InsertNode(result, insertPos); 
 
   result->imports = ctx.AllocateCopy(topLevelImportsWithDuplicates);
 

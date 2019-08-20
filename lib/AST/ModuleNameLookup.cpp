@@ -266,7 +266,7 @@ bool ModuleNameLookup<LookupStrategy>::recordImportDecls(
     ArrayRef<ValueDecl *> newDecls,
     OverloadSetTy<CRTPWorkaround> &overloads) {
 
-  FrontendStatsTracer tracer(ctx.Stats, "record-import-decls");
+  //FrontendStatsTracer tracer(ctx.Stats, "record-import-decls");
   static_assert(
       std::is_same<decltype(overloads),
                    typename LookupStrategy::OverloadSetTy &>::value,
