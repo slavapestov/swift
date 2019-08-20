@@ -476,7 +476,7 @@ void namelookup::lookupInFileUnit(FileUnit *file,
   if (stats)
     stats->getFrontendCounters().NumLookupInSourceFile++;
 
-  FrontendStatsTracer tracer(stats, "lookup-in-source-file");
+  //FrontendStatsTracer tracer(stats, "lookup-in-source-file");
 
   LookupByName lookup(ctx, resolutionKind, name, lookupKind);
   lookup.lookupInFileUnit(decls, file);
@@ -494,7 +494,7 @@ void namelookup::lookupInModule(ModuleDecl *startModule,
   if (stats)
     stats->getFrontendCounters().NumLookupInModule++;
 
-  FrontendStatsTracer tracer(stats, "lookup-in-module");
+  //FrontendStatsTracer tracer(stats, "lookup-in-module");
 
   assert(moduleScopeContext && moduleScopeContext->isModuleScopeContext());
   LookupByName lookup(ctx, resolutionKind, name, lookupKind);
