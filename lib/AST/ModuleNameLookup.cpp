@@ -75,8 +75,7 @@ class ModuleNameLookup {
   template <bool CRTPWorkaround = true>
   bool recordImportDecls(
       SmallVectorImpl<ValueDecl *> &results,
-      ArrayRef<ValueDecl *> newDecls,
-      OverloadSetTy<CRTPWorkaround> &overloads);
+      ArrayRef<ValueDecl *> newDecls);
 
   /// Given a list of imports and an access path to limit by, perform a lookup
   /// into each of them and record the results in \p decls, filtering based on
@@ -263,42 +262,14 @@ template <typename LookupStrategy>
 template <bool CRTPWorkaround>
 bool ModuleNameLookup<LookupStrategy>::recordImportDecls(
     SmallVectorImpl<ValueDecl *> &results,
-    ArrayRef<ValueDecl *> newDecls,
-    OverloadSetTy<CRTPWorkaround> &overloads) {
-
-  //FrontendStatsTracer tracer(ctx.Stats, "record-import-decls");
-  static_assert(
-      std::is_same<decltype(overloads),
-                   typename LookupStrategy::OverloadSetTy &>::value,
-      "Template params should be inferred.");
+    ArrayRef<ValueDecl *> newDecls) {
 
   const size_t originalSize = results.size();
 
   switch (resolutionKind) {
   case ResolutionKind::Overloadable: {
-    // Add new decls if they provide a new overload. Note that the new decls
-    // may be ambiguous with respect to each other, just not any decls already
-    // in the overload set.
-    llvm::copy_if(newDecls, std::back_inserter(results),
-                  [&](ValueDecl *result) -> bool {
-      if (!result->hasInterfaceType()) {
-        if (auto *typeResolver = result->getASTContext().getLazyResolver()) {
-          typeResolver->resolveDeclSignature(result);
-          if (result->isInvalid())
-            return true;
-        } else {
-          return true;
-        }
-      }
-      return getDerived()->isValidOverload(overloads, result);
-    });
-
-    // Update the overload set.
-    bool stillOverloadable = getDerived()->updateOverloadSet(overloads,
-                                                             newDecls);
-    if (stillOverloadable)
-      return false;
-    break;
+    results.append(newDecls.begin(), newDecls.end());
+    return false;
   }
 
   case ResolutionKind::Exact:
@@ -359,9 +330,9 @@ void ModuleNameLookup<LookupStrategy>::collectLookupResultsFromImports(
 
   // Add the results from scoped imports, then the results from unscoped
   // imports if needed.
-  const bool canReturnEarly = recordImportDecls(decls, scopedValues, overloads);
+  const bool canReturnEarly = recordImportDecls(decls, scopedValues);
   if (!canReturnEarly)
-    (void)recordImportDecls(decls, unscopedValues, overloads);
+    (void)recordImportDecls(decls, unscopedValues);
 }
 
 template <typename LookupStrategy>
@@ -383,7 +354,7 @@ ArrayRef<ValueDecl *> ModuleNameLookup<LookupStrategy>::lookupInModuleUncached(
   // Record the decls by overload signature.
   const size_t initialCount = decls.size();
   typename LookupStrategy::OverloadSetTy overloads;
-  const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
+  const bool canReturnEarly = recordImportDecls(decls, localDecls);
 
   // If needed, search for decls in re-exported modules as well.
   if (!canReturnEarly) {
@@ -429,19 +400,17 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
   // Do the lookup into our own module.
   auto *module = file->getParentModule();
 
-  bool respectAccessControl = true;
-  SmallVector<ValueDecl *, 4> localDecls;
-  getDerived()->doLocalLookup(module, /*accessPath=*/{}, localDecls);
+  SmallVector<ValueDecl *, 4> localDeclsxx;
+  getDerived()->doLocalLookup(module, /*accessPath=*/{}, localDeclsxx);
   if (respectAccessControl) {
-    llvm::erase_if(localDecls, [=](ValueDecl *VD) {
+    llvm::erase_if(localDeclsxx, [=](ValueDecl *VD) {
       return !VD->isAccessibleFrom(file);
     });
   }
 
   // Record the decls by overload signature.
   const size_t initialCount = decls.size();
-  typename LookupStrategy::OverloadSetTy overloads;
-  const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
+  const bool canReturnEarly = recordImportDecls(decls, localDeclsxx);
 
   // If needed, search for decls in imported modules as well.
   if (!canReturnEarly) {
@@ -453,36 +422,44 @@ void ModuleNameLookup<LookupStrategy>::lookupInFileUnit(
 
     // FIXME: scoped vs unscoped
 
+{
+    SmallVector<ValueDecl *, 4> localDecls;
     for (auto topLevelImport : topLevelImports) {
       auto accessPath = topLevelImport.first;
       auto *otherModule = topLevelImport.second;
 
-      SmallVector<ValueDecl *, 4> localDecls;
       getDerived()->doLocalLookup(otherModule, accessPath, localDecls);
-      if (respectAccessControl) {
-        llvm::erase_if(localDecls, [=](ValueDecl *VD) {
-          return !VD->isAccessibleFrom(file);
-        });
-      }
-
-      const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
     }
 
+    if (respectAccessControl) {
+      llvm::erase_if(localDecls, [=](ValueDecl *VD) {
+        return !VD->isAccessibleFrom(file);
+      });
+    }
+
+    if (!localDecls.empty())
+      recordImportDecls(decls, localDecls);
+}
+
+{
+      SmallVector<ValueDecl *, 4> localDecls;
     for (auto transitiveImport : transitiveImports) {
       auto accessPath = transitiveImport.first;
       auto *otherModule = transitiveImport.second;
 
-      SmallVector<ValueDecl *, 4> localDecls;
       getDerived()->doLocalLookup(otherModule, accessPath, localDecls);
+    }
+
       if (respectAccessControl) {
         llvm::erase_if(localDecls, [=](ValueDecl *VD) {
           return !VD->isAccessibleFrom(nullptr);
         });
       }
-
-      const bool canReturnEarly = recordImportDecls(decls, localDecls, overloads);
-    }
+      if (!localDecls.empty())
+        recordImportDecls(decls, localDecls);
   }
+
+}
 
   // Remove duplicated declarations, which can happen when the same module is
   // imported indirectly through two intermediate modules.
