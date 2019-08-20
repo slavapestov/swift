@@ -1426,24 +1426,25 @@ bool TypeBase::satisfiesClassConstraint() {
   return mayHaveSuperclass() || isObjCExistentialType();
 }
 
+static Type getConcreteTypeForSuperclassTraversing(Type t) {
+  if (t->isExistentialType()) {
+    return t->getExistentialLayout().getSuperclass();
+  } if (auto archetype = t->getAs<ArchetypeType>()) {
+    return archetype->getSuperclass();
+  } else if (auto dynamicSelfTy = t->getAs<DynamicSelfType>()) {
+    return dynamicSelfTy->getSelfType();
+  }
+  return t;
+}
+
 Type TypeBase::getSuperclass(bool useArchetypes) {
-  auto *nominalDecl = getAnyNominal();
+  Type t = getConcreteTypeForSuperclassTraversing(this);
+
+  auto *nominalDecl = t->getAnyNominal();
   auto *classDecl = dyn_cast_or_null<ClassDecl>(nominalDecl);
 
-  // Handle some special non-class types here.
-  if (!classDecl) {
-    if (auto archetype = getAs<ArchetypeType>())
-      return archetype->getSuperclass();
-
-    if (auto dynamicSelfTy = getAs<DynamicSelfType>())
-      return dynamicSelfTy->getSelfType();
-
-    if (isExistentialType())
-      return getExistentialLayout().getSuperclass();
-
-    // No other types have superclasses.
+  if (!classDecl)
     return Type();
-  }
 
   // We have a class, so get the superclass type.
   //
@@ -1464,7 +1465,7 @@ Type TypeBase::getSuperclass(bool useArchetypes) {
                                           (useArchetypes
                                            ? classDecl->getGenericEnvironment()
                                            : nullptr));
-  return superclassTy.subst(subMap);
+  return superclassTy.subst(subMap, SubstFlags::UseErrorType);
 }
 
 bool TypeBase::isExactSuperclassOf(Type ty) {
@@ -3396,17 +3397,6 @@ bool TypeBase::isNoEscape() const {
   }
 
   return false;
-}
-
-static Type getConcreteTypeForSuperclassTraversing(Type t) {
-  if (t->isExistentialType()) {
-    return t->getExistentialLayout().getSuperclass();
-  } if (auto archetype = t->getAs<ArchetypeType>()) {
-    return archetype->getSuperclass();
-  } else if (auto dynamicSelfTy = t->getAs<DynamicSelfType>()) {
-    return dynamicSelfTy->getSelfType();
-  }
-  return t;
 }
 
 Type TypeBase::getSuperclassForDecl(const ClassDecl *baseClass,
