@@ -223,7 +223,7 @@ private:
   /// iteration over all files in the module.
   Optional<ArrayRef<ImportedModule>> ImportedModulesForLookupCache;
 
-  SmallVector<std::pair<ImportFilter, ImportedModules>, 4>
+  SmallVector<std::pair<ImportFilter, ArrayRef<ImportedModule>>, 4>
     ImportedModulesCache;
 
   /// Tracks the file that will generate the module's entry point, either

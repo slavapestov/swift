@@ -3422,7 +3422,7 @@ void ClangModuleUnit::getImportedModulesForLookup(
   auto importsToCache = llvm::makeArrayRef(result);
   importedModulesForLookup = getASTContext().AllocateCopy(importsToCache);
 
-  for (auto cached : importedModulesForLookup) {
+  for (auto cached : *importedModulesForLookup) {
     if (llvm::find(imports, cached) == imports.end())
       imports.push_back(cached);
   }
