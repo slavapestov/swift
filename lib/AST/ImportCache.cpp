@@ -242,3 +242,9 @@ ImportCache::getAllAccessPathsNotShadowedBy(const ModuleDecl *mod,
   ShadowCache[key] = result;
   return result;
 };
+
+ArrayRef<ModuleDecl::ImportedModule>
+swift::namelookup::getAllImports(const DeclContext *dc) {
+  return dc->getASTContext().getImportCache().getImportSet(dc)
+    .getAllImports();
+}
