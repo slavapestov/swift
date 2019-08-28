@@ -19,6 +19,7 @@
 #include "swift/AST/ForeignErrorConvention.h"
 #include "swift/AST/GenericEnvironment.h"
 #include "swift/AST/Initializer.h"
+#include "swift/AST/ModuleNameLookup.h"
 #include "swift/AST/Pattern.h"
 #include "swift/AST/ParameterList.h"
 #include "swift/AST/PrettyStackTrace.h"
@@ -1277,10 +1278,14 @@ ModuleFile::resolveCrossReference(ModuleID MID, uint32_t pathLen) {
     if (privateDiscriminator) {
       baseModule->lookupMember(values, baseModule, name,
                                getIdentifier(privateDiscriminator));
+    } else if (importedFromClang) {
+      auto importer = getContext().getClangModuleLoader();
+      auto *underlying = importer->loadModule(SourceLoc(),
+                                              {{baseModule->getName(), SourceLoc()}});
+      //namelookup::lookupInModule(baseModule, {}, name, values, NLKind::QualifiedLookup, namelookup::ResolutionKind::Overloadable, baseModule);
+      underlying->lookupValue({}, name, NLKind::QualifiedLookup, values);
     } else {
-      baseModule->lookupQualified(baseModule, name,
-                                  NL_QualifiedDefault | NL_KnownNoDependency,
-                                  values);
+      baseModule->lookupValue({}, name, NLKind::QualifiedLookup, values);
     }
     filterValues(filterTy, nullptr, nullptr, isType, inProtocolExt,
                  importedFromClang, isStatic, None, values);
