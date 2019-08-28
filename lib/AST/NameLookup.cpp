@@ -1495,7 +1495,10 @@ bool DeclContext::lookupQualified(ArrayRef<NominalTypeDecl *> typeDecls,
   using namespace namelookup;
   assert(decls.empty() && "additive lookup not supported");
 
-  auto *stats = getASTContext().Stats;
+  auto &ctx = getASTContext();
+  auto *stats = ctx.Stats;
+
+  FrontendStatsTracer tracer(stats, "lookup-qualified");
   if (stats)
     stats->getFrontendCounters().NumLookupQualifiedInNominal++;
 
@@ -1531,7 +1534,6 @@ bool DeclContext::lookupQualified(ArrayRef<NominalTypeDecl *> typeDecls,
 
   // Visit all of the nominal types we know about, discovering any others
   // we need along the way.
-  auto &ctx = getASTContext();
   auto typeResolver = ctx.getLazyResolver();
   bool wantProtocolMembers = (options & NL_ProtocolMembers);
   while (!stack.empty()) {
@@ -1637,6 +1639,7 @@ bool DeclContext::lookupQualified(ModuleDecl *module, DeclName member,
 
   auto &ctx = getASTContext();
   auto *stats = ctx.Stats;
+  FrontendStatsTracer tracer(stats, "lookup-qualified");
   if (stats)
     stats->getFrontendCounters().NumLookupQualifiedInModule++;
 

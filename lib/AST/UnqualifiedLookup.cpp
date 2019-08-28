@@ -1195,6 +1195,7 @@ UnqualifiedLookup::UnqualifiedLookup(DeclName Name,
     : IndexOfFirstOuterResult(0) {
 
   auto *stats = DC->getASTContext().Stats;
+  FrontendStatsTracer tracer(stats, "lookup-unqualified");
   if (stats)
     stats->getFrontendCounters().NumUnqualifiedLookup++;
 

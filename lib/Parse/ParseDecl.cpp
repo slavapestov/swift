@@ -182,6 +182,10 @@ namespace {
 
 void PersistentParserState::parseMembers(IterableDeclContext *IDC) {
   SourceFile &SF = *IDC->getDecl()->getDeclContext()->getParentSourceFile();
+
+  auto *stats = SF.getASTContext().Stats;
+  FrontendStatsTracer tracer(stats, "parse-delayed-members");
+
   assert(!SF.hasInterfaceHash() &&
     "Cannot delay parsing if we care about the interface hash.");
   assert(SF.Kind != SourceFileKind::SIL && "cannot delay parsing SIL");
