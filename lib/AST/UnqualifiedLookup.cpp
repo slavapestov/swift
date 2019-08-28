@@ -1015,8 +1015,7 @@ void UnqualifiedLookupFactory::lookForAModuleWithTheGivenName(
   if (desiredModule) {
     // Make sure the desired module is actually visible from the current
     // context.
-    SmallVector<ModuleDecl::AccessPathTy, 1> accessPaths;
-    if (Ctx.getImportCache().isImportedBy(desiredModule, dc, accessPaths)) {
+    if (Ctx.getImportCache().isImportedBy(desiredModule, dc)) {
       Results.push_back(LookupResultEntry(desiredModule));
 #ifndef NDEBUG
       addedResult(Results.back());
