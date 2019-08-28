@@ -24,6 +24,7 @@
 #include "swift/Option/Options.h"
 #include "swift/Serialization/ModuleFormat.h"
 #include "swift/SIL/SILModule.h"
+#include "swift/SIL/TypeLowering.h"
 #include "swift/Subsystems.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Bitcode/BitstreamReader.h"
@@ -178,7 +179,8 @@ int modulewrap_main(ArrayRef<const char *> Args, const char *Argv0,
                          true);
   ModuleDecl *M = ModuleDecl::create(ASTCtx.getIdentifier("swiftmodule"), ASTCtx);
   SILOptions SILOpts;
-  std::unique_ptr<SILModule> SM = SILModule::createEmptyModule(M, SILOpts);
+  Lowering::TypeConverter TC(*M);
+  std::unique_ptr<SILModule> SM = SILModule::createEmptyModule(M, TC, SILOpts);
   createSwiftModuleObjectFile(*SM, (*ErrOrBuf)->getBuffer(),
                               Invocation.getOutputFilename());
   return 0;

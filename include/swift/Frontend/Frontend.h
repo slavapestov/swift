@@ -55,6 +55,10 @@ class SerializedModuleLoader;
 class MemoryBufferSerializedModuleLoader;
 class SILModule;
 
+namespace Lowering {
+class TypeConverter;
+}
+
 /// The abstract configuration of the compiler, including:
 ///   - options for all stages of translation,
 ///   - information about the build environment,
@@ -373,6 +377,7 @@ class CompilerInstance {
   SourceManager SourceMgr;
   DiagnosticEngine Diagnostics{SourceMgr};
   std::unique_ptr<ASTContext> Context;
+  std::unique_ptr<Lowering::TypeConverter> TheSILTypes;
   std::unique_ptr<SILModule> TheSILModule;
 
   std::unique_ptr<PersistentParserState> PersistentState;
@@ -448,6 +453,8 @@ public:
 
   SILOptions &getSILOptions() { return Invocation.getSILOptions(); }
   const SILOptions &getSILOptions() const { return Invocation.getSILOptions(); }
+
+  Lowering::TypeConverter &getSILTypes();
 
   void addDiagnosticConsumer(DiagnosticConsumer *DC) {
     Diagnostics.addConsumer(*DC);
