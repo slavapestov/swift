@@ -160,23 +160,40 @@ ImportSet &ImportCache::getImportSet(const DeclContext *dc) {
   return result;
 }
 
-bool ImportCache::isImportedBy(const ModuleDecl *mod, const DeclContext *dc,
-                               SmallVectorImpl<ModuleDecl::AccessPathTy> &accessPaths) {
-  bool found = false;
+ArrayRef<ModuleDecl::AccessPathTy> ImportCache::allocateArray(
+    ASTContext &ctx,
+    SmallVectorImpl<ModuleDecl::AccessPathTy> &results) {
+  if (results.empty())
+    return ArrayRef<ModuleDecl::AccessPathTy>();
+  else if (results.size() == 1 && results[0].empty())
+    return {&EmptyAccessPath, 1};
+  else
+    return ctx.AllocateCopy(results);
+}
 
+ArrayRef<ModuleDecl::AccessPathTy>
+ImportCache::getAllVisibleAccessPaths(const ModuleDecl *mod,
+                                      const DeclContext *dc) {
+  dc = dc->getModuleScopeContext();
+
+  auto key = std::make_pair(mod, dc);
+  auto found = VisibilityCache.find(key);
+  if (found != VisibilityCache.end())
+    return found->second;
+
+  SmallVector<ModuleDecl::AccessPathTy, 1> accessPaths;
   for (auto next : getImportSet(dc).getAllImports()) {
     // If we found 'mod', record the access path.
     if (next.second == mod) {
       // Make sure the list of access paths is unique.
       if (llvm::find(accessPaths, next.first) == accessPaths.end())
         accessPaths.push_back(next.first);
-
-      // Keep going in case we find more access paths.
-      found = true;
     }
   }
 
-  return found;
+  auto result = allocateArray(mod->getASTContext(), accessPaths);
+  VisibilityCache[key] = result;
+  return result;
 }
 
 ArrayRef<ModuleDecl::AccessPathTy>
@@ -238,7 +255,7 @@ ImportCache::getAllAccessPathsNotShadowedBy(const ModuleDecl *mod,
     visitExports(next, stack);
   }
 
-  auto result = ctx.AllocateCopy(accessPaths);
+  auto result = allocateArray(ctx, accessPaths);
   ShadowCache[key] = result;
   return result;
 };

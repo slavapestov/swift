@@ -98,9 +98,18 @@ class ImportCache {
   llvm::FoldingSet<ImportSet> ImportSets;
   llvm::DenseMap<const DeclContext *, ImportSet *> ImportSetForDC;
   llvm::DenseMap<std::tuple<const ModuleDecl *,
+                            const DeclContext *>,
+                 ArrayRef<ModuleDecl::AccessPathTy>> VisibilityCache;
+  llvm::DenseMap<std::tuple<const ModuleDecl *,
                             const ModuleDecl *,
                             const DeclContext *>,
                  ArrayRef<ModuleDecl::AccessPathTy>> ShadowCache;
+
+  ModuleDecl::AccessPathTy EmptyAccessPath;
+
+  ArrayRef<ModuleDecl::AccessPathTy> allocateArray(
+      ASTContext &ctx,
+      SmallVectorImpl<ModuleDecl::AccessPathTy> &results);
 
   ImportSet &getImportSet(ASTContext &ctx,
                           ArrayRef<ModuleDecl::ImportedModule> topLevelImports);
@@ -112,25 +121,27 @@ public:
   /// from 'dc'.
   ImportSet &getImportSet(const DeclContext *dc);
 
-  /// Returns true if 'mod' is was imported from 'dc', possibly transitively
-  /// via re-exports. Also, adds all access paths to 'accessPaths'.
+  /// Returns all access paths into 'mod' that are visible from 'dc',
+  /// including transitively, via re-exports.
+  ArrayRef<ModuleDecl::AccessPathTy>
+  getAllVisibleAccessPaths(const ModuleDecl *mod, const DeclContext *dc);
+
   bool isImportedBy(const ModuleDecl *mod,
-                    const DeclContext *dc,
-                    SmallVectorImpl<ModuleDecl::AccessPathTy> &accessPaths);
+                    const DeclContext *dc) {
+    return !getAllVisibleAccessPaths(mod, dc).empty();
+  }
 
   /// Determines if 'mod' is visible from 'dc' as a result of a scoped import.
   /// Note that if 'mod' was not imported from 'dc' at all, this also returns
   /// false.
   bool isScopedImport(const ModuleDecl *mod, DeclBaseName name,
                       const DeclContext *dc) {
-    SmallVector<ModuleDecl::AccessPathTy, 1> accessPaths;
-    if (isImportedBy(mod, dc, accessPaths)) {
-      for (auto accessPath : accessPaths) {
-        if (accessPath.empty())
-          continue;
-        if (ModuleDecl::matchesAccessPath(accessPath, name))
-          return true;
-      }
+    auto accessPaths = getAllVisibleAccessPaths(mod, dc);
+    for (auto accessPath : accessPaths) {
+      if (accessPath.empty())
+        continue;
+      if (ModuleDecl::matchesAccessPath(accessPath, name))
+        return true;
     }
 
     return false;
