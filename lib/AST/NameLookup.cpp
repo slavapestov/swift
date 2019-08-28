@@ -1662,15 +1662,14 @@ bool DeclContext::lookupQualified(ModuleDecl *module, DeclName member,
     // anything in this one.
 
     // Perform the lookup in all imports of this module.
-    SmallVector<ModuleDecl::AccessPathTy, 1> accessPaths;
-    if (ctx.getImportCache().isImportedBy(module, topLevelScope, accessPaths)) {
-      if (llvm::find_if(accessPaths,
-                        [&](ModuleDecl::AccessPathTy accessPath) {
-                          return ModuleDecl::matchesAccessPath(accessPath, member);
-                        }) != accessPaths.end()) {
-        lookupInModule(module, {}, member, decls,
-                       NLKind::QualifiedLookup, kind, topLevelScope);
-      }
+    auto accessPaths = ctx.getImportCache().getAllVisibleAccessPaths(
+        module, topLevelScope);
+    if (llvm::find_if(accessPaths,
+                      [&](ModuleDecl::AccessPathTy accessPath) {
+                        return ModuleDecl::matchesAccessPath(accessPath, member);
+                      }) != accessPaths.end()) {
+      lookupInModule(module, {}, member, decls,
+                     NLKind::QualifiedLookup, kind, topLevelScope);
     }
   }
 
