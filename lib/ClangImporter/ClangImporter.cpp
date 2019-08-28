@@ -3655,8 +3655,6 @@ ClangImporter::Implementation::loadNamedMembers(
   auto table = findLookupTable(*CMO);
   assert(table && "clang module without lookup table");
 
-  clang::ASTContext &clangCtx = getClangASTContext();
-
   assert(isa<clang::ObjCContainerDecl>(CD) || isa<clang::NamespaceDecl>(CD));
 
   TinyPtrVector<ValueDecl *> Members;
@@ -3664,7 +3662,6 @@ ClangImporter::Implementation::loadNamedMembers(
                                   effectiveClangContext)) {
     if (!entry.is<clang::NamedDecl *>()) continue;
     auto member = entry.get<clang::NamedDecl *>();
-    if (!isVisibleClangEntry(clangCtx, member)) continue;
 
     // Skip Decls from different clang::DeclContexts
     if (member->getDeclContext() != CDC) continue;
@@ -3680,6 +3677,16 @@ ClangImporter::Implementation::loadNamedMembers(
       }
     }
   }
+
+  if (N == DeclBaseName::createConstructor()) {
+    if (auto *classDecl = dyn_cast<ClassDecl>(D)) {
+      SmallVector<Decl *, 4> ctors;
+      importInheritedConstructors(const_cast<ClassDecl *>(classDecl), ctors);
+      for (auto ctor : ctors)
+        Members.push_back(cast<ValueDecl>(ctor));
+    }
+  }
+
   return Members;
 }
 
