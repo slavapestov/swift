@@ -1548,7 +1548,6 @@ bool SourceFile::isImportedImplementationOnly(const ModuleDecl *module) const {
   if (!hasImplementationOnlyImports())
     return false;
 
-  SmallVector<ModuleDecl::AccessPathTy, 1> accessPaths;
   auto &imports = getASTContext().getImportCache();
 
   // Look at the imports of this source file.
@@ -1559,12 +1558,12 @@ bool SourceFile::isImportedImplementationOnly(const ModuleDecl *module) const {
 
     // If the module is imported this way, it's not imported
     // implementation-only.
-    if (imports.isImportedBy(module, desc.module.second, accessPaths))
+    if (imports.isImportedBy(module, desc.module.second))
       return false;
   }
 
   // Now check this file's enclosing module in case there are re-exports.
-  return !imports.isImportedBy(module, getParentModule(), accessPaths);
+  return !imports.isImportedBy(module, getParentModule());
 }
 
 void ModuleDecl::clearLookupCache() {
