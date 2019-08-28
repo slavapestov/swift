@@ -221,15 +221,6 @@ static void recordShadowedDeclsAfterSignatureMatch(
         if (imports.isShadowedBy(firstModule, secondModule, name, dc)) {
           shadowed.insert(firstDecl);
           break;
-        } else if (firstScoped && !secondScoped) {
-          shadowed.insert(secondDecl);
-          continue;
-        }
-
-        // Now check if one module shadows the other.
-        if (imports.isShadowedBy(firstModule, secondModule, name, dc)) {
-          shadowed.insert(firstDecl);
-          break;
         } else if (imports.isShadowedBy(secondModule, firstModule, name, dc)) {
           shadowed.insert(secondDecl);
           continue;
