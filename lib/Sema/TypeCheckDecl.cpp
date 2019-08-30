@@ -4371,13 +4371,14 @@ static Type formExtensionInterfaceType(
 /// Check the generic parameters of an extension, recursively handling all of
 /// the parameter lists within the extension.
 static GenericEnvironment *
-checkExtensionGenericParams(TypeChecker &tc, ExtensionDecl *ext, Type type,
+checkExtensionGenericParams(TypeChecker &tc, ExtensionDecl *ext,
                             GenericParamList *genericParams) {
   assert(!ext->getGenericEnvironment());
 
   // Form the interface type of the extension.
   bool mustInferRequirements = false;
   SmallVector<std::pair<Type, Type>, 4> sameTypeReqs;
+  auto type = ext->getExtendedType();
   Type extInterfaceType =
     formExtensionInterfaceType(tc, ext, type, genericParams, sameTypeReqs,
                                mustInferRequirements);
@@ -4488,10 +4489,6 @@ void TypeChecker::validateExtension(ExtensionDecl *ext) {
 
   DeclValidationRAII IBV(ext);
 
-  auto extendedType = evaluateOrDefault(Context.evaluator,
-                                        ExtendedTypeRequest{ext},
-                                        ErrorType::get(ext->getASTContext()));
-
   if (auto *nominal = ext->getExtendedNominal()) {
     // If this extension was not already bound, it means it is either in an
     // inactive conditional compilation block, or otherwise (incorrectly)
@@ -4504,8 +4501,7 @@ void TypeChecker::validateExtension(ExtensionDecl *ext) {
     validateDecl(nominal);
 
     if (auto *genericParams = ext->getGenericParams()) {
-      GenericEnvironment *env =
-        checkExtensionGenericParams(*this, ext, extendedType, genericParams);
+      auto *env = checkExtensionGenericParams(*this, ext, genericParams);
       ext->setGenericEnvironment(env);
     }
   }
