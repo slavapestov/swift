@@ -3049,29 +3049,29 @@ public:
   }
 
   void visitExtensionDecl(ExtensionDecl *ED) {
+    auto nominal = ED->getExtendedNominal();
+    if (nominal == nullptr)
+      return;
+
     TC.validateExtension(ED);
 
     checkInheritanceClause(ED);
 
-    if (auto nominal = ED->getExtendedNominal()) {
-      TC.validateDecl(nominal);
+    // Check the raw values of an enum, since we might synthesize
+    // RawRepresentable while checking conformances on this extension.
+    if (auto enumDecl = dyn_cast<EnumDecl>(nominal)) {
+      if (enumDecl->hasRawType())
+        checkEnumRawValues(TC, enumDecl);
+    }
 
-      // Check the raw values of an enum, since we might synthesize
-      // RawRepresentable while checking conformances on this extension.
-      if (auto enumDecl = dyn_cast<EnumDecl>(nominal)) {
-        if (enumDecl->hasRawType())
-          checkEnumRawValues(TC, enumDecl);
-      }
-
-      // Only generic and protocol types are permitted to have
-      // trailing where clauses.
-      if (auto trailingWhereClause = ED->getTrailingWhereClause()) {
-        if (!ED->getGenericParams() &&
-            !ED->isInvalid()) {
-          ED->diagnose(diag::extension_nongeneric_trailing_where,
-                       nominal->getFullName())
-          .highlight(trailingWhereClause->getSourceRange());
-        }
+    // Only generic and protocol types are permitted to have
+    // trailing where clauses.
+    if (auto trailingWhereClause = ED->getTrailingWhereClause()) {
+      if (!ED->getGenericParams() &&
+          !ED->isInvalid()) {
+        ED->diagnose(diag::extension_nongeneric_trailing_where,
+                      nominal->getFullName())
+        .highlight(trailingWhereClause->getSourceRange());
       }
     }
 
