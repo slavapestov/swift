@@ -3049,9 +3049,15 @@ public:
   }
 
   void visitExtensionDecl(ExtensionDecl *ED) {
+    // Produce any diagnostics for the extended type.
+    auto extType = ED->getExtendedType();
+
     auto nominal = ED->getExtendedNominal();
-    if (nominal == nullptr)
+    if (nominal == nullptr) {
+      ED->setInvalid();
+      ED->diagnose(diag::non_nominal_extension, extType);
       return;
+    }
 
     TC.validateExtension(ED);
 
