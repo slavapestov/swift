@@ -1066,7 +1066,7 @@ populateLookupTableEntryFromExtensions(ASTContext &ctx,
         assert(!e->hasUnparsedMembers());
         if (populateLookupTableEntryFromLazyIDCLoader(ctx, table,
                                                       name, e)) {
-          return true;
+          populateLookupTableEntryFromCurrentMembers(ctx, table, name, e);
         }
       } else {
         populateLookupTableEntryFromCurrentMembers(ctx, table, name, e);

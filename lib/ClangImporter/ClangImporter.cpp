@@ -3600,6 +3600,8 @@ void ClangImporter::Implementation::lookupAllObjCMembers(
   }
 }
 
+llvm::DenseSet<const IterableDeclContext *> hasIAM;
+
 Optional<TinyPtrVector<ValueDecl *>>
 ClangImporter::Implementation::loadNamedMembers(
     const IterableDeclContext *IDC, DeclBaseName N, uint64_t contextData) {
@@ -3617,10 +3619,20 @@ ClangImporter::Implementation::loadNamedMembers(
   // can support some of them lazily but the full set of idioms seems
   // prohibitively complex (also they're not stored in by-name lookup, for
   // reasons unclear).
-  if (forEachLookupTable([&](SwiftLookupTable &table) -> bool {
-        return (!table.lookupGlobalsAsMembers(effectiveClangContext).empty());
-      }))
-    return None;
+  if (isa<ExtensionDecl>(D) && hasIAM.find(IDC) == hasIAM.end()) {
+    if (forEachLookupTable([&](SwiftLookupTable &table) -> bool {
+          return (!table.lookupGlobalsAsMembers(effectiveClangContext).empty());
+        })) {
+      if (!isa<ExtensionDecl>(D)) {
+        forEachLookupTable([&](SwiftLookupTable &table) -> bool {
+          for (auto d : table.lookupGlobalsAsMembers(effectiveClangContext)) d.get<clang::NamedDecl *>()->dump();
+          return false;
+        });
+      }
+      return None;
+    }
+    hasIAM.insert(IDC);
+  }
 
   // There are 3 cases:
   //
