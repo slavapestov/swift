@@ -4017,8 +4017,7 @@ TypeSubstitutionMap TypeBase::getMemberSubstitutions(
       isa<GenericTypeDecl>(member) ||
       isa<SubscriptDecl>(member)) {
     auto *innerDC = member->getInnermostDeclContext();
-    if (innerDC->isInnermostContextGeneric()) {
-      auto sig = innerDC->getGenericSignatureOfContext();
+    if (auto sig = innerDC->getGenericSignatureOfContext()) {
       for (auto param : sig->getInnermostGenericParams()) {
         auto *genericParam = param->getCanonicalType()
             ->castTo<GenericTypeParamType>();
