@@ -215,7 +215,16 @@ public:
                          ASTScopeImpl *const organicInsertionPoint,
                          ArrayRef<ASTNode> nodesOrDeclsToAdd) {
     auto *ip = insertionPoint;
-    for (auto nd : cull(nodesOrDeclsToAdd)) {
+    for (auto nd : nodesOrDeclsToAdd) {
+      ASTScopeAssert(
+          !n.isDecl(DeclKind::Accessor),
+          "Should not find accessors in iterable types or brace statements");
+      if (!isLocalizable(n) ||
+          n.isDecl(DeclKind::Var) ||
+          n.isDecl(DeclKind::EnumCase) ||
+          n.isDecl(DeclKind::IfConfig))
+        continue;
+
       auto *const newIP =
           addToScopeTreeAndReturnInsertionPoint(nd, ip).getPtrOr(ip);
       ip = newIP;
@@ -469,30 +478,6 @@ public:
       fn(diffAttr);
   }
 
-public:
-
-private:
-  /// Remove VarDecls because we'll find them when we expand the
-  /// PatternBindingDecls. Remove EnunCases
-  /// because they overlap EnumElements and AST includes the elements in the
-  /// members.
-  std::vector<ASTNode> cull(ArrayRef<ASTNode> input) const {
-    // TODO: Investigate whether to move the real EndLoc tracking of
-    // SubscriptDecl up into AbstractStorageDecl. May have to cull more.
-    std::vector<ASTNode> culled;
-    llvm::copy_if(input, std::back_inserter(culled), [&](ASTNode n) {
-      ASTScopeAssert(
-          !n.isDecl(DeclKind::Accessor),
-          "Should not find accessors in iterable types or brace statements");
-      return isLocalizable(n) &&
-             !n.isDecl(DeclKind::Var) &&
-             !n.isDecl(DeclKind::EnumCase) &&
-             !n.isDecl(DeclKind::IfConfig);
-    });
-    return culled;
-  }
-
-public:
   /// For debugging. Return true if scope tree contains all the decl contexts in
   /// the AST May modify the scope tree in order to update obsolete scopes.
   /// Likely slow.
