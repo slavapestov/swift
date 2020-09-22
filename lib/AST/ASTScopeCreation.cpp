@@ -61,12 +61,6 @@ template <typename Rangeable>
 static SourceRange getRangeableSourceRange(const Rangeable *const p) {
   return p->getSourceRange();
 }
-static SourceRange getRangeableSourceRange(const SpecializeAttr *a) {
-  return a->getRange();
-}
-static SourceRange getRangeableSourceRange(const DifferentiableAttr *a) {
-  return a->getRange();
-}
 static SourceRange getRangeableSourceRange(const ASTNode n) {
   return n.getSourceRange();
 }
@@ -131,13 +125,6 @@ bool doesRangeableRangeMatch(const T *x, const SourceManager &SM,
 }
 
 #pragma mark end of rangeable
-
-static std::vector<ASTNode> asNodeVector(DeclRange dr) {
-  std::vector<ASTNode> nodes;
-  llvm::transform(dr, std::back_inserter(nodes),
-                  [&](Decl *d) { return ASTNode(d); });
-  return nodes;
-}
 
 namespace swift {
 namespace ast_scope {
@@ -228,7 +215,7 @@ public:
                          ASTScopeImpl *const organicInsertionPoint,
                          ArrayRef<ASTNode> nodesOrDeclsToAdd) {
     auto *ip = insertionPoint;
-    for (auto nd : sortBySourceRange(cull(nodesOrDeclsToAdd))) {
+    for (auto nd : cull(nodesOrDeclsToAdd)) {
       auto *const newIP =
           addToScopeTreeAndReturnInsertionPoint(nd, ip).getPtrOr(ip);
       ip = newIP;
@@ -450,19 +437,22 @@ public:
   void
   forEachSpecializeAttrInSourceOrder(Decl *declBeingSpecialized,
                                      function_ref<void(SpecializeAttr *)> fn) {
-    std::vector<SpecializeAttr *> sortedSpecializeAttrs;
+    std::vector<SpecializeAttr *> specializeAttrs;
     for (auto *attr : declBeingSpecialized->getAttrs()) {
       if (auto *specializeAttr = dyn_cast<SpecializeAttr>(attr))
-        sortedSpecializeAttrs.push_back(specializeAttr);
+        specializeAttrs.push_back(specializeAttr);
     }
+
+    std::reverse(specializeAttrs.begin(), specializeAttrs.end());
+
     // TODO: rm extra copy
-    for (auto *specializeAttr : sortBySourceRange(sortedSpecializeAttrs))
+    for (auto *specializeAttr : specializeAttrs)
       fn(specializeAttr);
   }
 
   void forEachDifferentiableAttrInSourceOrder(
       Decl *decl, function_ref<void(DifferentiableAttr *)> fn) {
-    std::vector<DifferentiableAttr *> sortedDifferentiableAttrs;
+    std::vector<DifferentiableAttr *> differentiableAttrs;
     for (auto *attr : decl->getAttrs())
       if (auto *diffAttr = dyn_cast<DifferentiableAttr>(attr))
         // NOTE(TF-835): Skipping implicit `@differentiable` attributes is
@@ -471,8 +461,11 @@ public:
         // Perhaps this check may no longer be necessary after TF-835: robust
         // `@derivative` attribute lowering.
         if (!diffAttr->isImplicit())
-          sortedDifferentiableAttrs.push_back(diffAttr);
-    for (auto *diffAttr : sortBySourceRange(sortedDifferentiableAttrs))
+          differentiableAttrs.push_back(diffAttr);
+
+    std::reverse(differentiableAttrs.begin(), differentiableAttrs.end());
+
+    for (auto *diffAttr : differentiableAttrs)
       fn(diffAttr);
   }
 
@@ -497,27 +490,6 @@ private:
              !n.isDecl(DeclKind::IfConfig);
     });
     return culled;
-  }
-
-  /// Templated to work on either ASTNodes, Decl*'s, or whatnot.
-  template <typename Rangeable>
-  std::vector<Rangeable>
-  sortBySourceRange(std::vector<Rangeable> toBeSorted) const {
-    auto compareNodes = [&](Rangeable n1, Rangeable n2) {
-      return isNotAfter(n1, n2);
-    };
-    std::stable_sort(toBeSorted.begin(), toBeSorted.end(), compareNodes);
-    return toBeSorted;
-  }
-
-  template <typename Rangeable>
-  bool isNotAfter(Rangeable n1, Rangeable n2) const {
-    const auto r1 = getRangeableSourceRange(n1);
-    const auto r2 = getRangeableSourceRange(n2);
-
-    const int signum = ASTScopeImpl::compare(r1, r2, ctx.SourceMgr,
-                                             /*ensureDisjoint=*/true);
-    return -1 == signum;
   }
 
 public:
@@ -1559,7 +1531,8 @@ void AbstractFunctionBodyScope::expandBody(ScopeCreator &scopeCreator) {
 void GenericTypeOrExtensionScope::expandBody(ScopeCreator &) {}
 
 void IterableTypeScope::expandBody(ScopeCreator &scopeCreator) {
-  auto nodes = asNodeVector(getIterableDeclContext().get()->getMembers());
+  auto members = getIterableDeclContext().get()->getMembers();
+  std::vector<ASTNode> nodes(members.begin(), members.end());
   scopeCreator.addSiblingsToScopeTree(this, this, nodes);
   if (auto *s = scopeCreator.getASTContext().Stats)
     ++s->getFrontendCounters().NumIterableTypeBodyASTScopeExpansions;
