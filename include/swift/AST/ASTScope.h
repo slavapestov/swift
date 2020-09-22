@@ -1144,8 +1144,6 @@ public:
 
 protected:
   ASTScopeImpl *expandSpecifically(ScopeCreator &scopeCreator) override;
-  void beCurrent() override;
-  bool isCurrentIfWasExpanded() const override;
 
 private:
   AnnotatedInsertionPoint
