@@ -57,7 +57,6 @@ enum Color : Int {
   }
 
   var rawValue: Double {
-  // expected-error@-1 {{invalid redeclaration of synthesized implementation for protocol requirement 'rawValue'}}
     return 1.0
   }
 }
