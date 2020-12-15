@@ -148,8 +148,8 @@ void Parser::performCodeCompletionSecondPassImpl(
   SyntaxContext->disable();
 
   // Disable updating the interface hash
-  llvm::SaveAndRestore<Optional<llvm::MD5>> CurrentTokenHashSaver(
-      CurrentTokenHash, None);
+  //llvm::SaveAndRestore<Optional<llvm::MD5>> CurrentTokenHashSaver(
+  //    CurrentTokenHash, None);
 
   auto BufferID = L->getBufferID();
   auto startLoc = SourceMgr.getLocForOffset(BufferID, info.StartOffset);
@@ -539,8 +539,8 @@ Parser::Parser(std::unique_ptr<Lexer> Lex, SourceFile &SF,
   }
 
   // If the interface hash is enabled, set up the initial hash.
-  if (SF.hasInterfaceHash())
-    CurrentTokenHash.emplace();
+  //if (SF.hasInterfaceHash())
+  //  CurrentTokenHash.emplace();
 
   // Set the token to a sentinel so that we know the lexer isn't primed yet.
   // This cannot be tok::unknown, since that is a token the lexer could produce.
@@ -588,13 +588,7 @@ SourceLoc Parser::consumeTokenWithoutFeedingReceiver() {
 }
 
 void Parser::recordTokenHash(StringRef token) {
-  assert(!token.empty());
-  if (CurrentTokenHash) {
-    CurrentTokenHash->update(token);
-    // Add null byte to separate tokens.
-    uint8_t a[1] = {0};
-    CurrentTokenHash->update(a);
-  }
+  
 }
 
 void Parser::consumeExtraToken(Token Extra) {
