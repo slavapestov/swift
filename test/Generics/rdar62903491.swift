@@ -1,5 +1,5 @@
 // RUN: %target-typecheck-verify-swift
-// RUN: %target-swift-frontend -typecheck -debug-generic-signatures 2>&1 | %FileCheck %s
+// RUN: %target-swift-frontend -typecheck -debug-generic-signatures %s 2>&1 | %FileCheck %s
 
 protocol P {
   associatedtype X : P
