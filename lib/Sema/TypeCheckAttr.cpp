@@ -281,7 +281,6 @@ public:
   void visitMarkerAttr(MarkerAttr *attr);
 
   void visitReasyncAttr(ReasyncAttr *attr);
-  void visitAtReasyncAttr(AtReasyncAttr *attr);
 };
 } // end anonymous namespace
 
