@@ -95,7 +95,19 @@ func computeValueAsync() async -> Int {}
 
 func reasyncWithAutoclosure(_: @autoclosure () async -> Int) reasync {}
 
-func callReasyncWithAutoclosure() async {
+func callReasyncWithAutoclosure1() {
+// expected-note@-1 2{{add 'async' to function 'callReasyncWithAutoclosure1()' to make it asynchronous}}
+// expected-note@-2 2{{add '@asyncHandler' to function 'callReasyncWithAutoclosure1()' to create an implicit asynchronous context}}
+  reasyncWithAutoclosure(computeValue())
+  await reasyncWithAutoclosure(await computeValueAsync())
+  // expected-error@-1 {{'async' in a function that does not support concurrency}}
+
+  await reasyncWithAutoclosure(computeValueAsync())
+  // expected-error@-1 {{call is 'async' in an autoclosure argument that is not marked with 'await'}}
+  // expected-error@-2 {{'async' in a function that does not support concurrency}}
+}
+
+func callReasyncWithAutoclosure2() async {
   reasyncWithAutoclosure(computeValue())
   await reasyncWithAutoclosure(await computeValueAsync())
 
