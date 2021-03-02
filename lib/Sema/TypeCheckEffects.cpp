@@ -865,8 +865,8 @@ private:
 
     // If we're currently doing rethrows-checking on the body of the
     // function which declares the parameter, it's rethrowing-only.
-    if (kind == EffectKind::Throws &&
-        param->getDeclContext() == RethrowsDC)
+    auto *ParentDC = getPolymorphicEffectDeclContext(kind);
+    if (ParentDC == param->getDeclContext())
       return Classification::forConditional(kind, reason);
 
     // Otherwise, it throws unconditionally.
@@ -1325,13 +1325,7 @@ public:
   }
 
   /// Whether this is a function that rethrows.
-  bool isRethrows() const {
-    if (!HandlesErrors)
-      return false;
-
-    if (ErrorHandlingIgnoresFunction)
-      return false;
-
+  bool hasPolymorphicEffect(EffectKind kind) const {
     if (!Function)
       return false;
 
@@ -1339,7 +1333,24 @@ public:
     if (!fn)
       return false;
 
-    switch (fn->getPolymorphicEffectKind(EffectKind::Throws)) {
+    switch (kind) {
+    case EffectKind::Throws:
+      if (!HandlesErrors)
+        return false;
+
+      if (ErrorHandlingIgnoresFunction)
+        return false;
+
+      break;
+
+    case EffectKind::Async:
+      if (!HandlesAsync)
+        return false;
+
+      break;
+    }
+
+    switch (fn->getPolymorphicEffectKind(kind)) {
     case PolymorphicEffectKind::ByClosure:
     case PolymorphicEffectKind::ByConformance:
       return true;
@@ -1460,9 +1471,6 @@ public:
 
   Kind getKind() const { return TheKind; }
 
-  bool handlesNothing() const {
-    return !HandlesErrors;
-  }
   bool handlesThrows(ConditionalEffectKind errorKind) const {
     switch (errorKind) {
     case ConditionalEffectKind::None:
@@ -1475,17 +1483,30 @@ public:
     // An operation that always throws can only be handled by an
     // all-handling context.
     case ConditionalEffectKind::Always:
-      return HandlesErrors && !isRethrows();
+      return HandlesErrors && !hasPolymorphicEffect(EffectKind::Throws);
     }
     llvm_unreachable("bad error kind");
   }
 
-  bool handlesAsync() const {
-    return HandlesAsync;
+  bool handlesAsync(ConditionalEffectKind errorKind) const {
+    switch (errorKind) {
+    case ConditionalEffectKind::None:
+      return true;
+
+    // A call that's rethrowing-only can be handled by 'rethrows'.
+    case ConditionalEffectKind::Conditional:
+      return HandlesAsync;
+
+    // An operation that always throws can only be handled by an
+    // all-handling context.
+    case ConditionalEffectKind::Always:
+      return HandlesAsync && !hasPolymorphicEffect(EffectKind::Async);
+    }
+    llvm_unreachable("bad error kind");
   }
 
-  DeclContext *getRethrowsDC() const {
-    if (!isRethrows())
+  DeclContext *getPolymorphicEffectDeclContext(EffectKind kind) const {
+    if (!hasPolymorphicEffect(kind))
       return nullptr;
 
     return Function->getAbstractFunctionDecl();
@@ -1595,8 +1616,10 @@ public:
 
     // Allow the diagnostic to fire on the 'try' if we don't have
     // anything else to say.
-    if (isTryCovered && !reason.hasPolymorphicEffect() &&
-        !isRethrows() && !isAutoClosure()) {
+    if (isTryCovered &&
+        !reason.hasPolymorphicEffect() &&
+        !hasPolymorphicEffect(EffectKind::Throws) &&
+        !isAutoClosure()) {
       DiagnoseErrorOnTry = true;
       return;
     }
@@ -1628,7 +1651,7 @@ public:
         return;
       }
 
-      if (isRethrows()) {
+      if (hasPolymorphicEffect(EffectKind::Throws)) {
         diagnoseThrowInLegalContext(Diags, E, isTryCovered, reason,
                                     diag::throwing_call_in_rethrows_function,
                             diag::tryless_throwing_call_in_rethrows_function);
@@ -1667,7 +1690,7 @@ public:
         return;
       }
 
-      if (isRethrows()) {
+      if (hasPolymorphicEffect(EffectKind::Throws)) {
         Diags.diagnose(S->getStartLoc(), diag::throw_in_rethrows_function);
         return;
       }
@@ -1841,6 +1864,7 @@ class CheckEffectsCoverage : public EffectsHandlingWalker<CheckEffectsCoverage> 
   ASTContext &Ctx;
 
   DeclContext *RethrowsDC = nullptr;
+  DeclContext *ReasyncDC = nullptr;
   Context CurContext;
 
   class ContextFlags {
@@ -1927,6 +1951,7 @@ class CheckEffectsCoverage : public EffectsHandlingWalker<CheckEffectsCoverage> 
   CheckEffectsCoverage &Self;
     Context OldContext;
     DeclContext *OldRethrowsDC;
+    DeclContext *OldReasyncDC;
     ContextFlags OldFlags;
     ConditionalEffectKind OldMaxThrowingKind;
 
@@ -1934,6 +1959,7 @@ class CheckEffectsCoverage : public EffectsHandlingWalker<CheckEffectsCoverage> 
     ContextScope(CheckEffectsCoverage &self, Optional<Context> newContext)
       : Self(self), OldContext(self.CurContext),
         OldRethrowsDC(self.RethrowsDC),
+        OldReasyncDC(self.ReasyncDC),
         OldFlags(self.Flags),
         OldMaxThrowingKind(self.MaxThrowingKind) {
       if (newContext) self.CurContext = *newContext;
@@ -1944,6 +1970,7 @@ class CheckEffectsCoverage : public EffectsHandlingWalker<CheckEffectsCoverage> 
 
     void enterSubFunction() {
       Self.RethrowsDC = nullptr;
+      Self.ReasyncDC = nullptr;
     }
 
     void enterTry() {
@@ -2048,6 +2075,7 @@ class CheckEffectsCoverage : public EffectsHandlingWalker<CheckEffectsCoverage> 
     ~ContextScope() {
       Self.CurContext = OldContext;
       Self.RethrowsDC = OldRethrowsDC;
+      Self.ReasyncDC = OldReasyncDC;
       Self.Flags = OldFlags;
       Self.MaxThrowingKind = OldMaxThrowingKind;
     }
@@ -2058,8 +2086,13 @@ public:
     : Ctx(ctx), CurContext(initialContext),
       MaxThrowingKind(ConditionalEffectKind::None) {
 
-    if (auto rethrowsDC = initialContext.getRethrowsDC()) {
+    if (auto rethrowsDC = initialContext.getPolymorphicEffectDeclContext(
+          EffectKind::Throws)) {
       RethrowsDC = rethrowsDC;
+    }
+    if (auto reasyncDC = initialContext.getPolymorphicEffectDeclContext(
+          EffectKind::Async)) {
+      ReasyncDC = reasyncDC;
     }
   }
 
@@ -2141,7 +2174,7 @@ private:
 
     // If the enclosing context doesn't handle anything, use a
     // specialized diagnostic about non-exhaustive catches.
-    if (CurContext.handlesNothing()) {
+    if (!CurContext.handlesThrows(ConditionalEffectKind::Conditional)) {
       CurContext.setNonExhaustiveCatch(true);
     }
 
@@ -2178,7 +2211,7 @@ private:
 
     auto savedContext = CurContext;
     if (doThrowingKind != ConditionalEffectKind::Always &&
-        CurContext.isRethrows()) {
+        CurContext.hasPolymorphicEffect(EffectKind::Throws)) {
       // If this catch clause is reachable at all, it's because a function
       // parameter throws. So let's temporarily state that the body is allowed
       // to throw.
@@ -2196,6 +2229,7 @@ private:
     // But if the expression didn't type-check, suppress diagnostics.
     ApplyClassifier classifier;
     classifier.RethrowsDC = RethrowsDC;
+    classifier.ReasyncDC = ReasyncDC;
     auto classification = classifier.classifyApply(E);
 
     checkThrowAsyncSite(E, /*requiresTry*/ true, classification);
@@ -2253,7 +2287,7 @@ private:
 
   ShouldRecurse_t checkAsyncLet(PatternBindingDecl *patternBinding) {
     // Diagnose async let in a context that doesn't handle async.
-    if (!CurContext.handlesAsync()) {
+    if (!CurContext.handlesAsync(ConditionalEffectKind::Always)) {
       CurContext.diagnoseUnhandledAsyncSite(Ctx.Diags, patternBinding);
     }
 
@@ -2336,7 +2370,7 @@ private:
       Flags.set(ContextFlags::HasAnyAsyncSite);
 
       // Diagnose async calls in a context that doesn't handle async.
-      if (!CurContext.handlesAsync()) {
+      if (!CurContext.handlesAsync(asyncKind)) {
         CurContext.diagnoseUnhandledAsyncSite(Ctx.Diags, E);
       }
       // Diagnose async calls that are outside of an await context.
@@ -2392,7 +2426,7 @@ private:
     // course we're in a context that could never handle an 'async'. Then, we
     // produce an error.
     if (!Flags.has(ContextFlags::HasAnyAsyncSite)) {
-      if (CurContext.handlesAsync())
+      if (CurContext.handlesAsync(ConditionalEffectKind::Conditional))
         Ctx.Diags.diagnose(E->getAwaitLoc(), diag::no_async_in_await);
       else
         CurContext.diagnoseUnhandledAsyncSite(Ctx.Diags, E);
@@ -2417,7 +2451,7 @@ private:
 
     // Diagnose all the call sites within a single unhandled 'try'
     // at the same time.
-    } else if (CurContext.handlesNothing()) {
+    } else if (!CurContext.handlesThrows(ConditionalEffectKind::Conditional)) {
       CurContext.diagnoseUnhandledTry(Ctx.Diags, E);
     }
 
@@ -2465,7 +2499,7 @@ private:
       CurContext.diagnoseUnhandledThrowStmt(Ctx.Diags, S);
     }
     if (S->getAwaitLoc().isValid() &&
-        !CurContext.handlesAsync()) {
+        !CurContext.handlesAsync(ConditionalEffectKind::Always)) {
       CurContext.diagnoseUnhandledAsyncSite(Ctx.Diags, S);
     }
     return ShouldRecurse;
