@@ -1339,8 +1339,18 @@ public:
     if (!fn)
       return false;
 
-    return fn->getPolymorphicEffectKind(EffectKind::Throws)
-        == PolymorphicEffectKind::ByClosure;
+    switch (fn->getPolymorphicEffectKind(EffectKind::Throws)) {
+    case PolymorphicEffectKind::ByClosure:
+    case PolymorphicEffectKind::ByConformance:
+      return true;
+
+    case PolymorphicEffectKind::None:
+    case PolymorphicEffectKind::Always:
+    case PolymorphicEffectKind::Invalid:
+      return false;
+    }
+
+    llvm_unreachable("Bad polymorphic effect kind");
   }
 
   /// Whether this is an autoclosure.
