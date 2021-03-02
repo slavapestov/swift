@@ -288,12 +288,6 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  bool isAutoClosure() const {
-    if (getKind() == Kind::Closure)
-      return isa<AutoClosureExpr>(getClosure());
-    return false;
-  }
-
   AbstractFunctionDecl *getFunction() const {
     assert(getKind() == Kind::Function);
     return TheFunction;
@@ -743,7 +737,7 @@ public:
         return;
       }
 
-      // Handle rethrowing functions.
+      // Handle rethrowing and reasync functions.
       switch (fnRef.getPolymorphicEffectKind(kind)) {
       case PolymorphicEffectKind::ByConformance: {
         auto substitutions = fnRef.getSubstitutions();
@@ -799,9 +793,6 @@ public:
         classifyFunctionBody(fnRef,
                              PotentialEffectReason::forApply(),
                              kind));
-      assert(result.getConditionalKind(kind)
-             != ConditionalEffectKind::None &&
-             "body classification decided function had no effect?");
     };
 
     classifyApplyEffect(EffectKind::Throws);
@@ -828,23 +819,12 @@ public:
   }
 
 private:
-  /// Classify a throwing function according to our local knowledge of
-  /// its implementation.
-  ///
-  /// For the most part, this only distinguishes between Throws and
-  /// RethrowingOnly.  But it can return Invalid if a type-checking
-  /// failure prevents it from deciding that, and it can return None
-  /// if the function is an autoclosure that simply doesn't throw at all.
+  /// Classify a throwing or async function according to our local
+  /// knowledge of its implementation.
   Classification
   classifyFunctionBody(const AbstractFunction &fn,
                        PotentialEffectReason reason,
                        EffectKind kind) {
-    // If we're not checking a 'rethrows' context, we don't need to
-    // distinguish between 'throws' and 'rethrows'.  But don't even
-    // trust 'throws' for autoclosures.
-    if (!getPolymorphicEffectDeclContext(kind) && !fn.isAutoClosure())
-      return Classification::forUnconditional(kind, reason);
-
     switch (fn.getKind()) {
     case AbstractFunction::Opaque:
       return Classification::forUnconditional(kind, reason);
