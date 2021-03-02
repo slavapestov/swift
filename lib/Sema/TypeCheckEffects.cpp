@@ -288,6 +288,12 @@ public:
     llvm_unreachable("bad kind");
   }
 
+  bool isAutoClosure() const {
+    if (getKind() == Kind::Closure)
+      return isa<AutoClosureExpr>(getClosure());
+    return false;
+  }
+
   AbstractFunctionDecl *getFunction() const {
     assert(getKind() == Kind::Function);
     return TheFunction;
@@ -789,10 +795,21 @@ public:
 
       // Try to classify the implementation of functions that we have
       // local knowledge of.
-      result.merge(
-        classifyFunctionBody(fnRef,
-                             PotentialEffectReason::forApply(),
-                             kind));
+      //
+      // An autoclosure callee here only appears in a narrow case where
+      // we're in the initializer of an 'async let'.
+      if (fnRef.isAutoClosure()) {
+        result.merge(Classification::forUnconditional(
+            kind, PotentialEffectReason::forApply()));
+      } else {
+        result.merge(
+          classifyFunctionBody(fnRef,
+                               PotentialEffectReason::forApply(),
+                               kind));
+        assert(result.getConditionalKind(kind)
+               != ConditionalEffectKind::None &&
+               "body classification decided function had no effect?");
+      }
     };
 
     classifyApplyEffect(EffectKind::Throws);
