@@ -697,6 +697,12 @@ struct GenericSignatureBuilder::Implementation {
   /// Whether there were any errors.
   bool HadAnyError = false;
 
+  /// All explicit non-same type requirements that were added to the builder.
+  SmallVector<ExplicitRequirement, 2> ExplicitRequirements;
+
+  /// All explicit same-type requirements that were added to the builder.
+  SmallVector<Requirement, 2> ExplicitSameTypeRequirements;
+
   /// A mapping of redundant explicit requirements to the best root requirement
   /// that implies them.
   using RedundantRequirementMap =
@@ -961,8 +967,10 @@ bool RequirementSource::isSelfDerivedSource(GenericSignatureBuilder &builder,
 static Type replaceSelfWithType(Type selfType, Type depTy) {
   if (auto depMemTy = depTy->getAs<DependentMemberType>()) {
     Type baseType = replaceSelfWithType(selfType, depMemTy->getBase());
-    assert(depMemTy->getAssocType() && "Missing associated type");
-    return DependentMemberType::get(baseType, depMemTy->getAssocType());
+    if (auto *assocType = depMemTy->getAssocType()) {
+      return DependentMemberType::get(baseType, assocType);
+    }
+    return DependentMemberType::get(baseType, depMemTy->getName());
   }
 
   assert(depTy->is<GenericTypeParamType>() && "missing Self?");
@@ -2118,7 +2126,7 @@ TypeDecl *EquivalenceClass::lookupNestedType(
 
     return cache.types.front();
   };
-
+#if 0
   // If we have a cached value that is up-to-date, use that.
   auto cached = nestedTypeNameCache.find(name);
   if (cached != nestedTypeNameCache.end() &&
@@ -2128,7 +2136,7 @@ TypeDecl *EquivalenceClass::lookupNestedType(
     ++NumNestedTypeCacheHits;
     return populateResult(cached->second);
   }
-
+#endif
   // Cache miss; go compute the result.
   ++NumNestedTypeCacheMisses;
 
@@ -2504,10 +2512,12 @@ ConstraintResult GenericSignatureBuilder::handleUnresolvedRequirement(
     break;
   }
 
-  if (unresolvedEquivClass) {
+  if (unresolvedEquivClass && false) {
+    llvm::errs() << "delaying a requirement of a class\n";
     unresolvedEquivClass->delayedRequirements.push_back(
                                           {delayedKind, lhs, rhs, source});
   } else {
+    llvm::errs() << "delaying a requirement globally\n";
     Impl->DelayedRequirements.push_back({delayedKind, lhs, rhs, source});
   }
 
@@ -3822,12 +3832,24 @@ static Type substituteConcreteType(Type parentType,
 
   auto *dc = concreteDecl->getDeclContext();
 
+  auto subMap = parentType->getContextSubstitutionMap(
+      dc->getParentModule(), dc);
+
   // Form an unsubstituted type referring to the given type declaration,
   // for use in an inferred same-type requirement.
   auto type = getStructuralType(concreteDecl, /*keepSugar=*/true);
 
-  auto subMap = parentType->getContextSubstitutionMap(
-      dc->getParentModule(), dc);
+  if (type->isTypeParameter()) {
+    if (type->findUnresolvedDependentMemberType()) {
+      return type.transform([&](Type t) {
+        if (t->is<GenericTypeParamType>()) {
+          return t.subst(subMap);
+        }
+
+        return t;
+      });
+    }
+  }
 
   return type.subst(subMap);
 }
@@ -3876,6 +3898,7 @@ ResolvedType GenericSignatureBuilder::maybeResolveEquivalenceClass(
       }
 
       auto concreteType = substituteConcreteType(parentType, concreteDecl);
+      concreteType.dump();
       return maybeResolveEquivalenceClass(concreteType, resolutionKind,
                                           wantExactPotentialArchetype);
     }
@@ -4438,6 +4461,11 @@ ConstraintResult GenericSignatureBuilder::addConformanceRequirement(
                                FloatingRequirementSource source) {
   auto resolvedSource = source.getSource(*this, type);
 
+  if (!resolvedSource->isDerivedRequirement()) {
+    Impl->ExplicitRequirements.emplace_back(RequirementKind::Conformance,
+                                            resolvedSource, proto);
+  }
+
   // Add the conformance requirement, bailing out earlier if we've already
   // seen it.
   auto equivClass = type.getEquivalenceClass(*this);
@@ -4453,6 +4481,13 @@ ConstraintResult GenericSignatureBuilder::addLayoutRequirementDirect(
                                              ResolvedType type,
                                              LayoutConstraint layout,
                                              FloatingRequirementSource source) {
+  auto resolvedSource = source.getSource(*this, type);
+
+  if (!resolvedSource->isDerivedRequirement()) {
+    Impl->ExplicitRequirements.emplace_back(RequirementKind::Layout,
+                                            resolvedSource, layout);
+  }
+
   auto equivClass = type.getEquivalenceClass(*this);
 
   // Update the layout in the equivalence class, if we didn't have one already.
@@ -4471,7 +4506,7 @@ ConstraintResult GenericSignatureBuilder::addLayoutRequirementDirect(
 
   // Record this layout constraint.
   equivClass->layoutConstraints.push_back({type.getUnresolvedType(),
-    layout, source.getSource(*this, type)});
+    layout, resolvedSource});
   equivClass->modified(*this);
   ++NumLayoutConstraints;
   if (!anyChanges) ++NumLayoutConstraintsExtra;
@@ -4588,6 +4623,11 @@ ConstraintResult GenericSignatureBuilder::addSuperclassRequirementDirect(
                                             Type superclass,
                                             FloatingRequirementSource source) {
   auto resolvedSource = source.getSource(*this, type);
+
+  if (!resolvedSource->isDerivedRequirement()) {
+    Impl->ExplicitRequirements.emplace_back(RequirementKind::Superclass,
+                                            resolvedSource, superclass);
+  }
 
   // Record the constraint.
   auto equivClass = type.getEquivalenceClass(*this);
@@ -4781,6 +4821,11 @@ GenericSignatureBuilder::addSameTypeRequirementBetweenTypeParameters(
 
   Type depType1 = type1.getDependentType(*this);
   Type depType2 = type2.getDependentType(*this);
+
+  if (!source->isDerivedRequirement()) {
+    Impl->ExplicitSameTypeRequirements.emplace_back(RequirementKind::SameType,
+                                                    depType1, depType2);
+  }
 
   // Record the same-type constraint, and bail out if it was already known.
   auto equivClass = type1.getEquivalenceClassIfPresent();
@@ -5022,6 +5067,12 @@ ConstraintResult GenericSignatureBuilder::addSameTypeRequirementToConcrete(
 
   }
 
+  if (!source->isDerivedRequirement()) {
+    Impl->ExplicitSameTypeRequirements.emplace_back(RequirementKind::SameType,
+                                                    type.getDependentType(*this),
+                                                    concrete);
+  }
+
   // Record the requirement.
   equivClass->concreteType = concrete;
 
@@ -5120,6 +5171,8 @@ ConstraintResult GenericSignatureBuilder::addSameTypeRequirement(
 
   auto resolved1 = resolve(paOrT1, source);
   if (!resolved1) {
+    llvm::errs() << "LHS Unresolved\n";
+    paOrT1.get<Type>()->dump();
     return handleUnresolvedRequirement(RequirementKind::SameType, paOrT1,
                                        toUnresolvedRequirementRHS(paOrT2),
                                        source,
@@ -5129,6 +5182,7 @@ ConstraintResult GenericSignatureBuilder::addSameTypeRequirement(
 
   auto resolved2 = resolve(paOrT2, source);
   if (!resolved2) {
+    llvm::errs() << "RHS Unresolved\n";
     return handleUnresolvedRequirement(RequirementKind::SameType, paOrT1,
                                        toUnresolvedRequirementRHS(paOrT2),
                                        source,
@@ -5149,6 +5203,8 @@ ConstraintResult GenericSignatureBuilder::addSameTypeRequirementDirect(
 
   // If both sides of the requirement are concrete, equate them.
   if (concreteType1 && concreteType2) {
+  llvm::errs() << "@@@@@ C vs C\n";
+  llvm::errs() << "  " << concreteType1 << " == " << concreteType2 << "\n";
     return addSameTypeRequirementBetweenConcrete(concreteType1,
                                                  concreteType2, source,
                                                  diagnoseMismatch);
@@ -5156,15 +5212,22 @@ ConstraintResult GenericSignatureBuilder::addSameTypeRequirementDirect(
 
   // If one side is concrete, map the other side to that concrete type.
   if (concreteType1) {
+  llvm::errs() << "@@@@@ C vs A\n";
+  concreteType1.dump();
+  llvm::errs() << "  " << concreteType1 << " == " << type2.getDependentType(*this) << "\n";
     return addSameTypeRequirementToConcrete(type2, concreteType1,
                                             source.getSource(*this, type2));
   }
 
   if (concreteType2) {
+  llvm::errs() << "@@@@@ A vs C\n";
+  llvm::errs() << "  " << type1.getDependentType(*this) << " == " << concreteType2 << "\n";
     return addSameTypeRequirementToConcrete(type1, concreteType2,
                                             source.getSource(*this, type1));
   }
 
+  llvm::errs() << "@@@@@\n";
+  llvm::errs() << "  " << type1.getDependentType(*this) << " == " << type2.getDependentType(*this) << "\n";
   return addSameTypeRequirementBetweenTypeParameters(
                      type1, type2,
                      source.getSource(*this, type2));
@@ -6230,12 +6293,6 @@ void GenericSignatureBuilder::computeRedundantRequirements() {
 void
 GenericSignatureBuilder::finalize(TypeArrayView<GenericTypeParamType> genericParams,
                                   bool allowConcreteGenericParams) {
-  // Process any delayed requirements that we can handle now.
-  processDelayedRequirements();
-
-  computeRedundantRequirements();
-  diagnoseRedundantRequirements();
-
   assert(!Impl->finalized && "Already finalized builder");
 #ifndef NDEBUG
   Impl->finalized = true;
@@ -6551,6 +6608,16 @@ void GenericSignatureBuilder::processDelayedRequirements() {
         break;
 
       case DelayedRequirement::SameType:
+        llvm::errs() << "trying to solve a same-type constraint...\n";
+        if (auto *pa = req.lhs.dyn_cast<PotentialArchetype *>())
+          llvm::errs() << pa->getDependentType(getGenericParams()) << " == ";
+        else
+          llvm::errs() << req.lhs.get<Type>() << " == ";
+        if (auto *pa = asUnresolvedType(req.rhs).dyn_cast<PotentialArchetype *>())
+          llvm::errs() << pa->getDependentType(getGenericParams()) << "\n";
+        else
+          llvm::errs() << asUnresolvedType(req.rhs).get<Type>() << "\n";
+
         reqResult = addSameTypeRequirement(
                                req.lhs, asUnresolvedType(req.rhs), req.source,
                                UnresolvedHandlingKind::GenerateUnresolved);
@@ -6582,6 +6649,9 @@ void GenericSignatureBuilder::processDelayedRequirements() {
 
     if (anySolved) {
       anyChanges = true;
+    } else {
+      llvm::errs() << "no changes!\n";
+      llvm::errs() << "delayed requirements remaining " << Impl->DelayedRequirements.size() << "\n";
     }
   } while (anySolved);
 }
@@ -8291,15 +8361,26 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
                                           bool allowConcreteGenericParams,
                                           bool buildingRequirementSignature,
                                           bool rebuildingWithoutRedundantConformances) && {
+  // Process any delayed requirements that we can handle now.
+  processDelayedRequirements();
+
+  // Diagnose redundant requirements.
+  computeRedundantRequirements();
+  diagnoseRedundantRequirements();
+
   // Finalize the builder, producing any necessary diagnostics.
   finalize(getGenericParams(), allowConcreteGenericParams);
 
-  // Collect the requirements placed on the generic parameter types.
-  SmallVector<Requirement, 4> requirements;
-  enumerateRequirements(getGenericParams(), requirements);
+  if (rebuildingWithoutRedundantConformances) {
+    assert(!buildingRequirementSignature &&
+           "Rebuilding a requirement signature?");
 
-  // Form the generic signature.
-  auto sig = GenericSignature::get(getGenericParams(), requirements);
+    //assert(!Impl->HadAnyError &&
+    //       "Rebuilt signature had errors");
+
+    assert(!hasExplicitConformancesImpliedByConcrete() &&
+           "Rebuilt signature still had redundant conformance requirements");
+  }
 
   // If any of our explicit conformance requirements were implied by
   // superclass or concrete same-type requirements, we have to build the
@@ -8310,26 +8391,72 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
   // we might end up emitting duplicate diagnostics.
   //
   // Also, don't do this when building a requirement signature.
-  if (!buildingRequirementSignature &&
+  if (!rebuildingWithoutRedundantConformances &&
+      !buildingRequirementSignature &&
       !Impl->HadAnyError &&
       hasExplicitConformancesImpliedByConcrete()) {
     NumSignaturesRebuiltWithoutRedundantRequirements++;
 
-    if (rebuildingWithoutRedundantConformances) {
-      llvm::errs() << "Rebuilt signature still has "
-                   << "redundant conformance requirements: ";
-      llvm::errs() << sig << "\n";
-      abort();
-    }
-
     GenericSignatureBuilder newBuilder(Context);
 
-    for (auto param : sig->getGenericParams())
+    for (auto param : getGenericParams())
       newBuilder.addGenericParameter(param);
 
-    for (auto &req : sig->getRequirements()) {
-      newBuilder.addRequirement(stripBoundDependentMemberTypes(req),
-                                FloatingRequirementSource::forAbstract(), nullptr);
+    auto newSource = FloatingRequirementSource::forAbstract();
+
+    llvm::errs() << "rebuilding...\n";
+    dump();
+
+    for (const auto &req : Impl->ExplicitRequirements) {
+      if (isRedundantExplicitRequirement(req))
+        continue;
+
+      auto subjectType = stripBoundDependentMemberTypes(
+          req.getSource()->getStoredType());
+      auto rhs = req.getRHS();
+
+      switch (req.getKind()) {
+      case RequirementKind::Conformance: {
+        auto constraintType = rhs.get<ProtocolDecl *>()->getDeclaredInterfaceType();
+        Requirement(req.getKind(), subjectType, constraintType).dump();
+        newBuilder.addRequirement(Requirement(req.getKind(), subjectType, constraintType),
+                                  newSource, nullptr);
+        break;
+      }
+      case RequirementKind::Superclass: {
+        // FIXME: transform RHS
+        auto constraintType = stripBoundDependentMemberTypes(rhs.get<Type>());
+        Requirement(req.getKind(), subjectType, constraintType).dump();
+        newBuilder.addRequirement(Requirement(req.getKind(), subjectType, constraintType),
+                                  newSource, nullptr);
+        break;
+      }
+      case RequirementKind::Layout: {
+        auto layout = rhs.get<LayoutConstraint>();
+        Requirement(req.getKind(), subjectType, layout).dump();
+        newBuilder.addRequirement(Requirement(req.getKind(), subjectType, layout),
+                                  newSource, nullptr);
+        break;
+      }
+      case RequirementKind::SameType:
+        llvm_unreachable("Should not see same-type requirement here");
+      }
+    }
+
+    for (const auto &req : Impl->ExplicitSameTypeRequirements) {
+      auto subjectType = stripBoundDependentMemberTypes(req.getFirstType());
+      Type constraintType;
+      if (req.getSecondType()->isTypeParameter()) {
+        constraintType = stripBoundDependentMemberTypes(req.getSecondType());
+      } else {
+        constraintType = resolveDependentMemberTypes(*this, req.getSecondType())
+          .transform([](Type t) {
+                         return stripBoundDependentMemberTypes(t);
+                       });
+      }
+      Requirement(req.getKind(), subjectType, constraintType).dump();
+      newBuilder.addRequirement(Requirement(req.getKind(), subjectType, constraintType),
+                                newSource, nullptr);
     }
 
     return std::move(newBuilder).computeGenericSignature(
@@ -8337,6 +8464,13 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
         buildingRequirementSignature,
         /*rebuildingWithoutRedundantConformances=*/true);
   }
+
+  // Collect the requirements placed on the generic parameter types.
+  SmallVector<Requirement, 4> requirements;
+  enumerateRequirements(getGenericParams(), requirements);
+
+  // Form the generic signature.
+  auto sig = GenericSignature::get(getGenericParams(), requirements);
 
 #ifndef NDEBUG
   if (!Impl->HadAnyError) {
