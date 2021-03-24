@@ -3766,11 +3766,11 @@ static Type resolveDependentMemberTypes(
                                 GenericSignatureBuilder &builder,
                                 Type type,
                                 ArchetypeResolutionKind resolutionKind
-                                  = ArchetypeResolutionKind::WellFormed) {
+                                  = ArchetypeResolutionKind::WellFormed,
+                                bool wantAnchor = false) {
   if (!type->hasTypeParameter()) return type;
 
-  return type.transformRec([&resolutionKind,
-                            &builder](TypeBase *type) -> Optional<Type> {
+  return type.transformRec([&](TypeBase *type) -> Optional<Type> {
     if (!type->isTypeParameter())
       return None;
 
@@ -3804,7 +3804,10 @@ static Type resolveDependentMemberTypes(
                                          resolutionKind);
     }
 
-    return equivClass->getAnchor(builder, builder.getGenericParams());
+    if (wantAnchor)
+      return equivClass->getAnchor(builder, builder.getGenericParams());
+    else
+      return resolved.getDependentType(builder);
   });
 }
 
@@ -3954,9 +3957,12 @@ ResolvedType GenericSignatureBuilder::maybeResolveEquivalenceClass(
       auto *concreteDecl =
           baseEquivClass->lookupNestedType(*this, depMemTy->getName());
 
-      if (!concreteDecl)
+      if (!concreteDecl) {
+        llvm::errs() << "no concrete decl named " << depMemTy->getName() << "\n";
         return ResolvedType::forUnresolved(baseEquivClass);
-
+      }
+llvm::errs() << "concrete decl here: ";
+concreteDecl->dumpRef(); llvm::errs() << "\n";
       Type parentType;
       auto *proto = concreteDecl->getDeclContext()->getSelfProtocolDecl();
       if (!proto) {
@@ -3979,6 +3985,8 @@ ResolvedType GenericSignatureBuilder::maybeResolveEquivalenceClass(
         }
       }
 
+llvm::errs() << "parent type for that concrete decl is : ";
+llvm::errs() << parentType << "\n";
       auto concreteType = substituteConcreteType(parentType, concreteDecl);
       return maybeResolveEquivalenceClass(concreteType, resolutionKind,
                                           wantExactPotentialArchetype);
@@ -8049,6 +8057,7 @@ void GenericSignatureBuilder::enumerateRequirements(
     // If this equivalence class is bound to a concrete type, equate the
     // anchor with a concrete type.
     if (Type concreteType = equivClass->concreteType) {
+      concreteType = resolveDependentMemberTypes(*this, concreteType, ArchetypeResolutionKind::WellFormed, true);
       // If the parent of this anchor is also a concrete type, don't
       // create a requirement.
       if (!subjectType->is<GenericTypeParamType>() &&
@@ -8105,14 +8114,17 @@ void GenericSignatureBuilder::enumerateRequirements(
       continue;
 
     // If we have a superclass, produce a superclass requirement
-    if (equivClass->superclass &&
-        !equivClass->recursiveSuperclassType &&
-        !equivClass->superclass->hasError()) {
-      if (hasNonRedundantRequirementSource<Type>(
-            equivClass->superclassConstraints,
-            RequirementKind::Superclass, *this)) {
-        recordRequirement(RequirementKind::Superclass,
-                          subjectType, equivClass->superclass);
+    if (Type superclass = equivClass->superclass) {
+      superclass = resolveDependentMemberTypes(*this, superclass, ArchetypeResolutionKind::WellFormed, true);
+
+      if (!equivClass->recursiveSuperclassType &&
+          !superclass->hasError()) {
+        if (hasNonRedundantRequirementSource<Type>(
+              equivClass->superclassConstraints,
+              RequirementKind::Superclass, *this)) {
+          recordRequirement(RequirementKind::Superclass,
+                            subjectType, superclass);
+        }
       }
     }
 
@@ -8412,7 +8424,8 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
         continue;
 
       auto subjectType = stripBoundDependentMemberTypes(
-          req.getSource()->getStoredType());
+          resolveDependentMemberTypes(*this, stripBoundDependentMemberTypes(req.getSource()->getStoredType())));
+      subjectType.dump();
       auto rhs = req.getRHS();
 
       switch (req.getKind()) {
@@ -8444,9 +8457,11 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
     }
 
     for (const auto &req : Impl->ExplicitSameTypeRequirements) {
-      auto subjectType = stripBoundDependentMemberTypes(req.getFirstType());
+      auto subjectType = (!req.getSecondType()->isTypeParameter() ? req.getFirstType()
+          : stripBoundDependentMemberTypes(
+          resolveDependentMemberTypes(*this, stripBoundDependentMemberTypes(req.getFirstType()))));
       Type constraintType;
-      if (req.getSecondType()->isTypeParameter()) {
+      if (false && req.getSecondType()->isTypeParameter()) {
         constraintType = stripBoundDependentMemberTypes(req.getSecondType());
       } else {
         constraintType = resolveDependentMemberTypes(*this, req.getSecondType())
