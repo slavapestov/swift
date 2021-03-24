@@ -8387,8 +8387,8 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
     assert(!buildingRequirementSignature &&
            "Rebuilding a requirement signature?");
 
-    //assert(!Impl->HadAnyError &&
-    //       "Rebuilt signature had errors");
+    assert(!Impl->HadAnyError &&
+           "Rebuilt signature had errors");
 
     assert(!hasExplicitConformancesImpliedByConcrete() &&
            "Rebuilt signature still had redundant conformance requirements");
