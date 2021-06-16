@@ -736,20 +736,22 @@ bool MutableTerm::rewriteSubTerm(const MutableTerm &lhs,
 ///
 /// An overlap occurs if one of the following two cases holds:
 ///
-/// 1) If this == TUV and other == U, then \p result is TUV.
-/// 2) If this == TU and other == UV, then \p result is TUV.
-/// 3) If neither holds, we return false.
+/// 1) If this == TUV and other == U.
+/// 2) If this == TU and other == UV.
+///
+/// In both cases, we return the subterms T and V, together with
+/// an 'overlap kind' identifying the first or second case.
 ///
 /// Note that this relation is not commutative; we need to check
 /// for overlap between both (X and Y) and (Y and X).
-bool MutableTerm::checkForOverlap(const MutableTerm &other,
-                                  MutableTerm &result) const {
-  assert(result.size() == 0);
-
+OverlapKind
+MutableTerm::checkForOverlap(const MutableTerm &other,
+                             MutableTerm &t,
+                             MutableTerm &v) const {
   // If the other term is longer than this term, there's no way
   // we can overlap.
   if (other.size() > size())
-    return false;
+    return OverlapKind::None;
 
   auto first1 = begin();
   auto last1 = end();
@@ -762,43 +764,48 @@ bool MutableTerm::checkForOverlap(const MutableTerm &other,
   // A.B.C.D.E
   // X.Y.Z
   //   X.Y.Z
-  //     X.Y.Z
-  while (last2 - first2 <= last1 - first1) {
+  while (last1 - first1 > last2 - first2) {
     if (std::equal(first2, last2, first1)) {
-      // If this == TUV and other == U, the overlap is TUV, so just
-      // copy this term over.
-      result = *this;
-      return true;
+      // We have an overlap of the first kind, where
+      // this == TUV and other == U.
+      //
+      // Get the subterms for T and V.
+      t = MutableTerm(begin(), first1);
+      v = MutableTerm(first1 + other.size(), end());
+      assert(!v.empty());
+      return OverlapKind::First;
     }
 
     ++first1;
   }
+
+  assert(last1 - first1 == last2 - first2);
 
   // Look for an overlap of the second kind, where a prefix of the
   // other term is equal to some suffix of this term.
   //
   // A.B.C.D.E
+  //     X.Y.Z
   //       X.Y
   //         X
   while (first1 != last1) {
-    --last2;
-
     if (std::equal(first1, last1, first2)) {
-      // If this == TU and other == UV, the overlap is the term
-      // TUV, which can be formed by concatenating a prefix of this
-      // term with the entire other term.
-      std::copy(begin(), first1,
-                std::back_inserter(result.Atoms));
-      std::copy(other.begin(), other.end(),
-                std::back_inserter(result.Atoms));
-      return true;
+      // We have an overlap of the second kind, where
+      // this == TU and other == UV.
+      //
+      // Get the subterms for T and V.
+      t = MutableTerm(begin(), first1);
+      assert(!t.empty());
+      v = MutableTerm(last2, other.end());
+      return OverlapKind::Second;
     }
 
+    --last2;
     ++first1;
   }
 
   // No overlap found.
-  return false;
+  return OverlapKind::None;
 }
 
 void MutableTerm::dump(llvm::raw_ostream &out) const {
@@ -1187,6 +1194,51 @@ void RewriteSystem::processMergedAssociatedTypes() {
   MergedAssociatedTypes.clear();
 }
 
+/// Compute a critical pair from two rewrite rules.
+///
+/// There are two cases:
+///
+/// 1) lhs == TUV -> X, rhs == U -> Y. The overlapped term is TUV;
+///    applying lhs and rhs, respectively, yields the critical pair
+///    (X, TYV).
+///
+/// 2) lhs == TU -> X, rhs == UV -> Y. The overlapped term is once
+///    again TUV; applying lhs and rhs, respectively, yields the
+///    critical pair (XV, TY).
+static Optional<std::pair<MutableTerm, MutableTerm>>
+computeCriticalPair(const Rule &lhs, const Rule &rhs) {
+  MutableTerm t, v;
+
+  switch (lhs.checkForOverlap(rhs, t, v)) {
+  case OverlapKind::None:
+    return None;
+
+  case OverlapKind::First: {
+    // lhs == TUV -> X, rhs == U -> Y.
+
+    // Compute the term TYV.
+    t.append(rhs.getRHS());
+    t.append(v);
+    return std::make_pair(lhs.getRHS(), t);
+  }
+
+  case OverlapKind::Second: {
+    // lhs == TU -> X, rhs == UV -> Y.
+
+    // Compute the term XV.
+    MutableTerm xv;
+    xv.append(lhs.getRHS());
+    xv.append(v);
+
+    // Compute the term TY.
+    t.append(rhs.getRHS());
+    return std::make_pair(xv, t);
+  }
+  }
+
+  llvm_unreachable("Bad overlap kind");
+}
+
 /// Computes the confluent completion using the Knuth-Bendix algorithm
 /// (https://en.wikipedia.org/wiki/Knuth–Bendix_completion_algorithm).
 ///
@@ -1211,50 +1263,33 @@ RewriteSystem::computeConfluentCompletion(unsigned maxIterations,
   // that we resolve all overlaps among the initial set of rules before
   // moving on to overlaps between rules introduced by completion.
   while (!Worklist.empty()) {
-    auto pair = Worklist.front();
+    auto next = Worklist.front();
     Worklist.pop_front();
 
-    MutableTerm first;
-
-    const auto &lhs = Rules[pair.first];
-    const auto &rhs = Rules[pair.second];
+    const auto &lhs = Rules[next.first];
+    const auto &rhs = Rules[next.second];
 
     if (DebugCompletion) {
-      llvm::dbgs() << "$ Check for overlap: (#" << pair.first << ") ";
+      llvm::dbgs() << "$ Check for overlap: (#" << next.first << ") ";
       lhs.dump(llvm::dbgs());
       llvm::dbgs() << "\n";
-      llvm::dbgs() << "                -vs- (#" << pair.second << ") ";
+      llvm::dbgs() << "                -vs- (#" << next.second << ") ";
       rhs.dump(llvm::dbgs());
-      llvm::dbgs() << ":";
+      llvm::dbgs() << ":\n";
     }
 
-    if (!lhs.checkForOverlap(rhs, first)) {
+    auto pair = computeCriticalPair(lhs, rhs);
+    if (!pair) {
       if (DebugCompletion) {
         llvm::dbgs() << " no overlap\n\n";
       }
       continue;
     }
 
-    if (DebugCompletion) {
-      llvm::dbgs() << "\n";
-      llvm::dbgs() << "$$ Overlapping term is ";
-      first.dump(llvm::dbgs());
-      llvm::dbgs() << "\n";
-    }
+    MutableTerm first, second;
 
-    assert(first.size() > 0);
-
-    // We have two rules whose left hand sides overlap. This means
-    // one of the following two cases is true:
-    //
-    // 1) lhs == TUV and rhs == U
-    // 2) lhs == TU and rhs == UV
-    MutableTerm second = first;
-
-    // In both cases, rewrite the term TUV using both rules to
-    // produce two new terms X and Y.
-    lhs.apply(first);
-    rhs.apply(second);
+    // We have a critical pair (X, Y).
+    std::tie(first, second) = *pair;
 
     if (DebugCompletion) {
       llvm::dbgs() << "$$ First term of critical pair is ";
