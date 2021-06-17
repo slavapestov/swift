@@ -831,6 +831,9 @@ bool MutableTerm::rewriteSubTerm(const MutableTerm &lhs,
 /// In both cases, we return the subterms T and V, together with
 /// an 'overlap kind' identifying the first or second case.
 ///
+/// If both rules have identical left hand sides, either case could
+/// apply, but we arbitrarily pick case 1.
+///
 /// Note that this relation is not commutative; we need to check
 /// for overlap between both (X and Y) and (Y and X).
 OverlapKind
@@ -853,7 +856,8 @@ MutableTerm::checkForOverlap(const MutableTerm &other,
   // A.B.C.D.E
   // X.Y.Z
   //   X.Y.Z
-  while (last1 - first1 > last2 - first2) {
+  //     X.Y.Z
+  while (last1 - first1 >= last2 - first2) {
     if (std::equal(first2, last2, first1)) {
       // We have an overlap of the first kind, where
       // this == TUV and other == U.
@@ -868,13 +872,10 @@ MutableTerm::checkForOverlap(const MutableTerm &other,
     ++first1;
   }
 
-  assert(last1 - first1 == last2 - first2);
-
   // Look for an overlap of the second kind, where a prefix of the
   // other term is equal to some suffix of this term.
   //
   // A.B.C.D.E
-  //     X.Y.Z
   //       X.Y
   //         X
   while (first1 != last1) {
@@ -884,6 +885,7 @@ MutableTerm::checkForOverlap(const MutableTerm &other,
       //
       // Get the subterms for T and V.
       t = MutableTerm(begin(), first1);
+      assert(!t.empty());
       v = MutableTerm(last2, other.end());
       return OverlapKind::Second;
     }
@@ -1298,6 +1300,9 @@ void RewriteSystem::processMergedAssociatedTypes() {
 /// 2) lhs == TU -> X, rhs == UV -> Y. The overlapped term is once
 ///    again TUV; applying lhs and rhs, respectively, yields the
 ///    critical pair (XV, TY).
+///
+/// If lhs and rhs have identical left hand sides, either case could
+/// apply, but we arbitrarily pick case 1.
 ///
 /// There is also an additional wrinkle. If we're in case 2, and the
 /// last atom of V is a superclass or concrete type atom A, we prepend
