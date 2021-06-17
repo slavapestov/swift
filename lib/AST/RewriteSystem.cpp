@@ -445,6 +445,52 @@ int Atom::compare(Atom other, const ProtocolGraph &graph) const {
   return result;
 }
 
+/// For a superclass or concrete type atom
+///
+///   [concrete: Foo<X1, ..., Xn>]
+///   [superclass: Foo<X1, ..., Xn>]
+///
+/// Return a new atom where the prefix T is prepended to each of the
+/// substitutions:
+///
+///   [concrete: Foo<T.X1, ..., T.Xn>]
+///   [superclass: Foo<T.X1, ..., T.Xn>]
+///
+/// Asserts if this is not a superclass or concrete type atom.
+Atom Atom::prependPrefixToConcreteSubstitutions(
+    const MutableTerm &prefix,
+    RewriteContext &ctx) const {
+  assert(isSuperclassOrConcreteType());
+
+  if (prefix.empty())
+    return *this;
+
+  SmallVector<Term, 2> substitutions;
+  for (auto term : getSubstitutions()) {
+    MutableTerm mutTerm;
+    mutTerm.append(prefix);
+    mutTerm.append(term);
+
+    substitutions.push_back(Term::get(mutTerm, ctx));
+  }
+
+  switch (getKind()) {
+  case Kind::Superclass:
+    return Atom::forSuperclass(getSuperclass(), substitutions, ctx);
+  case Kind::ConcreteType:
+    return Atom::forConcreteType(getConcreteType(), substitutions, ctx);
+
+  case Kind::GenericParam:
+  case Kind::Name:
+  case Kind::Protocol:
+  case Kind::AssociatedType:
+  case Kind::Layout:
+    break;
+  }
+
+  llvm_unreachable("Bad atom kind");
+}
+
 /// Print the atom using our mnemonic representation.
 void Atom::dump(llvm::raw_ostream &out) const {
   auto dumpSubstitutions = [&]() {
@@ -1210,8 +1256,12 @@ void RewriteSystem::processMergedAssociatedTypes() {
 /// 2) lhs == TU -> X, rhs == UV -> Y. The overlapped term is once
 ///    again TUV; applying lhs and rhs, respectively, yields the
 ///    critical pair (XV, TY).
-static Optional<std::pair<MutableTerm, MutableTerm>>
-computeCriticalPair(const Rule &lhs, const Rule &rhs) {
+///
+/// There is also an additional wrinkle. If we're in case 2, and the
+/// last atom of V is a superclass or concrete type atom A, we prepend
+/// T to each substitution of A.
+Optional<std::pair<MutableTerm, MutableTerm>>
+RewriteSystem::computeCriticalPair(const Rule &lhs, const Rule &rhs) const {
   MutableTerm t, v;
 
   switch (lhs.checkForOverlap(rhs, t, v)) {
@@ -1229,6 +1279,11 @@ computeCriticalPair(const Rule &lhs, const Rule &rhs) {
 
   case OverlapKind::Second: {
     // lhs == TU -> X, rhs == UV -> Y.
+
+    if (v.back().isSuperclassOrConcreteType()) {
+      v.back() = v.back().prependPrefixToConcreteSubstitutions(
+          t, Context);
+    }
 
     // Compute the term XV.
     MutableTerm xv;
