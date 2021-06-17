@@ -193,6 +193,12 @@ Atom Atom::forName(Identifier name,
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(name);
 
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
+
   ctx.Atoms.InsertNode(atom, insertPos);
 
   return atom;
@@ -214,6 +220,12 @@ Atom Atom::forProtocol(const ProtocolDecl *proto,
   unsigned size = Storage::totalSizeToAlloc<const ProtocolDecl *, Term>(0, 0);
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(proto);
+
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
 
   ctx.Atoms.InsertNode(atom, insertPos);
 
@@ -252,6 +264,12 @@ Atom Atom::forAssociatedType(ArrayRef<const ProtocolDecl *> protos,
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(protos, name);
 
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
+
   ctx.Atoms.InsertNode(atom, insertPos);
 
   return atom;
@@ -276,6 +294,12 @@ Atom Atom::forGenericParam(GenericTypeParamType *param,
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(param);
 
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
+
   ctx.Atoms.InsertNode(atom, insertPos);
 
   return atom;
@@ -296,6 +320,12 @@ Atom Atom::forLayout(LayoutConstraint layout,
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(layout);
 
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
+
   ctx.Atoms.InsertNode(atom, insertPos);
 
   return atom;
@@ -307,6 +337,7 @@ Atom Atom::forSuperclass(CanType type, ArrayRef<Term> substitutions,
   llvm::FoldingSetNodeID id;
   id.AddInteger(unsigned(Kind::Superclass));
   id.AddPointer(type.getPointer());
+  id.AddInteger(unsigned(substitutions.size()));
 
   for (auto substitution : substitutions)
     id.AddPointer(substitution.getOpaquePointer());
@@ -320,6 +351,12 @@ Atom Atom::forSuperclass(CanType type, ArrayRef<Term> substitutions,
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(Kind::Superclass, type, substitutions);
 
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
+
   ctx.Atoms.InsertNode(atom, insertPos);
 
   return atom;
@@ -331,7 +368,7 @@ Atom Atom::forConcreteType(CanType type, ArrayRef<Term> substitutions,
   llvm::FoldingSetNodeID id;
   id.AddInteger(unsigned(Kind::ConcreteType));
   id.AddPointer(type.getPointer());
-
+  id.AddInteger(unsigned(substitutions.size()));
   for (auto substitution : substitutions)
     id.AddPointer(substitution.getOpaquePointer());
 
@@ -343,6 +380,12 @@ Atom Atom::forConcreteType(CanType type, ArrayRef<Term> substitutions,
       0, substitutions.size());
   void *mem = ctx.Allocator.Allocate(size, alignof(Storage));
   auto *atom = new (mem) Storage(Kind::ConcreteType, type, substitutions);
+
+#ifndef NDEBUG
+  llvm::FoldingSetNodeID newID;
+  atom->Profile(newID);
+  assert(id == newID);
+#endif
 
   ctx.Atoms.InsertNode(atom, insertPos);
 
