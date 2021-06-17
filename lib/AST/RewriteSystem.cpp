@@ -884,7 +884,6 @@ MutableTerm::checkForOverlap(const MutableTerm &other,
       //
       // Get the subterms for T and V.
       t = MutableTerm(begin(), first1);
-      assert(!t.empty());
       v = MutableTerm(last2, other.end());
       return OverlapKind::Second;
     }
