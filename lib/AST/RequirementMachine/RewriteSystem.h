@@ -22,7 +22,6 @@
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/TinyPtrVector.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/TrailingObjects.h"
 #include <algorithm>
@@ -37,6 +36,7 @@ namespace swift {
 
 namespace rewriting {
 
+class EquivalenceClassMap;
 class MutableTerm;
 class RewriteContext;
 class Term;
@@ -90,7 +90,7 @@ public:
     Name,
 
     //////
-    ////// "Fact-like" atom kinds:
+    ////// "Property-like" atom kinds:
     //////
 
     /// When appearing at the start of a term, denotes a nested
@@ -125,6 +125,17 @@ private:
 
 public:
   Kind getKind() const;
+
+  /// A property records something about a type term; either a protocol
+  /// conformance, a layout constraint, or a superclass or concrete type
+  /// constraint.
+  bool isProperty() const {
+    auto kind = getKind();
+    return (kind == Atom::Kind::Protocol ||
+            kind == Atom::Kind::Layout ||
+            kind == Atom::Kind::Superclass ||
+            kind == Atom::Kind::ConcreteType);
+  }
 
   bool isSuperclassOrConcreteType() const {
     auto kind = getKind();
@@ -353,6 +364,17 @@ public:
                               MutableTerm &v) const;
 
   void dump(llvm::raw_ostream &out) const;
+
+  friend bool operator==(const MutableTerm &lhs, const MutableTerm &rhs) {
+    if (lhs.size() != rhs.size())
+      return false;
+
+    return std::equal(lhs.begin(), lhs.end(), rhs.begin());
+  }
+
+  friend bool operator!=(const MutableTerm &lhs, const MutableTerm &rhs) {
+    return !(lhs == rhs);
+  }
 };
 
 /// A global object that can be shared by multiple rewrite systems.
@@ -536,6 +558,8 @@ public:
       unsigned maxDepth);
 
   void simplifyRightHandSides();
+
+  bool buildEquivalenceClassMap(EquivalenceClassMap &map);
 
   void dump(llvm::raw_ostream &out) const;
 

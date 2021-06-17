@@ -522,7 +522,5 @@ RewriteSystem::computeConfluentCompletion(unsigned maxIterations,
     processMergedAssociatedTypes();
   }
 
-  simplifyRightHandSides();
-
   return CompletionResult::Success;
 }
