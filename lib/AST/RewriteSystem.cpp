@@ -1318,6 +1318,11 @@ RewriteSystem::computeCriticalPair(const Rule &lhs, const Rule &rhs) const {
   case OverlapKind::First: {
     // lhs == TUV -> X, rhs == U -> Y.
 
+    // Note: This includes the case where the two rules have exactly
+    // equal left hand sides; that is, lhs == U -> X, rhs == U -> Y.
+    //
+    // In this case, T and V are both empty.
+
     // Compute the term TYV.
     t.append(rhs.getRHS());
     t.append(v);
