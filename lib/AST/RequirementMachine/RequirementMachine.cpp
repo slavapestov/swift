@@ -279,9 +279,17 @@ void RequirementMachine::addGenericSignature(CanGenericSignature sig) {
 /// Attempt to obtain a confluent rewrite system using the completion
 /// procedure.
 void RequirementMachine::computeCompletion(CanGenericSignature sig) {
+  // FIXME: Integrate this with existing limit
+  unsigned maxOuterIterations = 10;
+
   bool keepGoing = true;
 
   while (keepGoing) {
+    if (--maxOuterIterations == 0) {
+      llvm::errs() << "crap\n";
+      abort();
+    }
+
     // First, run the Knuth-Bendix algorithm to resolve overlapping rules.
     auto result = Impl->System.computeConfluentCompletion(
         Context.LangOpts.RequirementMachineStepLimit,
