@@ -305,8 +305,10 @@ bool GenericSignatureImpl::requiresClass(Type type) const {
 
   auto &ctx = getASTContext();
   if (ctx.LangOpts.EnableRequirementMachine) {
-    bool gsbResult = computeViaGSB();
     bool rqmResult = computeViaRQM();
+
+#ifndef NDEBUG
+    bool gsbResult = computeViaGSB();
 
     if (gsbResult != rqmResult) {
       llvm::errs() << "RequirementMachine::requiresClass() is broken\n";
@@ -315,6 +317,7 @@ bool GenericSignatureImpl::requiresClass(Type type) const {
       llvm::errs() << "GenericSignatureBuilder says: " << gsbResult << "\n";
       llvm::errs() << "RequirementMachine says: " << rqmResult << "\n";
     }
+#endif
 
     return rqmResult;
   } else {
