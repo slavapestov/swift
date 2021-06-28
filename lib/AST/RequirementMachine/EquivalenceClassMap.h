@@ -89,6 +89,10 @@ public:
   LayoutConstraint getLayoutConstraint() const {
     return Layout;
   }
+
+  ArrayRef<const ProtocolDecl *> getConformsTo() const {
+    return ConformsTo;
+  }
 };
 
 /// Stores all rewrite rules of the form T.[p] => T, where [p] is a property
