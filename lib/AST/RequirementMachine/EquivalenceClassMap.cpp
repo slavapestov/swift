@@ -391,6 +391,9 @@ EquivalenceClassMap::getEquivalenceClassIfPresent(const MutableTerm &key) const 
 /// Returns nullptr if no information is known about this key.
 EquivalenceClass *
 EquivalenceClassMap::lookUpEquivalenceClass(const MutableTerm &key) const {
+  if (auto *equivClass = getEquivalenceClassIfPresent(key))
+    return equivClass;
+
   auto begin = key.begin() + 1;
   auto end = key.end();
 
