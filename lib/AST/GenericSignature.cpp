@@ -280,21 +280,46 @@ bool GenericSignatureImpl::requiresClass(Type type) const {
   assert(type->isTypeParameter() &&
          "Only type parameters can have superclass requirements");
 
-  auto &builder = *getGenericSignatureBuilder();
-  auto equivClass =
-    builder.resolveEquivalenceClass(
-                                  type,
-                                  ArchetypeResolutionKind::CompleteWellFormed);
-  if (!equivClass) return false;
+  auto computeViaGSB = [&]() {
+    auto &builder = *getGenericSignatureBuilder();
+    auto equivClass =
+      builder.resolveEquivalenceClass(
+                                    type,
+                                    ArchetypeResolutionKind::CompleteWellFormed);
+    if (!equivClass) return false;
 
-  // If this type was mapped to a concrete type, then there is no
-  // requirement.
-  if (equivClass->concreteType) return false;
+    // If this type was mapped to a concrete type, then there is no
+    // requirement.
+    if (equivClass->concreteType) return false;
 
-  // If there is a layout constraint, it might be a class.
-  if (equivClass->layout && equivClass->layout->isClass()) return true;
+    // If there is a layout constraint, it might be a class.
+    if (equivClass->layout && equivClass->layout->isClass()) return true;
 
-  return false;
+    return false;
+  };
+
+  auto computeViaRQM = [&]() {
+    auto *machine = getRequirementMachine();
+    return machine->requiresClass(type);
+  };
+
+  auto &ctx = getASTContext();
+  if (ctx.LangOpts.EnableRequirementMachine) {
+    bool gsbResult = computeViaGSB();
+    bool rqmResult = computeViaRQM();
+
+    if (gsbResult != rqmResult) {
+      llvm::errs() << "RequirementMachine::requiresClass() is broken\n";
+      llvm::errs() << "Generic signature: " << GenericSignature(this) << "\n";
+      llvm::errs() << "Dependent type: "; type.dump(llvm::errs());
+      llvm::errs() << "GenericSignatureBuilder says: " << gsbResult << "\n";
+      llvm::errs() << "RequirementMachine says: " << rqmResult << "\n";
+    }
+
+    return rqmResult;
+  } else {
+    return computeViaGSB();
+  }
 }
 
 /// Determine the superclass bound on the given dependent type.
