@@ -879,9 +879,7 @@ MutableTerm RewriteContext::getMutableTermForType(CanType paramType,
 }
 
 void Rule::dump(llvm::raw_ostream &out) const {
-  LHS.dump(out);
-  out << " => ";
-  RHS.dump(out);
+  out << LHS << " => " << RHS;
   if (deleted)
     out << " [deleted]";
 }
@@ -940,11 +938,7 @@ bool RewriteSystem::addRule(MutableTerm lhs, MutableTerm rhs) {
   assert(lhs.compare(rhs, Protos) > 0);
 
   if (DebugAdd) {
-    llvm::dbgs() << "# Adding rule ";
-    lhs.dump(llvm::dbgs());
-    llvm::dbgs() << " => ";
-    rhs.dump(llvm::dbgs());
-    llvm::dbgs() << "\n";
+    llvm::dbgs() << "# Adding rule " << lhs << " => " << rhs << "\n";
   }
 
   unsigned i = Rules.size();
@@ -995,9 +989,7 @@ bool RewriteSystem::simplify(MutableTerm &term) const {
   bool changed = false;
 
   if (DebugSimplify) {
-    llvm::dbgs() << "= Term ";
-    term.dump(llvm::dbgs());
-    llvm::dbgs() << "\n";
+    llvm::dbgs() << "= Term " << term << "\n";
   }
 
   while (true) {
@@ -1007,16 +999,12 @@ bool RewriteSystem::simplify(MutableTerm &term) const {
         continue;
 
       if (DebugSimplify) {
-        llvm::dbgs() << "== Rule ";
-        rule.dump(llvm::dbgs());
-        llvm::dbgs() << "\n";
+        llvm::dbgs() << "== Rule " << rule << "\n";
       }
 
       if (rule.apply(term)) {
         if (DebugSimplify) {
-          llvm::dbgs() << "=== Result ";
-          term.dump(llvm::dbgs());
-          llvm::dbgs() << "\n";
+          llvm::dbgs() << "=== Result " << term << "\n";
         }
 
         changed = true;
@@ -1045,9 +1033,7 @@ void RewriteSystem::simplifyRightHandSides() {
 
 #define ASSERT_RULE(expr) \
   if (!(expr)) { \
-    llvm::errs() << "&&& Malformed rewrite rule: "; \
-    rule.dump(llvm::errs()); \
-    llvm::errs() << "\n\n"; \
+    llvm::errs() << "&&& Malformed rewrite rule: " << rule << "\n\n"; \
     dump(llvm::errs()); \
     assert(expr); \
   }
@@ -1101,9 +1087,7 @@ void RewriteSystem::simplifyRightHandSides() {
 void RewriteSystem::dump(llvm::raw_ostream &out) const {
   out << "Rewrite system: {\n";
   for (const auto &rule : Rules) {
-    out << "- ";
-    rule.dump(out);
-    out << "\n";
+    out << "- " << rule << "\n";
   }
   out << "}\n";
 }
