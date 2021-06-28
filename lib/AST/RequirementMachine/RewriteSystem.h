@@ -575,9 +575,8 @@ public:
     MaxDepth
   };
 
-  CompletionResult computeConfluentCompletion(
-      unsigned maxIterations,
-      unsigned maxDepth);
+  std::pair<CompletionResult, unsigned>
+  computeConfluentCompletion(unsigned maxIterations, unsigned maxDepth);
 
   void simplifyRightHandSides();
 
