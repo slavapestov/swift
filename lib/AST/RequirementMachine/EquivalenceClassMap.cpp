@@ -62,8 +62,7 @@ using namespace swift;
 using namespace rewriting;
 
 void EquivalenceClass::dump(llvm::raw_ostream &out) const {
-  Key.dump(out);
-  out << " => {";
+  out << Key << " => {";
 
   if (!ConformsTo.empty()) {
     out << " conforms_to: [";
@@ -83,13 +82,11 @@ void EquivalenceClass::dump(llvm::raw_ostream &out) const {
   }
 
   if (Superclass) {
-    out << " superclass: ";
-    Superclass->dump(out);
+    out << " superclass: " << *Superclass;
   }
 
   if (ConcreteType) {
-    out << " concrete_type: ";
-    ConcreteType->dump(out);
+    out << " concrete_type: " << *ConcreteType;
   }
 
   out << " }";
@@ -175,20 +172,26 @@ static Atom unifyConcreteTypes(
   auto lhsType = lhs.getConcreteType();
   auto rhsType = rhs.getConcreteType();
 
+  if (debug) {
+    llvm::dbgs() << "% Unifying " << lhs << " with " << rhs << "\n";
+  }
+
   class Matcher : public TypeMatcher<Matcher> {
     ArrayRef<Term> lhsSubstitutions;
     ArrayRef<Term> rhsSubstitutions;
     RewriteContext &ctx;
     SmallVectorImpl<std::pair<MutableTerm, MutableTerm>> &inducedRules;
+    bool debug;
 
   public:
     Matcher(ArrayRef<Term> lhsSubstitutions,
             ArrayRef<Term> rhsSubstitutions,
             RewriteContext &ctx,
-            SmallVectorImpl<std::pair<MutableTerm, MutableTerm>> &inducedRules)
+            SmallVectorImpl<std::pair<MutableTerm, MutableTerm>> &inducedRules,
+            bool debug)
         : lhsSubstitutions(lhsSubstitutions),
           rhsSubstitutions(rhsSubstitutions),
-          ctx(ctx), inducedRules(inducedRules) {}
+          ctx(ctx), inducedRules(inducedRules), debug(debug) {}
 
     bool alwaysMismatchGenericParams() const { return true; }
 
@@ -202,6 +205,10 @@ static Atom unifyConcreteTypes(
         if (lhsSubstitutions[lhsIndex] != rhsSubstitutions[rhsIndex]) {
           MutableTerm lhsTerm(lhsSubstitutions[lhsIndex]);
           MutableTerm rhsTerm(rhsSubstitutions[rhsIndex]);
+          if (debug) {
+            llvm::dbgs() << "%% Induced rule " << lhsTerm
+                         << " == " << rhsTerm << "\n";
+          }
           inducedRules.emplace_back(lhsTerm, rhsTerm);
         }
         return true;
@@ -223,6 +230,10 @@ static Atom unifyConcreteTypes(
         MutableTerm constraintTerm(subjectTerm);
         constraintTerm.add(Atom::forConcreteType(concreteType, result, ctx));
 
+        if (debug) {
+          llvm::dbgs() << "%% Induced rule " << subjectTerm
+                       << " == " << constraintTerm << "\n";
+        }
         inducedRules.emplace_back(subjectTerm, constraintTerm);
         return true;
       }
@@ -243,6 +254,10 @@ static Atom unifyConcreteTypes(
         MutableTerm constraintTerm(subjectTerm);
         constraintTerm.add(Atom::forConcreteType(concreteType, result, ctx));
 
+        if (debug) {
+          llvm::dbgs() << "%% Induced rule " << subjectTerm
+                       << " == " << constraintTerm << "\n";
+        }
         inducedRules.emplace_back(subjectTerm, constraintTerm);
         return true;
       }
@@ -255,9 +270,12 @@ static Atom unifyConcreteTypes(
 
   Matcher matcher(lhs.getSubstitutions(),
                   rhs.getSubstitutions(),
-                  ctx, inducedRules);
-  if (matcher.match(lhsType, rhsType)) {
+                  ctx, inducedRules, debug);
+  if (!matcher.match(lhsType, rhsType)) {
     // FIXME: Diagnose the conflict
+    if (debug) {
+      llvm::dbgs() << "%% Concrete type conflict\n";
+    }
     return Atom::forConcreteType(CanType(ErrorType::get(ctx.getASTContext())),
                                  {}, ctx);
   }
