@@ -417,6 +417,7 @@ bool GenericSignatureImpl::requiresProtocol(Type type,
       llvm::errs() << "\n";
       llvm::errs() << "GenericSignatureBuilder says: " << gsbResult << "\n";
       llvm::errs() << "RequirementMachine says: " << rqmResult << "\n";
+      abort();
     }
 #endif
 
