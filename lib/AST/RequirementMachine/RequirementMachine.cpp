@@ -324,8 +324,7 @@ void RequirementMachine::computeCompletion(CanGenericSignature sig) {
   }
 
   if (Context.LangOpts.DebugRequirementMachine) {
-    Impl->System.dump(llvm::dbgs());
-    Impl->Map.dump(llvm::dbgs());
+    dump(llvm::dbgs());
   }
 
   assert(!Impl->Complete);
@@ -334,6 +333,11 @@ void RequirementMachine::computeCompletion(CanGenericSignature sig) {
 
 bool RequirementMachine::isComplete() const {
   return Impl->Complete;
+}
+
+void RequirementMachine::dump(llvm::raw_ostream &out) const {
+  Impl->System.dump(out);
+  Impl->Map.dump(out);
 }
 
 bool RequirementMachine::requiresClass(Type depType) const {
