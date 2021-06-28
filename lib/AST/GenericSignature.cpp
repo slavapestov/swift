@@ -482,6 +482,7 @@ LayoutConstraint GenericSignatureImpl::getLayoutConstraint(Type type) const {
       llvm::errs() << "\n";
       llvm::errs() << "GenericSignatureBuilder says: " << gsbResult << "\n";
       llvm::errs() << "RequirementMachine says: " << rqmResult << "\n";
+      abort();
     }
 #endif
 
