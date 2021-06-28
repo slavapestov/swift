@@ -316,6 +316,7 @@ bool GenericSignatureImpl::requiresClass(Type type) const {
       llvm::errs() << "Dependent type: "; type.dump(llvm::errs());
       llvm::errs() << "GenericSignatureBuilder says: " << gsbResult << "\n";
       llvm::errs() << "RequirementMachine says: " << rqmResult << "\n";
+      abort();
     }
 #endif
 
