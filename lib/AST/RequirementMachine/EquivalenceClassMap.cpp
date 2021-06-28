@@ -302,6 +302,17 @@ void EquivalenceClass::addProperty(
     return;
 
   case Atom::Kind::Superclass: {
+    auto superclass = property.getSuperclass();
+
+    // A superclass requirement implies a layout requirement.
+    auto layout =
+      LayoutConstraint::getLayoutConstraint(
+        superclass->getClassOrBoundGenericClass()->isObjC()
+          ? LayoutConstraintKind::Class
+          : LayoutConstraintKind::NativeClass,
+        ctx.getASTContext());
+    addProperty(Atom::forLayout(layout, ctx), ctx, inducedRules, debug);
+
     // FIXME: This needs to find the most derived subclass and also call
     // unifyConcreteTypes()
     Superclass = property;
@@ -375,6 +386,26 @@ EquivalenceClassMap::getEquivalenceClassIfPresent(const MutableTerm &key) const 
   return nullptr;
 }
 
+/// Look for an equivalence class corresponding to a suffix of the given key.
+///
+/// Returns nullptr if no information is known about this key.
+EquivalenceClass *
+EquivalenceClassMap::lookUpEquivalenceClass(const MutableTerm &key) const {
+  auto begin = key.begin() + 1;
+  auto end = key.end();
+
+  while (begin != end) {
+    MutableTerm suffix(begin, end);
+
+    if (auto *suffixClass = getEquivalenceClassIfPresent(suffix))
+      return suffixClass;
+
+    ++begin;
+  }
+
+  return nullptr;
+}
+
 /// Look for an equivalence class corresponding to the given key, creating a new
 /// equivalence class if necessary.
 ///
@@ -391,6 +422,8 @@ EquivalenceClassMap::getOrCreateEquivalenceClass(const MutableTerm &key) {
 
     assert(compare < 0 && "Must record equivalence classes in sorted order");
   }
+
+  auto *equivClass = new EquivalenceClass(key);
 
   // Look for the longest suffix of the key that has an equivalence class,
   // recording it as the next equivalence class if we find one.
@@ -413,25 +446,7 @@ EquivalenceClassMap::getOrCreateEquivalenceClass(const MutableTerm &key) {
   //
   // Since 'A' has no proper suffix with additional properties, the next
   // equivalence class of 'A' is nullptr.
-  EquivalenceClass *next = nullptr;
-
-  auto begin = key.begin() + 1;
-  auto end = key.end();
-
-  while (begin != end) {
-    MutableTerm suffix(begin, end);
-
-    if (auto *suffixClass = getEquivalenceClassIfPresent(suffix)) {
-      next = suffixClass;
-      break;
-    }
-
-    ++begin;
-  }
-
-  auto *equivClass = new EquivalenceClass(key);
-
-  if (next)
+  if (auto *next = lookUpEquivalenceClass(key))
     equivClass->copyPropertiesFrom(next, Context);
 
   Map.emplace_back(equivClass);

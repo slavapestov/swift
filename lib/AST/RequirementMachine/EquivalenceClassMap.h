@@ -81,6 +81,14 @@ class EquivalenceClass {
 public:
   const MutableTerm &getKey() const { return Key; }
   void dump(llvm::raw_ostream &out) const;
+
+  bool isConcreteType() const {
+    return ConcreteType.hasValue();
+  }
+
+  LayoutConstraint getLayoutConstraint() const {
+    return Layout;
+  }
 };
 
 /// Stores all rewrite rules of the form T.[p] => T, where [p] is a property
@@ -105,6 +113,8 @@ public:
   explicit EquivalenceClassMap(RewriteContext &ctx,
                                const ProtocolGraph &protos)
       : Context(ctx), Protos(protos) {}
+
+  EquivalenceClass *lookUpEquivalenceClass(const MutableTerm &key) const;
 
   void clear();
   void addProperty(const MutableTerm &key, Atom property,
