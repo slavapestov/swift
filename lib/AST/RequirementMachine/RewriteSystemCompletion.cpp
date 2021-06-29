@@ -507,7 +507,9 @@ RewriteSystem::computeConfluentCompletion(unsigned maxIterations,
       // If this rule reduces some existing rule, delete the existing rule.
       if (rule.canReduceLeftHandSide(newRule)) {
         if (DebugCompletion) {
-          llvm::dbgs() << "$ Deleting rule " << rule << "\n";
+          llvm::dbgs() << "$ Deleting rule " << rule << " because "
+                       << "its left hand side contains " << newRule
+                       << "\n";
         }
         rule.markDeleted();
       }
