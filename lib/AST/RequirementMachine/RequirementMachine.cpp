@@ -388,3 +388,15 @@ bool RequirementMachine::requiresProtocol(Type depType,
 
   return false;
 }
+
+bool RequirementMachine::isConcreteType(Type depType) const {
+  auto term = Impl->Context.getMutableTermForType(depType->getCanonicalType(),
+                                                  /*proto=*/nullptr);
+  Impl->System.simplify(term);
+
+  auto *equivClass = Impl->Map.lookUpEquivalenceClass(term);
+  if (!equivClass)
+    return false;
+
+  return equivClass->isConcreteType();
+}
