@@ -430,7 +430,7 @@ bool RequirementMachine::areSameTypeParameterInContext(Type depType1,
                                                    /*proto=*/nullptr);
   Impl->System.simplify(term1);
 
-  auto term2 = Impl->Context.getMutableTermForType(depType1->getCanonicalType(),
+  auto term2 = Impl->Context.getMutableTermForType(depType2->getCanonicalType(),
                                                    /*proto=*/nullptr);
   Impl->System.simplify(term2);
 
