@@ -434,6 +434,14 @@ public:
                                     const ProtocolDecl *proto);
 
   ASTContext &getASTContext() { return Context; }
+
+  Type getTypeForTerm(Term term,
+                      TypeArrayView<GenericTypeParamType> genericParams,
+                      const ProtocolGraph &protos) const;
+
+  Type getTypeForTerm(const MutableTerm &term,
+                      TypeArrayView<GenericTypeParamType> genericParams,
+                      const ProtocolGraph &protos) const;
 };
 
 /// A rewrite rule that replaces occurrences of LHS with RHS.

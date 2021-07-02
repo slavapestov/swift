@@ -884,6 +884,63 @@ MutableTerm RewriteContext::getMutableTermForType(CanType paramType,
   return MutableTerm(atoms);
 }
 
+template<typename Atoms>
+Type getTypeForAtomRange(Atoms atoms,
+                         TypeArrayView<GenericTypeParamType> genericParams,
+                         const ProtocolGraph &protos) {
+  Type result;
+
+  for (auto atom : atoms) {
+    if (!result) {
+      auto *genericParam = atom.getGenericParam();
+      if (!genericParams.empty()) {
+        unsigned index = GenericParamKey(genericParam).findIndexIn(genericParams);
+        result = genericParams[index];
+        continue;
+      }
+
+      result = genericParam;
+      continue;
+    }
+
+    assert(atom.getKind() == Atom::Kind::AssociatedType);
+    auto *proto = atom.getProtocols()[0];
+    auto name = atom.getName();
+
+    // FIXME: Cache this
+    const auto &info = protos.getProtocolInfo(proto);
+    auto found = std::find_if(info.AssociatedTypes.begin(),
+                              info.AssociatedTypes.end(),
+                              [&](const AssociatedTypeDecl *assocType) {
+                                return assocType->getName() == name;
+                              });
+    if (found == info.AssociatedTypes.end()) {
+      llvm::errs() << "need to look harder to find assoc type decl for ";
+      atom.dump(llvm::errs());
+      llvm::errs() << "\n";
+      abort();
+    }
+
+    auto *assocType = (*found)->getAssociatedTypeAnchor();
+
+    result = DependentMemberType::get(result, assocType);
+  }
+
+  return result;
+}
+
+Type RewriteContext::getTypeForTerm(Term term,
+                      TypeArrayView<GenericTypeParamType> genericParams,
+                      const ProtocolGraph &protos) const {
+  return getTypeForAtomRange(term, genericParams, protos);
+}
+
+Type RewriteContext::getTypeForTerm(const MutableTerm &term,
+                      TypeArrayView<GenericTypeParamType> genericParams,
+                      const ProtocolGraph &protos) const {
+  return getTypeForAtomRange(term, genericParams, protos);
+}
+
 void Rule::dump(llvm::raw_ostream &out) const {
   out << LHS << " => " << RHS;
   if (deleted)
