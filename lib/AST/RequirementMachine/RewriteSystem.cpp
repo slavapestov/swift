@@ -887,22 +887,51 @@ MutableTerm RewriteContext::getMutableTermForType(CanType paramType,
 template<typename Atoms>
 Type getTypeForAtomRange(Atoms atoms,
                          TypeArrayView<GenericTypeParamType> genericParams,
-                         const ProtocolGraph &protos) {
+                         const ProtocolGraph &protos,
+                         ASTContext &ctx) {
   Type result;
+
+  auto handleRoot = [&](GenericTypeParamType *genericParam) {
+    assert(genericParam->isCanonical());
+
+    if (!genericParams.empty()) {
+      unsigned index = GenericParamKey(genericParam).findIndexIn(genericParams);
+      result = genericParams[index];
+      return;
+    }
+
+    result = genericParam;
+  };
 
   for (auto atom : atoms) {
     if (!result) {
-      auto *genericParam = atom.getGenericParam();
-      if (!genericParams.empty()) {
-        unsigned index = GenericParamKey(genericParam).findIndexIn(genericParams);
-        result = genericParams[index];
+      // A valid term always begins with a generic parameter, protocol or
+      // associated type atom.
+      switch (atom.getKind()) {
+      case Atom::Kind::GenericParam:
+        handleRoot(atom.getGenericParam());
         continue;
-      }
 
-      result = genericParam;
-      continue;
+      case Atom::Kind::Protocol:
+        handleRoot(GenericTypeParamType::get(0, 0, ctx));
+        continue;
+
+      case Atom::Kind::AssociatedType:
+        handleRoot(GenericTypeParamType::get(0, 0, ctx));
+
+        // An associated type term at the root means we have a dependent
+        // member type rooted at Self; handle the associated type below.
+        break;
+
+      case Atom::Kind::Name:
+      case Atom::Kind::Layout:
+      case Atom::Kind::Superclass:
+      case Atom::Kind::ConcreteType:
+        llvm_unreachable("Term has invalid root atom");
+      }
     }
 
+    // Once we have a root, we should only see associated type atoms.
     assert(atom.getKind() == Atom::Kind::AssociatedType);
     auto *proto = atom.getProtocols()[0];
     auto name = atom.getName();
@@ -932,13 +961,13 @@ Type getTypeForAtomRange(Atoms atoms,
 Type RewriteContext::getTypeForTerm(Term term,
                       TypeArrayView<GenericTypeParamType> genericParams,
                       const ProtocolGraph &protos) const {
-  return getTypeForAtomRange(term, genericParams, protos);
+  return getTypeForAtomRange(term, genericParams, protos, Context);
 }
 
 Type RewriteContext::getTypeForTerm(const MutableTerm &term,
                       TypeArrayView<GenericTypeParamType> genericParams,
                       const ProtocolGraph &protos) const {
-  return getTypeForAtomRange(term, genericParams, protos);
+  return getTypeForAtomRange(term, genericParams, protos, Context);
 }
 
 void Rule::dump(llvm::raw_ostream &out) const {

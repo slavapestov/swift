@@ -437,3 +437,31 @@ bool RequirementMachine::areSameTypeParameterInContext(Type depType1,
 
   return (term1 == term2);
 }
+
+Type RequirementMachine::getCanonicalTypeInContext(
+    Type depType,
+    TypeArrayView<GenericTypeParamType> genericParams) const {
+  const auto &protos = Impl->System.getProtocols();
+
+  return depType.transformRec([&](Type t) -> Optional<Type> {
+    if (!t->isTypeParameter())
+      return None;
+
+    auto term = Impl->Context.getMutableTermForType(t->getCanonicalType(),
+                                                    /*proto=*/nullptr);
+    Impl->System.simplify(term);
+
+    auto *equivClass = Impl->Map.lookUpEquivalenceClass(term);
+    if (equivClass && equivClass->isConcreteType()) {
+      auto concreteType = equivClass->getConcreteType(genericParams,
+                                                      protos, Impl->Context);
+      if (!concreteType->hasTypeParameter())
+        return concreteType;
+
+      // FIXME: Recursion guard is needed here
+      return getCanonicalTypeInContext(concreteType, genericParams);
+    }
+
+    return Impl->Context.getTypeForTerm(term, genericParams, protos);
+  });
+}
