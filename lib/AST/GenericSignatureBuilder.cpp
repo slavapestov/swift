@@ -8398,7 +8398,8 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
   auto sig = GenericSignature::get(getGenericParams(), requirements);
 
 #ifndef NDEBUG
-  if (!Impl->HadAnyError) {
+  //bool hadAnyError = false;
+  if (requirementSignatureSelfProto) {
     checkGenericSignature(sig.getCanonicalSignature(), *this);
   }
 #endif
@@ -8420,6 +8421,12 @@ GenericSignature GenericSignatureBuilder::computeGenericSignature(
   // Wipe out the internal state, ensuring that nobody uses this builder for
   // anything more.
   Impl.reset();
+
+#ifndef NDEBUG
+  if (!requirementSignatureSelfProto) {
+    sig.verify();
+  }
+#endif
 
   return sig;
 }
