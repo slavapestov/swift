@@ -809,8 +809,6 @@ AssociatedTypeDecl *AssociatedTypeInference::findDefaultedAssociatedType(
 Type AssociatedTypeInference::computeFixedTypeWitness(
                                             AssociatedTypeDecl *assocType) {
   Type resultType;
-  auto *const structuralTy = DependentMemberType::get(
-      proto->getSelfInterfaceType(), assocType->getName());
 
   // Look at all of the inherited protocols to determine whether they
   // require a fixed type for this associated type.
@@ -826,14 +824,19 @@ Type AssociatedTypeInference::computeFixedTypeWitness(
     if (ctx.isRecursivelyConstructingRequirementMachine(sig.getCanonicalSignature()))
       continue;
 
+    auto selfTy = conformedProto->getSelfInterfaceType();
+    if (!sig->requiresProtocol(selfTy, assocType->getProtocol()))
+      continue;
+
+    auto structuralTy = DependentMemberType::get(selfTy, assocType->getName());
     const auto ty = sig->getCanonicalTypeInContext(structuralTy);
 
     // A dependent member type with an identical base and name indicates that
     // the protocol does not same-type constrain it in any way; move on to
     // the next protocol.
     if (auto *const memberTy = ty->getAs<DependentMemberType>()) {
-      if (memberTy->getBase()->isEqual(structuralTy->getBase()) &&
-          memberTy->getName() == structuralTy->getName())
+      if (memberTy->getBase()->isEqual(selfTy) &&
+          memberTy->getName() == assocType->getName())
         continue;
     }
 
