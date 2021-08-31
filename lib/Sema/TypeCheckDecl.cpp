@@ -1082,8 +1082,6 @@ ProtocolDependenciesRequest::evaluate(Evaluator &evaluator,
   // Otherwise, we can't ask for the requirement signature, because
   // this request is used as part of *building* the requirement
   // signature. Look at the structural requirements instead.
-  assert(proto->getParentSourceFile() != nullptr);
-
   for (auto req : proto->getStructuralRequirements()) {
     if (req.req.getKind() == RequirementKind::Conformance)
       result.push_back(req.req.getProtocolDecl());
@@ -1114,8 +1112,6 @@ RequirementSignatureRequest::evaluate(Evaluator &evaluator,
       return None;
     return ctx.AllocateCopy(requirements);
   }
-
-  assert(proto->getParentSourceFile() != nullptr);
 
   GenericSignatureBuilder builder(proto->getASTContext());
 
