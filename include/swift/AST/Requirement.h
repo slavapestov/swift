@@ -105,6 +105,12 @@ inline void simple_display(llvm::raw_ostream &out, const Requirement &req) {
   req.print(out, PrintOptions());
 }
 
+struct StructuralRequirement {
+  Requirement req;
+  SourceLoc loc;
+  bool inferred = false;
+};
+
 } // end namespace swift
 
 #endif
