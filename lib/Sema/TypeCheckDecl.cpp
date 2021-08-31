@@ -1013,7 +1013,7 @@ static void addInheritedRequirements(TypeDecl *decl, Type type, bool infer,
 ArrayRef<StructuralRequirement>
 StructuralRequirementsRequest::evaluate(Evaluator &evaluator,
                                         ProtocolDecl *proto) const {
-  assert(proto->getParentSourceFile() != nullptr);
+  assert(!proto->hasLazyRequirementSignature());
 
   SmallVector<StructuralRequirement, 4> result;
 
