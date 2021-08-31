@@ -42,8 +42,8 @@ struct ProtocolInfo {
   /// ProtocolGraph::computeInheritedAssociatedTypes().
   llvm::TinyPtrVector<AssociatedTypeDecl *> InheritedAssociatedTypes;
 
-  /// The protocol's requirement signature.
-  ArrayRef<Requirement> Requirements;
+  /// The protocol's dependencies.
+  ArrayRef<ProtocolDecl *> Dependencies;
 
   /// Used by ProtocolGraph::computeProtocolDepth() to detect circularity.
   unsigned Mark : 1;
@@ -65,17 +65,17 @@ struct ProtocolInfo {
 
   ProtocolInfo(ArrayRef<ProtocolDecl *> inherited,
                ArrayRef<AssociatedTypeDecl *> &&types,
-               ArrayRef<Requirement> reqs)
+               ArrayRef<ProtocolDecl *> deps)
     : Inherited(inherited),
       AssociatedTypes(types),
-      Requirements(reqs) {
+      Dependencies(deps) {
     Mark = 0;
     Depth = 0;
     Index = 0;
   }
 };
 
-/// Stores cached information about all protocols transtively
+/// Stores cached information about all protocols transitively
 /// referenced from a set of generic requirements.
 ///
 /// Out-of-line methods are documented in ProtocolGraph.cpp.

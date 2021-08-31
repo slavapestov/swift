@@ -98,7 +98,7 @@ void RewriteSystemBuilder::addGenericSignature(CanGenericSignature sig) {
     for (auto *assocType : info.InheritedAssociatedTypes)
       addAssociatedType(assocType, proto);
 
-    for (auto req : info.Requirements)
+    for (auto req : proto->getRequirementSignature())
       addRequirement(req.getCanonical(), proto);
 
     if (Dump) {

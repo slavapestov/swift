@@ -48,7 +48,7 @@ void ProtocolGraph::addProtocol(const ProtocolDecl *proto) {
 
   Info[proto] = {proto->getInheritedProtocols(),
                  proto->getAssociatedTypeMembers(),
-                 proto->getRequirementSignature()};
+                 proto->getProtocolDependencies()};
   Protocols.push_back(proto);
 }
 
@@ -58,7 +58,9 @@ void ProtocolGraph::computeTransitiveClosure() {
   unsigned i = 0;
   while (i < Protocols.size()) {
     auto *proto = Protocols[i++];
-    visitRequirements(getProtocolInfo(proto).Requirements);
+    for (auto *proto : getProtocolInfo(proto).Dependencies) {
+      addProtocol(proto);
+    }
   }
 }
 
