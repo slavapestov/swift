@@ -45,6 +45,7 @@ class RewriteContext;
 /// generic signatures and interface types.
 class RequirementMachine final {
   friend class swift::ASTContext;
+  friend class RewriteContext;
 
   CanGenericSignature Sig;
 
@@ -77,7 +78,8 @@ class RequirementMachine final {
   RequirementMachine &operator=(const RequirementMachine &) = delete;
   RequirementMachine &operator=(RequirementMachine &&) = delete;
 
-  void addGenericSignature(CanGenericSignature sig);
+  void initWithGenericSignature(CanGenericSignature sig);
+  void initWithProtocols(ArrayRef<const ProtocolDecl *> protos);
 
   bool isComplete() const;
   void computeCompletion();

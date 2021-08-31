@@ -1984,7 +1984,7 @@ ASTContext::getOrCreateRequirementMachine(CanGenericSignature sig) {
   // below.
   machinePtr.reset(machine);
 
-  machine->addGenericSignature(sig);
+  machine->initWithGenericSignature(sig);
 
   return machine;
 }
@@ -2002,6 +2002,15 @@ bool ASTContext::isRecursivelyConstructingRequirementMachine(
     return false;
 
   return !found->second->isComplete();
+}
+
+rewriting::RequirementMachine *
+ASTContext::getOrCreateRequirementMachine(const ProtocolDecl *proto) {
+  auto &rewriteCtx = getImpl().TheRewriteContext;
+  if (!rewriteCtx)
+    rewriteCtx.reset(new rewriting::RewriteContext(*this));
+
+  return rewriteCtx->getRequirementMachine(proto);
 }
 
 Optional<llvm::TinyPtrVector<ValueDecl *>>

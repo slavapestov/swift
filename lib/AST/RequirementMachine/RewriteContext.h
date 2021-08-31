@@ -28,6 +28,8 @@ namespace swift {
 
 namespace rewriting {
 
+class RequirementMachine;
+
 /// A global object that can be shared by multiple rewrite systems.
 ///
 /// It stores uniqued symbols and terms.
@@ -52,6 +54,31 @@ class RewriteContext final {
   /// Cache for merged associated type symbols.
   llvm::DenseMap<std::pair<Symbol, Symbol>, Symbol> MergedAssocTypes;
 
+  struct ProtocolNode {
+    unsigned Index;
+    unsigned LowLink : 31;
+    unsigned OnStack : 1;
+    unsigned ComponentID;
+
+    ProtocolNode() {
+      Index = 0;
+      LowLink = 0;
+      OnStack = 0;
+    }
+  };
+
+  struct ProtocolComponent {
+    ArrayRef<const ProtocolDecl *> Protos;
+    RequirementMachine *Machine = nullptr;
+  };
+
+  /// The protocol dependency graph.
+  llvm::DenseMap<const ProtocolDecl *, ProtocolNode> Protos;
+  unsigned NextComponentIndex = 0;
+
+  /// The connected components.
+  llvm::DenseMap<unsigned, ProtocolComponent> Components;
+
   ASTContext &Context;
 
   DebugOptions Debug;
@@ -60,6 +87,9 @@ class RewriteContext final {
   RewriteContext(RewriteContext &&) = delete;
   RewriteContext &operator=(const RewriteContext &) = delete;
   RewriteContext &operator=(RewriteContext &&) = delete;
+
+  void getRequirementMachineRec(const ProtocolDecl *proto,
+                                SmallVectorImpl<const ProtocolDecl *> &stack);
 
 public:
   /// Statistics.
@@ -101,6 +131,8 @@ public:
 
   Symbol mergeAssociatedTypes(Symbol lhs, Symbol rhs,
                               const ProtocolGraph &protos);
+
+  RequirementMachine *getRequirementMachine(const ProtocolDecl *proto);
 
   ~RewriteContext();
 };

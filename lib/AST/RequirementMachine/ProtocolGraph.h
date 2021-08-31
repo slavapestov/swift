@@ -55,23 +55,30 @@ struct ProtocolInfo {
 
   /// Index of the protocol in the linear order. Computed by
   /// ProtocolGraph::computeLinearOrder().
-  unsigned Index : 32;
+  unsigned Index : 31;
+
+  /// When building a protocol requirement signature, the initial set of
+  /// protocols are marked with this bit.
+  unsigned InitialComponent : 1;
 
   ProtocolInfo() {
     Mark = 0;
     Depth = 0;
     Index = 0;
+    InitialComponent = 0;
   }
 
   ProtocolInfo(ArrayRef<ProtocolDecl *> inherited,
                ArrayRef<AssociatedTypeDecl *> &&types,
-               ArrayRef<ProtocolDecl *> deps)
+               ArrayRef<ProtocolDecl *> deps,
+               bool initialComponent)
     : Inherited(inherited),
       AssociatedTypes(types),
       Dependencies(deps) {
     Mark = 0;
     Depth = 0;
     Index = 0;
+    InitialComponent = initialComponent;
   }
 };
 
@@ -85,6 +92,7 @@ class ProtocolGraph {
   bool Debug = false;
 
 public:
+  void visitProtocols(ArrayRef<const ProtocolDecl *> protos);
   void visitRequirements(ArrayRef<Requirement> reqs);
 
   bool isKnownProtocol(const ProtocolDecl *proto) const;
@@ -100,7 +108,8 @@ public:
       const ProtocolDecl *proto) const;
 
 private:
-  void addProtocol(const ProtocolDecl *proto);
+  void addProtocol(const ProtocolDecl *proto,
+                   bool initialComponent);
   void computeTransitiveClosure();
   void computeLinearOrder();
   void computeInheritedAssociatedTypes();
