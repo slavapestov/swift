@@ -42,34 +42,74 @@ protocol PP {
 
 struct GG<T : P> : PP {}
 
-// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR3@
+// CxHECK-LABEL: concrete_conformances_in_protocol.(file).RR3a@
+// CxHECK-LABEL: Requirement signature: <Self where Self.A : P, Self.B == GG<Self.A>>
+
+// GSB broken here
+/*protocol RR3a {
+  associatedtype A
+  associatedtype B where B : PP, B == GG<A>
+}*/
+
+// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR3b@
 // CHECK-LABEL: Requirement signature: <Self where Self.A : P, Self.B == GG<Self.A>>
 
-protocol RR3 {
+protocol RR3b {
   associatedtype A : P
   associatedtype B where B : PP, B == GG<A>
 }
 
-// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR4@
+// CxHECK-LABEL: concrete_conformances_in_protocol.(file).RR4a@
+// CxHECK-LABEL: Requirement signature: <Self where Self.A == GG<Self.B>, Self.B : P>
+
+// GSB broken here
+/*
+protocol RR4a {
+  associatedtype A where A : PP, A == GG<B>
+  associatedtype B
+}*/
+
+// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR4b@
 // CHECK-LABEL: Requirement signature: <Self where Self.A == GG<Self.B>, Self.B : P>
 
-protocol RR4 {
+protocol RR4b {
   associatedtype A where A : PP, A == GG<B>
   associatedtype B : P
 }
 
-// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR5@
+// CxHECK-LABEL: concrete_conformances_in_protocol.(file).RR5a@
+// CxHECK-LABEL: Requirement signature: <Self where Self.A : P, Self.B == GG<Self.A.T>, Self.A.T : P>
+
+// GSB broken here
+/*
+protocol RR5a {
+  associatedtype A : P
+  associatedtype B where B : PP, B == GG<A.T>
+}*/
+
+// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR5b@
 // CHECK-LABEL: Requirement signature: <Self where Self.A : PP, Self.B == GG<Self.A.T>>
 
-protocol RR5 {
+protocol RR5b {
   associatedtype A : PP
   associatedtype B where B : PP, B == GG<A.T>
 }
 
-// CHECK-LABEL: concrete_conformances_in_protocol.(file).RR6@
-// CHECK-LABEL: Requirement signature: <Self where Self.A == GG<Self.B.T>, Self.B : PP>
+// CxHECK-LABEL: concrete_conformances_in_protocol.(file).RR6a@
+// CxHECK-LABEL: Requirement signature: <Self where Self.A == GG<Self.B.T>, Self.B : P, Self.B.T : P>
 
-protocol RR6 {
+// RQM is broken here; extra req Self.A.T == Self.B.T, missing req Self.B.T : P
+/*protocol RR6a {
+  associatedtype A where A : PP, A == GG<B.T>
+  associatedtype B : P
+}*/
+
+// CxHECK-LABEL: concrete_conformances_in_protocol.(file).RR6b@
+// CxHECK-LABEL: Requirement signature: <Self where Self.A == GG<Self.B.T>, Self.B : PP>
+
+// RQM is broken here; extra req Self.A.T == Self.B.T, missing req Self.B.T : P
+/*
+protocol RR6b {
   associatedtype A where A : PP, A == GG<B.T>
   associatedtype B : PP
-}
+}*/
