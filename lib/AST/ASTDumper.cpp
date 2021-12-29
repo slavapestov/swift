@@ -3972,6 +3972,14 @@ namespace {
       PrintWithColorRAII(OS, ParenthesisColor) << ')';
     }
 
+    void visitParametrizedProtocolType(ParametrizedProtocolType *T,
+                                       StringRef label) {
+      printCommon(label, "parametrized_protocol_type");
+      printRec("base", T->getBaseType());
+      printRec("arg", T->getArgumentType());
+      PrintWithColorRAII(OS, ParenthesisColor) << ')';
+    }
+
     void visitExistentialType(ExistentialType *T,
                               StringRef label) {
       printCommon(label, "existential_type");

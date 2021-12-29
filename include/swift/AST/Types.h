@@ -5234,6 +5234,65 @@ private:
 BEGIN_CAN_TYPE_WRAPPER(ProtocolCompositionType, Type)
 END_CAN_TYPE_WRAPPER(ProtocolCompositionType, Type)
 
+/// ProtocolCompositionType - A type that composes some number of protocols
+/// together to represent types that conform to all of the named protocols.
+///
+/// \code
+/// protocol P { /* ... */ }
+/// protocol Q { /* ... */ }
+/// var x : P & Q
+/// \endcode
+///
+/// Here, the type of x is a composition of the protocols 'P' and 'Q'.
+///
+/// The canonical form of a protocol composition type is based on a sorted (by
+/// module and name), minimized (based on redundancy due to protocol
+/// inheritance) protocol list. If the sorted, minimized list is a single
+/// protocol, then the canonical type is that protocol type. Otherwise, it is
+/// a composition of the protocols in that list.
+class ParametrizedProtocolType final : public TypeBase,
+    public llvm::FoldingSetNode {
+  ProtocolType *Base;
+  Type Arg;
+
+public:
+  /// Retrieve an instance of a protocol composition type with the
+  /// given set of members.
+  static Type get(const ASTContext &C, ProtocolType *base,
+                  Type arg);
+
+  ProtocolType *getBaseType() const {
+    return Base;
+  }
+
+  Type getArgumentType() const {
+    return Arg;
+  }
+
+  void Profile(llvm::FoldingSetNodeID &ID) {
+    Profile(ID, Base, Arg);
+  }
+  static void Profile(llvm::FoldingSetNodeID &ID,
+                      ProtocolType *base,
+                      Type arg);
+
+  // Implement isa/cast/dyncast/etc.
+  static bool classof(const TypeBase *T) {
+    return T->getKind() == TypeKind::ParametrizedProtocol;
+  }
+  
+private:
+  ParametrizedProtocolType(const ASTContext *ctx,
+                           ProtocolType *base, Type arg,
+                           RecursiveTypeProperties properties)
+    : TypeBase(TypeKind::ParametrizedProtocol, /*Context=*/ctx, properties),
+      Base(base), Arg(arg) { }
+};
+BEGIN_CAN_TYPE_WRAPPER(ParametrizedProtocolType, Type)
+  PROXY_CAN_TYPE_SIMPLE_GETTER(getBaseType)
+  PROXY_CAN_TYPE_SIMPLE_GETTER(getArgumentType)
+END_CAN_TYPE_WRAPPER(ParametrizedProtocolType, Type)
+
 /// An existential type, spelled with \c any .
 ///
 /// In Swift 5 mode, a plain protocol name in type
