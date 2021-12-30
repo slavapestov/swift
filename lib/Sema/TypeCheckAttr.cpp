@@ -272,6 +272,8 @@ public:
   void visitNoImplicitCopyAttr(NoImplicitCopyAttr *attr);
 
   void visitUnavailableFromAsyncAttr(UnavailableFromAsyncAttr *attr);
+
+  void visitPrimaryAssociatedTypeAttr(PrimaryAssociatedTypeAttr *attr);
 };
 
 } // end anonymous namespace
@@ -5753,6 +5755,10 @@ void AttributeChecker::visitUnavailableFromAsyncAttr(
       }
     }
   }
+}
+
+void AttributeChecker::visitPrimaryAssociatedTypeAttr(
+    PrimaryAssociatedTypeAttr *attr) {
 }
 
 namespace {
