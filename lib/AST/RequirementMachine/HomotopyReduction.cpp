@@ -392,6 +392,9 @@ findRuleToDelete(llvm::function_ref<bool(unsigned)> isRedundantRuleFn,
     if (rule.isPermanent())
       continue;
 
+    // Homotopy reduction runs multiple passes with different filters to
+    // prioritize the deletion of certain rules ahead of others. Apply
+    // the filter now.
     if (!isRedundantRuleFn(ruleID))
       continue;
 
@@ -400,10 +403,32 @@ findRuleToDelete(llvm::function_ref<bool(unsigned)> isRedundantRuleFn,
       continue;
     }
 
+    // This is the best rule we've found so far.
     const auto &otherRule = getRule(found->second);
 
-    if (rule.isConflicting() ||
-        *rule.compare(otherRule, Context) > 0) {
+    Optional<int> comparison = rule.compare(otherRule, Context);
+    if (!comparison.hasValue()) {
+      // Two rules (T.[C] => T) and (T.[C'] => T) are incomparable if
+      // C and C' are superclass, concrete type or concrete conformance
+      // symbols.
+      //
+      // This should only arise in two limited situations:
+      // - The new rule was marked invalid due to a conflict.
+      // - The new rule was substitution-simplified.
+      //
+      // In both cases, the new rule becomes the new candidate for
+      // elimination.
+      if (!rule.isConflicting() && !rule.isSubstitutionSimplified()) {
+        llvm::errs() << "Incomparable rules in homotopy reduction:\n";
+        llvm::errs() << "- Candidate rule: " << rule << "\n";
+        llvm::errs() << "- Best rule so far: " << otherRule << "\n";
+        abort();
+      }
+
+      found = pair;
+    } else if (*comparison > 0) {
+      // Otherwise, if the new rule is less canonical than the best one so
+      // far, it becomes the new candidate for elimination.
       found = pair;
     }
   }
