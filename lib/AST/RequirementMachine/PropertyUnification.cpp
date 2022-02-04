@@ -391,6 +391,35 @@ void PropertyMap::addSuperclassProperty(
   }
 }
 
+static void buildRewritePathForInducedRule(unsigned differenceID,
+                                           unsigned lhsRuleID,
+                                           unsigned rhsRuleID,
+                                           unsigned substitutionIndex,
+                                           const RewriteSystem &system,
+                                           RewritePath &path) {
+  // Replace f(Xn) with Xn and push T.[RHS] on the stack.
+  path.add(RewriteStep::forRightConcreteProjection(
+      differenceID, substitutionIndex, /*inverse=*/false));
+
+  unsigned rhsPrefix = 0; // FIXME
+
+  // Apply the rule (T.[RHS] => T).
+  path.add(RewriteStep::forRewriteRule(
+      /*startOffset=*/rhsPrefix, /*endOffset=*/0,
+      /*ruleID=*/rhsRuleID, /*inverse=*/false));
+
+  unsigned lhsPrefix = 0; // FIXME
+
+  // Apply the inverted rule (T => T.[LHS]).
+  path.add(RewriteStep::forRewriteRule(
+      /*startOffset=*/lhsPrefix, /*endOffset=*/0,
+      /*ruleID=*/lhsRuleID, /*inverse=*/true));
+
+  // Pop T.[LHS] from the stack, leaving behind Xn.
+  path.add(RewriteStep::forLeftConcreteProjection(
+           differenceID, substitutionIndex, /*inverse=*/true));
+}
+
 /// Record induced rules from the given type difference.
 void PropertyMap::processTypeDifference(const TypeDifference &difference,
                                         unsigned differenceID,
@@ -402,34 +431,22 @@ void PropertyMap::processTypeDifference(const TypeDifference &difference,
     difference.dump(llvm::dbgs());
   }
 
-  for (const auto &pair : difference.SameTypes) {
-    // Both sides are type parameters; add a same-type requirement.
-    auto lhsTerm = difference.getOriginalSubstitution(pair.first);
-    MutableTerm rhsTerm(pair.second);
+  for (unsigned index : indices(difference.LHS.getSubstitutions())) {
+    auto lhsTerm = difference.getReplacementSubstitution(index);
+    auto rhsTerm = difference.getOriginalSubstitution(index);
+
+    RewritePath path;
+    buildRewritePathForInducedRule(differenceID, lhsRuleID, rhsRuleID,
+                                   index, System, path);
 
     if (debug) {
       llvm::dbgs() << "%% Induced rule " << lhsTerm
-                   << " == " << rhsTerm << "\n";
+                   << " => " << rhsTerm << " with path ";
+      path.dump(llvm::dbgs(), lhsTerm, System);
+      llvm::dbgs() << "\n";
     }
 
-    // FIXME: Need a rewrite path here.
-    System.addRule(lhsTerm, rhsTerm);
-  }
-
-  for (const auto &pair : difference.ConcreteTypes) {
-    // A type parameter is equated with a concrete type; add a concrete
-    // type requirement.
-    auto rhsTerm = difference.getOriginalSubstitution(pair.first);
-    MutableTerm lhsTerm(rhsTerm);
-    lhsTerm.add(pair.second);
-
-    if (debug) {
-      llvm::dbgs() << "%% Induced rule " << lhsTerm
-                   << " == " << rhsTerm << "\n";
-    }
-
-    // FIXME: Need a rewrite path here.
-    System.addRule(lhsTerm, rhsTerm);
+    System.addRule(lhsTerm, rhsTerm, &path);
   }
 }
 
