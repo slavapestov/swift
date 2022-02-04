@@ -527,7 +527,7 @@ RewritePathEvaluator::applyLeftConcreteProjection(const RewriteStep &step,
   const auto &difference = system.getTypeDifference(step.getTypeDifferenceID());
   unsigned index = step.getSubstitutionIndex();
 
-  MutableTerm leftProjection(difference.LHS.getSubstitutions()[index]);
+  auto leftProjection = difference.getOriginalSubstitution(index);
 
   MutableTerm leftBaseTerm(difference.BaseTerm);
   leftBaseTerm.add(difference.LHS);
@@ -584,7 +584,7 @@ RewritePathEvaluator::applyRightConcreteProjection(const RewriteStep &step,
   const auto &difference = system.getTypeDifference(step.getTypeDifferenceID());
   unsigned index = step.getSubstitutionIndex();
 
-  MutableTerm leftProjection(difference.LHS.getSubstitutions()[index]);
+  auto leftProjection = difference.getOriginalSubstitution(index);
   auto rightProjection = difference.getReplacementSubstitution(index);
 
   MutableTerm leftBaseTerm(difference.BaseTerm);
