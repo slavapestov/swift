@@ -151,7 +151,11 @@ struct RewriteStep {
     /// term ending with the TypeDifference RHS at the top of the primary stack:
     ///
     ///    T.[concrete: C'<...> with <X1', X2'...>]
-    DecomposeConcrete
+    DecomposeConcrete,
+
+    LeftConcreteProjection,
+
+    RightConcreteProjection
   };
 
   /// The rewrite step kind.
@@ -178,7 +182,16 @@ struct RewriteStep {
   ///
   /// If Kind is Relation, the relation index returned from
   /// RewriteSystem::recordRelation().
-  unsigned Arg : 16;
+  ///
+  /// If Kind is DecomposeConcrete, the type difference ID returend from
+  /// RewriteSystem::recordTypeDifference().
+  ///
+  /// If Kind is LeftConcreteProjection or RightConcreteProjection, the
+  /// type difference returend from RewriteSystem::recordTypeDifference()
+  /// in the most significant 16 bits, together with the substitution index
+  /// in the least significant 16 bits. See getConcreteProjectionArg(),
+  /// getTypeDifference() and getSubstitutionIndex().
+  unsigned Arg;
 
   RewriteStep(StepKind kind, unsigned startOffset, unsigned endOffset,
               unsigned arg, bool inverse) {
@@ -225,8 +238,44 @@ struct RewriteStep {
                        /*arg=*/differenceID, inverse);
   }
 
+  static RewriteStep forLeftConcreteProjection(unsigned differenceID,
+                                               unsigned substitutionIndex,
+                                               bool inverse) {
+    unsigned arg = getConcreteProjectionArg(differenceID, substitutionIndex);
+    return RewriteStep(LeftConcreteProjection,
+                       /*startOffset=*/0, /*endOffset=*/0,
+                       arg, inverse);
+  }
+
+  static RewriteStep forRightConcreteProjection(unsigned differenceID,
+                                                unsigned substitutionIndex,
+                                                bool inverse) {
+    unsigned arg = getConcreteProjectionArg(differenceID, substitutionIndex);
+    return RewriteStep(RightConcreteProjection,
+                       /*startOffset=*/0, /*endOffset=*/0,
+                       arg, inverse);
+  }
+
   bool isInContext() const {
     return StartOffset > 0 || EndOffset > 0;
+  }
+
+  bool pushesTermsOnStack() const {
+    switch (Kind) {
+    case RewriteStep::Rule:
+    case RewriteStep::PrefixSubstitutions:
+    case RewriteStep::Relation:
+    case RewriteStep::Shift:
+      return false;
+
+    case RewriteStep::Decompose:
+    case RewriteStep::DecomposeConcrete:
+    case RewriteStep::LeftConcreteProjection:
+    case RewriteStep::RightConcreteProjection:
+      return true;
+    }
+
+    llvm_unreachable("Bad step kind");
   }
 
   void invert() {
@@ -238,9 +287,30 @@ struct RewriteStep {
     return Arg;
   }
 
+  unsigned getTypeDifferenceID() const {
+    assert(Kind == RewriteStep::LeftConcreteProjection ||
+           Kind == RewriteStep::RightConcreteProjection);
+    return (Arg >> 16) & 0xffff;
+  }
+
+  unsigned getSubstitutionIndex() const {
+    assert(Kind == RewriteStep::LeftConcreteProjection ||
+           Kind == RewriteStep::RightConcreteProjection);
+    return Arg & 0xffff;
+  }
+
   void dump(llvm::raw_ostream &out,
             RewritePathEvaluator &evaluator,
             const RewriteSystem &system) const;
+
+private:
+  static unsigned getConcreteProjectionArg(unsigned differenceID,
+                                           unsigned substitutionIndex) {
+    assert(differenceID <= 0xffff);
+    assert(substitutionIndex <= 0xffff);
+
+    return (differenceID << 16) | substitutionIndex;
+  }
 };
 
 /// Records a sequence of zero or more rewrite rules applied to a term.
@@ -417,6 +487,12 @@ struct RewritePathEvaluator {
 
   void applyDecomposeConcrete(const RewriteStep &step,
                               const RewriteSystem &system);
+
+  void applyLeftConcreteProjection(const RewriteStep &step,
+                                   const RewriteSystem &system);
+
+  void applyRightConcreteProjection(const RewriteStep &step,
+                                    const RewriteSystem &system);
 
   void dump(llvm::raw_ostream &out) const;
 };
