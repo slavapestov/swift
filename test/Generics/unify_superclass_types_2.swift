@@ -1,4 +1,4 @@
-// RUN: %target-typecheck-verify-swift -dump-requirement-machine 2>&1 | %FileCheck %s
+// RUN: %target-typecheck-verify-swift -dump-requirement-machine -debug-generic-signatures -requirement-machine-inferred-signatures=verify 2>&1 | %FileCheck %s
 
 // Note: The GSB fails this test, because it doesn't implement unification of
 // superclass type constructor arguments.
@@ -21,6 +21,8 @@ func sameType<T>(_: T.Type, _: T.Type) {}
 
 func takesGenericIntString<U>(_: Generic<Int, String, U>.Type) {}
 
+// CHECK-LABEL: .unifySuperclassTest@
+// CHECK-NEXT: Generic signature: <T where T : P1, T : P2>
 func unifySuperclassTest<T : P1 & P2>(_: T) {
   sameType(T.A1.self, String.self)
   sameType(T.A2.self, Int.self)

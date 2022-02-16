@@ -1,4 +1,4 @@
-// RUN: %target-typecheck-verify-swift -dump-requirement-machine 2>&1 | %FileCheck %s
+// RUN: %target-typecheck-verify-swift -dump-requirement-machine -debug-generic-signatures -requirement-machine-inferred-signatures=verify 2>&1 | %FileCheck %s
 
 // Note: The GSB fails this test, because it doesn't implement unification of
 // superclass type constructor arguments.
@@ -54,3 +54,6 @@ func unifySuperclassTest<T : P1 & P2>(_: T) {
 // CHECK-NEXT:   τ_0_0 => { conforms_to: [P1 P2] }
 // CHECK-NEXT:   τ_0_0.[P1:X] => { layout: _NativeClass superclass: [superclass: Derived<τ_0_0.[P2:A2]>] }
 // CHECK-NEXT: }
+
+// CHECK-LABEL: .unifySuperclassTest@
+// CHECK-NEXT: Generic signature: <T where T : P1, T : P2>

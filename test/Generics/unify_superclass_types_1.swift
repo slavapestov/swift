@@ -1,4 +1,4 @@
-// RUN: %target-typecheck-verify-swift -dump-requirement-machine 2>&1 | %FileCheck %s
+// RUN: %target-typecheck-verify-swift -dump-requirement-machine -debug-generic-signatures -requirement-machine-inferred-signatures=verify 2>&1 | %FileCheck %s
 
 class Base {}
 class Derived : Base {
@@ -27,3 +27,6 @@ extension P where Self : Derived {
 // CHECK-NEXT:   [P] => { conforms_to: [P] layout: _NativeClass superclass: [superclass: Base] }
 // CHECK-NEXT:   τ_0_0 => { conforms_to: [P] layout: _NativeClass superclass: [superclass: Derived] }
 // CHECK-NEXT: }
+
+// CHECK-LABEL: ExtensionDecl line={{.*}} base=P
+// CHECK-NEXT: Generic signature: <Self where Self : Derived, Self : P>
