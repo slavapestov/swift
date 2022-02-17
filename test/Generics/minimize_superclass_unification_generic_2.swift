@@ -486,3 +486,54 @@ protocol PcQb {
   associatedtype B3
   associatedtype B4
 }
+
+
+// ------------------------------------------------ //
+// Unifying two requirements in two other protocols //
+// ------------------------------------------------ //
+
+// CHECK-LABEL: .PaPbQ1@
+// CHECK-NEXT: Requirement signature: <Self where
+
+// CHECK-SAME: Self.[PaPbQ1]T : Pa,
+// CHECK-SAME: Self.[PaPbQ1]T : Pb>
+
+protocol PaPbQ1 {
+  associatedtype T where T : Pa, T : Pb
+}
+
+// CHECK-LABEL: .PaPbQ2@
+// CHECK-NEXT: Requirement signature: <Self where
+
+// CHECK-SAME: Self.[PaPbQ2]T : Pa,
+// CHECK-SAME: Self.[PaPbQ2]T : Pb>
+
+protocol PaPbQ2 {
+  associatedtype T where T : Pa, T : Pb,
+                         T.A1 == T.B1,
+                         T.A2 == (T.B2) -> T.B3,
+                         T.A3 == Int
+}
+
+// CHECK-LABEL: .PbPaQ1@
+// CHECK-NEXT: Requirement signature: <Self where
+
+// CHECK-SAME: Self.[PaPbQ1]T : Pa,
+// CHECK-SAME: Self.[PaPbQ1]T : Pb>
+
+protocol PbPaQ1 {
+  associatedtype T where T : Pb, T : Pa
+}
+
+// CHECK-LABEL: .PbPaQ2@
+// CHECK-NEXT: Requirement signature: <Self where
+
+// CHECK-SAME: Self.[PaPbQ2]T : Pa,
+// CHECK-SAME: Self.[PaPbQ2]T : Pb>
+
+protocol PbPaQ2 {
+  associatedtype T where T : Pb, T : Pa,
+                         T.A1 == T.B1,
+                         T.A2 == (T.B2) -> T.B3,
+                         T.A3 == Int
+}
