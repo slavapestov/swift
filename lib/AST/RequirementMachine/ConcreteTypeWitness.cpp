@@ -131,9 +131,7 @@ void PropertyMap::concretizeNestedTypesFromConcreteParent(
     //
     // This occurs when a pair of rules are inherited from the property map
     // entry for this key's suffix.
-    auto pair = std::make_pair(concreteRuleID, conformanceRuleID);
-    auto found = ConcreteConformances.find(pair);
-    if (found != ConcreteConformances.end())
+    if (!checkRulePairOnce(concreteRuleID, conformanceRuleID))
       continue;
 
     // FIXME: Either remove the ModuleDecl entirely from conformance lookup,
@@ -163,17 +161,6 @@ void PropertyMap::concretizeNestedTypesFromConcreteParent(
       continue;
     }
 
-    // FIXME: Maybe this can happen if the concrete type is an
-    // opaque result type?
-    assert(!conformance.isAbstract());
-
-    // Save this conformance for later.
-    auto *concrete = conformance.getConcrete();
-    auto inserted = ConcreteConformances.insert(
-        std::make_pair(pair, concrete));
-    assert(inserted.second);
-    (void) inserted;
-
     auto concreteConformanceSymbol = Symbol::forConcreteConformance(
         concreteType, substitutions, proto, Context);
 
@@ -183,20 +170,21 @@ void PropertyMap::concretizeNestedTypesFromConcreteParent(
     for (auto *assocType : proto->getAssociatedTypeMembers()) {
       concretizeTypeWitnessInConformance(key, requirementKind,
                                          concreteConformanceSymbol,
-                                         concrete, assocType);
+                                         conformance, assocType);
     }
 
     // We only infer conditional requirements in top-level generic signatures,
     // not in protocol requirement signatures.
-    if (key.getRootProtocol() == nullptr)
-      inferConditionalRequirements(concrete, substitutions);
+    if (conformance.isConcrete() &&
+        key.getRootProtocol() == nullptr)
+      inferConditionalRequirements(conformance.getConcrete(), substitutions);
   }
 }
 
 void PropertyMap::concretizeTypeWitnessInConformance(
     Term key, RequirementKind requirementKind,
     Symbol concreteConformanceSymbol,
-    ProtocolConformance *concrete,
+    ProtocolConformanceRef conformance,
     AssociatedTypeDecl *assocType) const {
   auto concreteType = concreteConformanceSymbol.getConcreteType();
   auto substitutions = concreteConformanceSymbol.getSubstitutions();
@@ -210,17 +198,27 @@ void PropertyMap::concretizeTypeWitnessInConformance(
                  << " on " << concreteType << "\n";
   }
 
-  auto t = concrete->getTypeWitness(assocType);
-  if (!t) {
-    if (Debug.contains(DebugFlags::ConcretizeNestedTypes)) {
-      llvm::dbgs() << "^^ " << "Type witness for " << assocType->getName()
-                   << " of " << concreteType << " could not be inferred\n";
+  CanType typeWitness;
+  if (conformance.isConcrete()) {
+    auto t = conformance.getConcrete()->getTypeWitness(assocType);
+
+    if (!t) {
+      if (Debug.contains(DebugFlags::ConcretizeNestedTypes)) {
+        llvm::dbgs() << "^^ " << "Type witness for " << assocType->getName()
+                     << " of " << concreteType << " could not be inferred\n";
+      }
+
+      t = ErrorType::get(concreteType);
     }
 
-    t = ErrorType::get(concreteType);
+    typeWitness = t->getCanonicalType();
+  } else if (conformance.isAbstract()) {
+    llvm::errs() << "Concrete type requirements to opaque result archetypes "
+                 << "are not supported yet\n";
+    abort();
+  } else if (conformance.isInvalid()) {
+    typeWitness = CanType(ErrorType::get(Context.getASTContext()));
   }
-
-  auto typeWitness = t->getCanonicalType();
 
   if (Debug.contains(DebugFlags::ConcretizeNestedTypes)) {
     llvm::dbgs() << "^^ " << "Type witness for " << assocType->getName()
