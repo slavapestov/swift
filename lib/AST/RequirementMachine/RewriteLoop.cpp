@@ -531,7 +531,35 @@ bool RewriteLoop::isUseful(
 
 void RewriteLoop::dump(llvm::raw_ostream &out,
                        const RewriteSystem &system) const {
+  switch (Kind) {
+  case IdentityKind::Overlap:
+    out << "[overlap] ";
+    break;
+  case IdentityKind::SimplifyLHS:
+    out << "[lhs↓] ";
+    break;
+  case IdentityKind::SimplifyRHS:
+    out << "[rhs↓] ";
+    break;
+  case IdentityKind::Relation:
+    out << "[relation] ";
+    break;
+  case IdentityKind::ConcreteConformance:
+    out << "[concrete-conformance] ";
+    break;
+  case IdentityKind::ConcretizedNestedType:
+    out << "[concretize-nested-type] ";
+    break;
+  case IdentityKind::ConcreteUnification:
+    out << "[concrete-unification] ";
+    break;
+  case IdentityKind::Projection:
+    out << "[projection] ";
+    break;
+  }
+
   out << Basepoint << ": ";
+
   Path.dump(out, Basepoint, system);
   if (isDeleted())
     out << " [deleted]";

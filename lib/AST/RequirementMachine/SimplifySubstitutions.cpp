@@ -234,7 +234,7 @@ void RewriteSystem::processTypeDifference(const TypeDifference &difference,
       llvm::dbgs() << "\n";
     }
 
-    addRule(lhsTerm, rhsTerm, &inducedRulePath);
+    addRule(lhsTerm, rhsTerm, &inducedRulePath, IdentityKind::Projection);
     buildRewritePathForJoiningTerms(lhsTerm, rhsTerm, &unificationPath);
   }
 
@@ -252,7 +252,8 @@ void RewriteSystem::processTypeDifference(const TypeDifference &difference,
   // Record a rewrite loop at T.[LHS].
   MutableTerm basepoint(difference.BaseTerm);
   basepoint.add(difference.LHS);
-  recordRewriteLoop(basepoint, unificationPath);
+  recordRewriteLoop(basepoint, unificationPath,
+                    IdentityKind::ConcreteUnification);
 
   // Optimization: If the LHS rule applies to the entire base term and not
   // a suffix, mark it substitution-simplified so that we can skip recording

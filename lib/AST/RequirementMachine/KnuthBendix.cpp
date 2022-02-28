@@ -153,12 +153,12 @@ RewriteSystem::computeCriticalPair(ArrayRef<Symbol>::const_iterator from,
 
     // If X == TYV, we have a trivial overlap.
     if (x == tyv) {
-      loops.emplace_back(x, path);
+      loops.emplace_back(x, path, IdentityKind::SimplifyLHS);
       return false;
     }
 
     // Add the pair (X, TYV).
-    pairs.emplace_back(x, tyv, path);
+    pairs.emplace_back(x, tyv, path, IdentityKind::SimplifyLHS);
   } else {
     // lhs == TU -> X, rhs == UV -> Y.
 
@@ -208,7 +208,7 @@ RewriteSystem::computeCriticalPair(ArrayRef<Symbol>::const_iterator from,
 
     // If XV == TY, we have a trivial overlap.
     if (xv == ty) {
-      loops.emplace_back(xv, path);
+      loops.emplace_back(xv, path, IdentityKind::Overlap);
       return false;
     }
 
@@ -258,9 +258,9 @@ RewriteSystem::computeCriticalPair(ArrayRef<Symbol>::const_iterator from,
       MutableTerm xw(lhs.getRHS());
       xw.append(ty.end() - endOffset, ty.end());
 
-      pairs.emplace_back(xv, xw, path);
+      pairs.emplace_back(xv, xw, path, IdentityKind::Overlap);
     } else {
-      pairs.emplace_back(xv, ty, path);
+      pairs.emplace_back(xv, ty, path, IdentityKind::Overlap);
     }
   }
 
@@ -394,7 +394,7 @@ RewriteSystem::computeConfluentCompletion(unsigned maxRuleCount,
       if (Rules.size() > maxRuleCount)
         return std::make_pair(CompletionResult::MaxRuleCount, Rules.size() - 1);
 
-      if (!addRule(pair.LHS, pair.RHS, &pair.Path))
+      if (!addRule(pair.LHS, pair.RHS, &pair.Path, pair.Kind))
         continue;
 
       // Check if the new rule is too long.
@@ -403,7 +403,7 @@ RewriteSystem::computeConfluentCompletion(unsigned maxRuleCount,
     }
 
     for (const auto &loop : resolvedLoops) {
-      recordRewriteLoop(loop.Basepoint, loop.Path);
+      recordRewriteLoop(loop.Basepoint, loop.Path, loop.Kind);
     }
 
     resolvedCriticalPairs.clear();

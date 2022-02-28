@@ -166,7 +166,8 @@ public:
   }
 
   bool addRule(MutableTerm lhs, MutableTerm rhs,
-               const RewritePath *path=nullptr);
+               const RewritePath *path = nullptr,
+               Optional<IdentityKind> = None);
 
   bool addPermanentRule(MutableTerm lhs, MutableTerm rhs);
 
@@ -218,9 +219,11 @@ private:
     MutableTerm LHS;
     MutableTerm RHS;
     RewritePath Path;
+    IdentityKind Kind;
 
-    CriticalPair(MutableTerm lhs, MutableTerm rhs, RewritePath path)
-      : LHS(lhs), RHS(rhs), Path(path) {}
+    CriticalPair(MutableTerm lhs, MutableTerm rhs,
+                 RewritePath path, IdentityKind kind)
+      : LHS(lhs), RHS(rhs), Path(path), Kind(kind) {}
   };
 
   bool
@@ -359,7 +362,8 @@ private:
 
 public:
   void recordRewriteLoop(MutableTerm basepoint,
-                         RewritePath path);
+                         RewritePath path,
+                         IdentityKind kind);
 
   void recordConflict(unsigned existingRuleID, unsigned newRuleID);
 

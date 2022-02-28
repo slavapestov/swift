@@ -443,11 +443,64 @@ struct ProtocolConformanceRules {
   bool SawIdentityConformance = false;
 };
 
+/// Describes why the rewrite loop was discovered and recorded.
+enum class IdentityKind : uint8_t {
+  /// The rewrite loop comes from the Knuth-Bendix algorithm, resolving
+  /// an overlap between a pair of rules where the suffix of one is
+  /// the prefix of another.
+  Overlap,
+
+  /// The rewrite loop comes from the Knuth-Bendix algorithm, resolving
+  /// an overlap between a pair of rules where the left hand side of one
+  /// is wholly contained in the left hand side of the other.
+  SimplifyLHS,
+
+  /// The rewrite loop was recorded when the right-hand side of a rule
+  /// was simplified by RewriteSystem::simplifyRightHandSides().
+  SimplifyRHS,
+
+  /// The rewrite loop was recorded when property map construction
+  /// introduced a relation between two properties that apply to the
+  /// same term.
+  ///
+  /// See recordRelation() in PropertyUnification.cpp.
+  Relation,
+
+  /// The rewrite loop was recorded when property map construction
+  /// introduced a concrete conformance rule for a term that both
+  /// conforms to a protocol and has a superclass or concrete type
+  /// requirement.
+  ///
+  /// See PropertyMap::concretizeNestedTypes().
+  ConcreteConformance,
+
+  /// The rewrite loop was recorded when property map construction
+  /// concretized a nested type of a concrete conformance.
+  ///
+  /// See PropertyMap::concretizeNestedTypes().
+  ConcretizedNestedType,
+
+  /// The rewrite loop was recorded by property map construction
+  /// to relate two superclass or concrete type requirements that apply
+  /// to the same term.
+  ///
+  /// See RewriteSystem::processTypeDifference().
+  ConcreteUnification,
+
+  /// The rewrite loop was recorded by property map construction
+  /// to relate a projection when a term is subject to two superclass
+  /// or concrete type requirements.
+  ///
+  /// See RewriteSystem::processTypeDifference().
+  Projection
+};
+
 /// A loop (3-cell) that rewrites the basepoint back to the basepoint.
 class RewriteLoop {
 public:
   MutableTerm Basepoint;
   RewritePath Path;
+  IdentityKind Kind;
 
 private:
   /// Cached value for findRulesAppearingOnceInEmptyContext().
@@ -479,8 +532,8 @@ private:
   void recompute(const RewriteSystem &system);
 
 public:
-  RewriteLoop(MutableTerm basepoint, RewritePath path)
-    : Basepoint(basepoint), Path(path) {
+  RewriteLoop(MutableTerm basepoint, RewritePath path, IdentityKind kind)
+    : Basepoint(basepoint), Path(path), Kind(kind) {
     ProjectionCount = 0;
     DecomposeCount = 0;
     HasConcreteTypeAliasRule = 0;

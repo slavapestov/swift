@@ -111,7 +111,7 @@ static void recordRelation(Term key,
 
   MutableTerm rhs(key);
 
-  (void) system.addRule(lhs, rhs, &path);
+  (void) system.addRule(lhs, rhs, &path, IdentityKind::Relation);
 }
 
 void RewriteSystem::recordConflict(unsigned existingRuleID,
@@ -500,7 +500,8 @@ void PropertyMap::unifyConcreteTypes(Term key,
 
     RewritePath unificationPath;
     System.buildRewritePathForUnifier(key, lhsRuleID, path, &unificationPath);
-    System.recordRewriteLoop(MutableTerm(rhsRule.getLHS()), unificationPath);
+    System.recordRewriteLoop(MutableTerm(rhsRule.getLHS()), unificationPath,
+                             IdentityKind::ConcreteUnification);
   }
 }
 

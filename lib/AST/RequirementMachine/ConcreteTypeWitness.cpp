@@ -241,7 +241,8 @@ void PropertyMap::concretizeTypeWitnessInConformance(
       substitutions, path);
 
   assert(!path.empty());
-  (void) System.addRule(constraintType, subjectType, &path);
+  (void) System.addRule(constraintType, subjectType, &path,
+                        IdentityKind::ConcretizedNestedType);
   if (Debug.contains(DebugFlags::ConcretizeNestedTypes)) {
     llvm::dbgs() << "^^ Induced rule " << constraintType
                  << " => " << subjectType << "\n";
@@ -505,7 +506,8 @@ void PropertyMap::recordConcreteConformanceRule(
   // it to go in the other direction.
   path.invert();
 
-  (void) System.addRule(std::move(lhs), std::move(rhs), &path);
+  (void) System.addRule(std::move(lhs), std::move(rhs), &path,
+                        IdentityKind::ConcreteConformance);
 }
 
 /// If \p key is fixed to a concrete type and is also subject to a conformance

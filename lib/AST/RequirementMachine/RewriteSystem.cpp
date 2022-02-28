@@ -200,13 +200,16 @@ bool RewriteSystem::simplify(MutableTerm &term, RewritePath *path) const {
 /// rewrite system; the path records a series of rewrite steps which transform
 /// \p lhs to \p rhs.
 bool RewriteSystem::addRule(MutableTerm lhs, MutableTerm rhs,
-                            const RewritePath *path) {
+                            const RewritePath *path,
+                            Optional<IdentityKind> kind) {
   // FIXME:
   // assert(!Complete || path != nullptr &&
   //        "Rules added by completion must have a path");
 
   assert(!lhs.empty());
   assert(!rhs.empty());
+
+  assert((path != nullptr) == kind.hasValue());
 
   if (Debug.contains(DebugFlags::Add)) {
     llvm::dbgs() << "# Adding rule " << lhs << " == " << rhs << "\n\n";
@@ -247,7 +250,7 @@ bool RewriteSystem::addRule(MutableTerm lhs, MutableTerm rhs,
     if (path) {
       // We already have a loop, since the simplified lhs is identical to the
       // simplified rhs.
-      recordRewriteLoop(lhs, loop);
+      recordRewriteLoop(lhs, loop, *kind);
 
       if (Debug.contains(DebugFlags::Add)) {
         llvm::dbgs() << "## Recorded trivial loop at " << lhs << ": ";
@@ -269,7 +272,8 @@ bool RewriteSystem::addRule(MutableTerm lhs, MutableTerm rhs,
   assert(*lhs.compare(rhs, Context) > 0);
 
   if (Debug.contains(DebugFlags::Add)) {
-    llvm::dbgs() << "## Simplified and oriented rule " << lhs << " => " << rhs << "\n\n";
+    llvm::dbgs() << "## Simplified and oriented rule "
+                 << lhs << " => " << rhs << "\n\n";
   }
 
   unsigned newRuleID = Rules.size();
@@ -281,7 +285,7 @@ bool RewriteSystem::addRule(MutableTerm lhs, MutableTerm rhs,
     // add a rewrite step applying the new rule in reverse to close the loop.
     loop.add(RewriteStep::forRewriteRule(/*startOffset=*/0, /*endOffset=*/0,
                                          newRuleID, /*inverse=*/true));
-    recordRewriteLoop(lhs, loop);
+    recordRewriteLoop(lhs, loop, *kind);
 
     if (Debug.contains(DebugFlags::Add)) {
       llvm::dbgs() << "## Recorded non-trivial loop at " << lhs << ": ";
@@ -429,7 +433,7 @@ void RewriteSystem::simplifyRightHandSides() {
       llvm::dbgs() << "\n";
     }
 
-    recordRewriteLoop(MutableTerm(lhs), loop);
+    recordRewriteLoop(MutableTerm(lhs), loop, IdentityKind::SimplifyRHS);
   }
 }
 
@@ -455,8 +459,9 @@ bool RewriteSystem::isInMinimizationDomain(const ProtocolDecl *proto) const {
 }
 
 void RewriteSystem::recordRewriteLoop(MutableTerm basepoint,
-                                      RewritePath path) {
-  RewriteLoop loop(basepoint, path);
+                                      RewritePath path,
+                                      IdentityKind kind) {
+  RewriteLoop loop(basepoint, path, kind);
   loop.verify(*this);
 
   if (!RecordLoops)
