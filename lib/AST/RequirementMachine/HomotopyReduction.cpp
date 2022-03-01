@@ -548,14 +548,18 @@ void RewriteSystem::minimizeRewriteSystem() {
   }
 
   performHomotopyReduction([&](unsigned loopID, unsigned ruleID) -> bool {
+    const auto &loop = Loops[loopID];
     const auto &rule = getRule(ruleID);
 
     if (rule.isLHSSimplified() &&
         !rule.isAnyConformanceRule())
       return true;
 
-    if (rule.isRHSSimplified() ||
-        rule.isSubstitutionSimplified())
+    if (rule.isRHSSimplified() &&
+        loop.Kind == IdentityKind::SimplifyRHS)
+      return true;
+
+    if (rule.isSubstitutionSimplified())
       return true;
 
     return false;
