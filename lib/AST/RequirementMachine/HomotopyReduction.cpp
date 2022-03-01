@@ -555,8 +555,7 @@ void RewriteSystem::minimizeRewriteSystem() {
         !rule.isAnyConformanceRule())
       return true;
 
-    if (rule.isRHSSimplified() &&
-        loop.Kind == IdentityKind::SimplifyRHS)
+    if (rule.isRHSSimplified())
       return true;
 
     if (rule.isSubstitutionSimplified())
