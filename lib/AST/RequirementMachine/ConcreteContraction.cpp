@@ -172,6 +172,10 @@ class ConcreteContraction {
   Type substType(Type type) const;
   Requirement substRequirement(const Requirement &req) const;
 
+  bool preserveSameTypeRequirement(const Requirement &req) const;
+
+  bool hasResolvedMemberTypeOfInterestingParameter(Type t) const;
+
 public:
   ConcreteContraction(bool debug) : Debug(debug) {}
 
@@ -415,6 +419,65 @@ ConcreteContraction::substRequirement(const Requirement &req) const {
   }
 }
 
+bool ConcreteContraction::
+hasResolvedMemberTypeOfInterestingParameter(Type type) const {
+  return type.findIf([&](Type t) -> bool {
+    if (auto *memberTy = t->getAs<DependentMemberType>()) {
+      if (memberTy->getAssocType() == nullptr)
+        return false;
+
+      auto baseTy = memberTy->getBase();
+      if (auto *genericParam = baseTy->getAs<GenericTypeParamType>()) {
+        GenericParamKey key(genericParam);
+
+        Type concreteType;
+        {
+          auto found = ConcreteTypes.find(key);
+          if (found != ConcreteTypes.end() && found->second.size() == 1)
+            return true;
+        }
+
+        Type superclass;
+        {
+          auto found = Superclasses.find(key);
+          if (found != Superclasses.end() && found->second.size() == 1)
+            return true;
+        }
+      }
+    }
+
+    return false;
+  });
+}
+
+/// Consider this code:
+///
+///     class C<T> {
+///       typealias A = T
+///     }
+///
+///     protocol P {
+///       associatedtype A
+///     }
+///
+///     func f<X, T>(_: X, _: T) where X : P, X : C<T>, X.A == T {}
+///
+/// The GenericSignatureBuilder would introduce an equivalence between
+/// typealias A in class C and associatedtype A in protocol P, so the
+/// requirement 'X.A == T' would effectively constrain _both_.
+///
+/// Simulate this by keeping both the original and substituted same-type
+/// requirement in a narrow case.
+bool ConcreteContraction::preserveSameTypeRequirement(
+    const Requirement &req) const {
+  if (req.getKind() == RequirementKind::SameType &&
+      !hasResolvedMemberTypeOfInterestingParameter(req.getFirstType()) &&
+      !hasResolvedMemberTypeOfInterestingParameter(req.getSecondType()))
+    return true;
+
+  return false;
+}
+
 /// Substitute all occurrences of generic parameters subject to superclass
 /// or concrete type requirements with their corresponding superclass or
 /// concrete type.
@@ -536,6 +599,9 @@ bool ConcreteContraction::performConcreteContraction(
       req.req.dump(llvm::dbgs());
       llvm::dbgs() << "\n";
     }
+
+    if (preserveSameTypeRequirement(req.req))
+      result.push_back(req);
 
     // Substitute the requirement.
     Optional<Requirement> substReq = substRequirement(req.req);
