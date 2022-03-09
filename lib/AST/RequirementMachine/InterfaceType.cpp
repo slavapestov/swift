@@ -345,8 +345,9 @@ getTypeForSymbolRange(const Symbol *begin, const Symbol *end, Type root,
     // We should have a resolved type at this point.
     AssociatedTypeDecl *assocType;
 
-    if (begin == iter) {
-      // FIXME: Eliminate this case once merged associated types are gone.
+    if (begin == iter || !root.isNull()) {
+      // If root is not null, we're being called from getRelativeTypeForTerm(),
+      // and we're not going to produce a canonical type.
       assocType = ctx.getAssociatedTypeForSymbol(symbol);
     } else {
       // The protocol stored in an associated type symbol appearing in a
