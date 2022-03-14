@@ -19,6 +19,7 @@ extension Array: Q where Element: P, Element: Equatable {
 }
 
 extension Set: Q where Element: P, Element: Equatable {
+// expected-warning@-1 {{redundant conformance constraint 'Element' : 'Equatable'}}
   func f() -> Element {
     return first!
   }

@@ -55,6 +55,7 @@ struct RedundantSuper<T: P4> {}
 // CHECK-LABEL: ExtensionDecl line={{.*}} base=RedundantSuper
 // CHECK-NEXT: (normal_conformance type=RedundantSuper<T> protocol=P2)
 extension RedundantSuper: P2 where T: P1 {}
+// expected-warning@-1 {{redundant conformance constraint 'T' : 'P1'}}
 
 struct OverlappingSub<T: P1> {}
 // CHECK-LABEL: ExtensionDecl line={{.*}} base=OverlappingSub
@@ -187,6 +188,7 @@ struct ClassLessSpecific<T: C3> {}
 // CHECK-LABEL: ExtensionDecl line={{.*}} base=ClassLessSpecific
 // CHECK-NEXT: (normal_conformance type=ClassLessSpecific<T> protocol=P2)
 extension ClassLessSpecific: P2 where T: C1 {}
+// expected-warning@-1 {{redundant superclass constraint 'T' : 'C1'}}
 
 
 // Inherited conformances:
@@ -330,6 +332,8 @@ struct RedundancyOrderDependenceGood<T: P1, U> {}
 // CHECK-NEXT: (normal_conformance type=RedundancyOrderDependenceGood<T, U> protocol=P2
 // CHECK-NEXT:   same_type: T U)
 extension RedundancyOrderDependenceGood: P2 where U: P1, T == U {}
+// expected-warning@-1 {{redundant conformance constraint 'U' : 'P1'}}
+
 struct RedundancyOrderDependenceBad<T, U: P1> {}
 // CHECK-LABEL: ExtensionDecl line={{.*}} base=RedundancyOrderDependenceBad
 // CHECK-LABEL: ExtensionDecl line={{.*}} base=RedundancyOrderDependenceBad
