@@ -853,7 +853,12 @@ void RewriteSystem::verifyMinimizedRules(
     for (const auto &step : pair.second) {
       if (step.Kind == RewriteStep::Rule) {
         const auto &rule = getRule(step.getRuleID());
-        if (rule.isRedundant()) {
+
+        // Imported rules might be marked as 'redundant' if they came from
+        // the requirement machine that was used to minimize the protocol
+        // requirement signature, so check the minimization domain first.
+        if (rule.isRedundant() &&
+            isInMinimizationDomain(rule.getLHS().getRootProtocol())) {
           llvm::errs() << "Redundant requirement path contains a redundant "
                           "rule " << rule << "\n";
           dump(llvm::errs());

@@ -194,9 +194,15 @@ public:
   RequirementMachine *getRequirementMachine(CanGenericSignature sig);
   bool isRecursivelyConstructingRequirementMachine(CanGenericSignature sig);
 
+  void installRequirementMachine(CanGenericSignature sig,
+                                 std::unique_ptr<RequirementMachine> machine);
+
   ArrayRef<const ProtocolDecl *> getProtocolComponent(const ProtocolDecl *proto);
   RequirementMachine *getRequirementMachine(const ProtocolDecl *proto);
   bool isRecursivelyConstructingRequirementMachine(const ProtocolDecl *proto);
+
+  void installRequirementMachine(const ProtocolDecl *proto,
+                                 std::unique_ptr<RequirementMachine> machine);
 
   ~RewriteContext();
 };

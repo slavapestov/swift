@@ -702,7 +702,7 @@ void RequirementMachine::verify(const MutableTerm &term) const {
   // generic parameter.
   if (term.begin()->getKind() == Symbol::Kind::GenericParam) {
     auto *genericParam = term.begin()->getGenericParam();
-    TypeArrayView<GenericTypeParamType> genericParams = getGenericParams();
+    auto genericParams = Sig.getGenericParams();
     auto found = std::find(genericParams.begin(),
                            genericParams.end(),
                            genericParam);

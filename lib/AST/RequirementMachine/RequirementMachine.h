@@ -155,8 +155,8 @@ public:
   llvm::DenseMap<const ProtocolDecl *, RequirementSignature>
   computeMinimalProtocolRequirements();
 
-  std::vector<Requirement>
-  computeMinimalGenericSignatureRequirements(bool reconstituteSugar);
+  GenericSignature
+  computeMinimalGenericSignature(bool reconstituteSugar);
 
   ArrayRef<Rule> getLocalRules() const;
 

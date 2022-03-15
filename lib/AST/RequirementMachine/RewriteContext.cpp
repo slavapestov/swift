@@ -149,6 +149,19 @@ bool RewriteContext::isRecursivelyConstructingRequirementMachine(
   return !found->second->isComplete();
 }
 
+/// Given a reuirement machine that built a minimized signature, attempt to
+/// re-use it for subsequent queries against the minimized signature, instead
+/// of building a new one later.
+void RewriteContext::installRequirementMachine(
+    CanGenericSignature sig,
+    std::unique_ptr<RequirementMachine> machine) {
+  auto *machinePtr = machine.release();
+
+  auto inserted = Machines.insert(std::make_pair(sig, machinePtr)).second;
+  if (!inserted)
+    delete machinePtr;
+}
+
 /// Implement Tarjan's algorithm to compute strongly-connected components in
 /// the protocol dependency graph.
 void RewriteContext::getProtocolComponentRec(
@@ -312,6 +325,11 @@ ArrayRef<const ProtocolDecl *> RewriteContext::getProtocolComponent(
 /// for being built with the same component.
 RequirementMachine *RewriteContext::getRequirementMachine(
     const ProtocolDecl *proto) {
+  // First, get the requirement signature. If this protocol was written in
+  // source, we'll minimize it and install the machine below, saving us the
+  // effort of recomputing it.
+  (void) proto->getRequirementSignature();
+
   auto &component = getProtocolComponentImpl(proto);
 
   if (component.Machine) {
@@ -354,6 +372,22 @@ bool RewriteContext::isRecursivelyConstructingRequirementMachine(
     return false;
 
   return component->second.ComputingRequirementSignatures;
+}
+
+/// Given a reuirement machine that built the requirement signatures for a
+/// protocol connected component, attempt to re-use it for subsequent
+/// queries against the connected component, instead of building a new one
+/// later.
+void RewriteContext::installRequirementMachine(
+    const ProtocolDecl *proto,
+    std::unique_ptr<RequirementMachine> machine) {
+  auto *machinePtr = machine.release();
+
+  auto &component = getProtocolComponentImpl(proto);
+  if (component.Machine == nullptr)
+    component.Machine = machinePtr;
+  else
+    delete machinePtr;
 }
 
 /// We print stats in the destructor, which should get executed at the end of
