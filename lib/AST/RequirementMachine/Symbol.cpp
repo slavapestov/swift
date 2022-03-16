@@ -263,11 +263,27 @@ Symbol Symbol::forAssociatedType(const ProtocolDecl *proto,
   return symbol;
 }
 
+/// Creates a new associated type symbol.
+Symbol Symbol::forAssociatedType(const AssociatedTypeDecl *assocType,
+                                 RewriteContext &ctx) {
+  if (assocType->Symbol)
+    return fromOpaquePointer(assocType->Symbol);
+
+  auto symbol = forAssociatedType(assocType->getProtocol(),
+                                  assocType->getName(),
+                                  ctx);
+  const_cast<AssociatedTypeDecl *>(assocType)->Symbol = const_cast<Symbol::Storage *>(symbol.Ptr);
+  return symbol;
+}
+
 /// Creates a generic parameter symbol, representing a generic
 /// parameter in the top-level generic signature from which the
 /// rewrite system is built.
 Symbol Symbol::forGenericParam(GenericTypeParamType *param,
                                RewriteContext &ctx) {
+  if (param->Symbol)
+    return Symbol::fromOpaquePointer(param->Symbol);
+
   assert(param->isCanonical());
 
   llvm::FoldingSetNodeID id;
@@ -291,6 +307,7 @@ Symbol Symbol::forGenericParam(GenericTypeParamType *param,
   ctx.Symbols.InsertNode(symbol, insertPos);
   ctx.SymbolHistogram.add(unsigned(Kind::GenericParam));
 
+  param->Symbol = symbol;
   return symbol;
 }
 

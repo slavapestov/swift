@@ -24,6 +24,7 @@ namespace llvm {
 
 namespace swift {
 
+class AssociatedTypeDecl;
 class CanType;
 class ProtocolDecl;
 class GenericTypeParamType;
@@ -195,6 +196,9 @@ public:
 
   static Symbol forAssociatedType(const ProtocolDecl *proto,
                                   Identifier name,
+                                  RewriteContext &ctx);
+
+  static Symbol forAssociatedType(const AssociatedTypeDecl *decl,
                                   RewriteContext &ctx);
 
   static Symbol forGenericParam(GenericTypeParamType *param,

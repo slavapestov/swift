@@ -230,8 +230,7 @@ void PropertyMap::concretizeTypeWitnessInConformance(
   // Build the term T.[concrete: C : P].[P:X].
   MutableTerm subjectType(key);
   subjectType.add(concreteConformanceSymbol);
-  subjectType.add(Symbol::forAssociatedType(proto, assocType->getName(),
-                                            Context));
+  subjectType.add(Symbol::forAssociatedType(assocType, Context));
 
   MutableTerm constraintType;
 

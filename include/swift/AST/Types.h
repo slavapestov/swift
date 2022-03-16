@@ -95,6 +95,10 @@ enum PointerTypeKind : unsigned;
 struct ValueOwnershipKind;
 class ErrorExpr;
 
+namespace rewriting {
+class Symbol;
+}
+
 typedef CanTypeWrapper<SILFunctionType> CanSILFunctionType;
 
 enum class TypeKind : uint8_t {
@@ -5891,12 +5895,17 @@ const Type *ArchetypeType::getSubclassTrailingObjects() const {
 ///
 /// \sa GenericTypeParamDecl
 class GenericTypeParamType : public SubstitutableType {
+  friend class swift::rewriting::Symbol;
+
   static constexpr unsigned TYPE_SEQUENCE_BIT = (1 << 30);
 
   using DepthIndexTy = llvm::PointerEmbeddedInt<unsigned, 31>;
 
   /// The generic type parameter or depth/index.
   llvm::PointerUnion<GenericTypeParamDecl *, DepthIndexTy> ParamOrDepthIndex;
+
+  /// The rewrite system symbol. Lazily initialized by Symbol::forGenericParam().
+  void *Symbol = nullptr;
 
 public:
   /// Retrieve a generic type parameter at the given depth and index.

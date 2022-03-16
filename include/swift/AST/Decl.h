@@ -110,7 +110,11 @@ namespace swift {
   class GenericParamScope;
   class PatternEntryDeclScope;
   class PatternEntryInitializerScope;
-  } // namespace ast_scope
+  }
+
+  namespace rewriting {
+  class Symbol;
+  }
 
 enum class DeclKind : uint8_t {
 #define DECL(Id, Parent) Id,
@@ -3202,7 +3206,11 @@ class AssociatedTypeDecl : public AbstractTypeParamDecl {
   LazyMemberLoader *Resolver = nullptr;
   uint64_t ResolverContextData;
 
+  /// The rewrite system symbol. Lazily initialized by Symbol::forAssocType().
+  void *Symbol = nullptr;
+
   friend class DefaultDefinitionTypeRequest;
+  friend class swift::rewriting::Symbol;
 
 public:
   AssociatedTypeDecl(DeclContext *dc, SourceLoc keywordLoc, Identifier name,

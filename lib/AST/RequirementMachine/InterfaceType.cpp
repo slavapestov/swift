@@ -111,14 +111,17 @@ MutableTerm RewriteContext::getMutableTermForType(CanType paramType,
     paramType = memberType.getBase();
 
     if (auto *assocType = memberType->getAssocType()) {
-      const auto *thisProto = assocType->getProtocol();
       if (proto && isa<GenericTypeParamType>(paramType)) {
-        thisProto = proto;
         innermostAssocTypeWasResolved = true;
+        if (proto == assocType->getProtocol())
+          symbols.push_back(Symbol::forAssociatedType(assocType, *this));
+        else {
+          symbols.push_back(Symbol::forAssociatedType(proto, assocType->getName(),
+                                                      *this));
+        }
+      } else {
+        symbols.push_back(Symbol::forAssociatedType(assocType, *this));
       }
-      symbols.push_back(Symbol::forAssociatedType(thisProto,
-                                                  assocType->getName(),
-                                                  *this));
     } else {
       symbols.push_back(Symbol::forName(memberType->getName(), *this));
       innermostAssocTypeWasResolved = false;
@@ -470,18 +473,21 @@ RewriteContext::getRelativeTermForType(CanType typeWitness,
 
     // If the substitution is a term consisting of a single protocol symbol [P],
     // produce [P:Foo] instead of [P].[Q:Foo] or [Q:Foo].
-    const auto *thisProto = assocType->getProtocol();
     if (proto && isa<GenericTypeParamType>(typeWitness)) {
-      thisProto = proto;
-
       assert(result.size() == 1);
       assert(result[0].getKind() == Symbol::Kind::Protocol);
       assert(result[0].getProtocol() == proto);
       result = MutableTerm();
-    }
 
-    symbols.push_back(Symbol::forAssociatedType(thisProto,
-                                                assocType->getName(), *this));
+      if (proto == assocType->getProtocol())
+        symbols.push_back(Symbol::forAssociatedType(assocType, *this));
+      else {
+        symbols.push_back(Symbol::forAssociatedType(proto,
+                                                    assocType->getName(), *this));
+      }
+    } else {
+      symbols.push_back(Symbol::forAssociatedType(assocType, *this));
+    }
   }
 
   // Add the member type names.
