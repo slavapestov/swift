@@ -837,6 +837,11 @@ namespace {
       printCommonPost(CD);
     }
 
+    void visitBuiltinTupleDecl(BuiltinTupleDecl *BTD) {
+      printCommon(BTD, "builtin_tuple_decl");
+      printCommonPost(BTD);
+    }
+
     void visitPatternBindingDecl(PatternBindingDecl *PBD) {
       printCommon(PBD, "pattern_binding_decl");
 
@@ -3764,6 +3769,12 @@ namespace {
       printField("decl", T->getDecl()->printRef());
       if (T->getParent())
         printRec("parent", T->getParent());
+      PrintWithColorRAII(OS, ParenthesisColor) << ')';
+    }
+
+    void visitBuiltinTupleType(BuiltinTupleType *T, StringRef label) {
+      printCommon(label, "builtin_tuple_type");
+      printField("decl", T->getDecl()->printRef());
       PrintWithColorRAII(OS, ParenthesisColor) << ')';
     }
 

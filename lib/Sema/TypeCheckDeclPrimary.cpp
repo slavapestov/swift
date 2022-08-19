@@ -3320,6 +3320,10 @@ public:
       addDelayedFunction(DD);
     }
   }
+
+  void visitBuiltinTupleDecl(BuiltinTupleDecl *BTD) {
+    llvm_unreachable("BuiltinTupleDecl should not show up here");
+  }
 };
 } // end anonymous namespace
 

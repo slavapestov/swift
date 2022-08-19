@@ -448,6 +448,9 @@ public:
   UNREACHABLE(Param, "does not have access control")
   UNREACHABLE(GenericTypeParam, "does not have access control")
   UNREACHABLE(MissingMember, "does not have access control")
+
+  UNREACHABLE(BuiltinTuple, "BuiltinTupleDecl should not show up here")
+
 #undef UNREACHABLE
 
 #define UNINTERESTING(KIND) \
@@ -1068,6 +1071,7 @@ public:
   UNREACHABLE(Param, "does not have access control")
   UNREACHABLE(GenericTypeParam, "does not have access control")
   UNREACHABLE(MissingMember, "does not have access control")
+  UNREACHABLE(BuiltinTuple, "BuiltinTupleDecl should not show up here")
 #undef UNREACHABLE
 
 #define UNINTERESTING(KIND) \

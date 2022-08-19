@@ -3661,6 +3661,11 @@ void PrintAST::visitProtocolDecl(ProtocolDecl *decl) {
                        Options.BracketOptions.shouldCloseNominal(decl));
   }
 }
+
+void PrintAST::visitBuiltinTupleDecl(BuiltinTupleDecl *decl) {
+  llvm_unreachable("Not implemented");
+}
+
 static bool isStructOrClassContext(DeclContext *dc) {
   auto *nominal = dc->getSelfNominalTypeDecl();
   if (nominal == nullptr)
@@ -6327,6 +6332,10 @@ public:
     } else {
       visit(T->getConstraintType());
     }
+  }
+
+  void visitBuiltinTupleType(BuiltinTupleType *T) {
+    printQualifiedType(T);
   }
 
   void visitLValueType(LValueType *T) {
