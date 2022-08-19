@@ -3665,6 +3665,7 @@ namespace {
     void visitPackExpansionType(PackExpansionType *T, StringRef label) {
       printCommon(label, "pack_expansion_type");
       printField("pattern", T->getPatternType());
+      printField("count", T->getCountType());
       PrintWithColorRAII(OS, ParenthesisColor) << ')';
     }
 
