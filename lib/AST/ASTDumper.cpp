@@ -3239,6 +3239,11 @@ static void dumpProtocolConformanceRec(
     unsigned indent,
     llvm::SmallPtrSetImpl<const ProtocolConformance *> &visited);
 
+static void dumpPackConformanceRec(
+    const PackConformance *conformance, llvm::raw_ostream &out,
+    unsigned indent,
+    llvm::SmallPtrSetImpl<const ProtocolConformance *> &visited);
+
 static void dumpProtocolConformanceRefRec(
     const ProtocolConformanceRef conformance, llvm::raw_ostream &out,
     unsigned indent,
@@ -3247,7 +3252,11 @@ static void dumpProtocolConformanceRefRec(
     out.indent(indent) << "(invalid_conformance)";
   } else if (conformance.isConcrete()) {
     dumpProtocolConformanceRec(conformance.getConcrete(), out, indent, visited);
+  } else if (conformance.isPack()) {
+    dumpPackConformanceRec(conformance.getPack(), out, indent, visited);
   } else {
+    assert(conformance.isAbstract());
+
     out.indent(indent) << "(abstract_conformance protocol="
                        << conformance.getAbstract()->getName();
     PrintWithColorRAII(out, ParenthesisColor) << ')';
@@ -3488,7 +3497,6 @@ void ProtocolConformanceRef::dump(llvm::raw_ostream &out, unsigned indent,
 void ProtocolConformanceRef::print(llvm::raw_ostream &out) const {
   llvm::SmallPtrSet<const ProtocolConformance *, 8> visited;
   dumpProtocolConformanceRefRec(*this, out, 0, visited);
-
 }
 
 void ProtocolConformance::dump() const {
