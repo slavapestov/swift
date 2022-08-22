@@ -1752,6 +1752,9 @@ public:
     if (nominal->hasClangNode())
       return nullptr;
 
+    if (isa<ProtocolDecl>(nominal))
+      return nullptr;
+
     auto &ctx = nominal->getASTContext();
 
     // Dig out the ObjectiveCBridgeable protocol.
