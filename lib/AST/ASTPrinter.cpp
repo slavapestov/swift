@@ -2326,10 +2326,12 @@ void PrintAST::printMembersOfDecl(Decl *D, bool needComma,
         AddMembers(Ext);
     }
     if (Options.PrintExtensionFromConformingProtocols) {
-      for (auto Conf : NTD->getAllConformances()) {
-        for (auto Ext : Conf->getProtocol()->getExtensions()) {
-          if (Options.printExtensionContentAsMembers(Ext))
-            AddMembers(Ext);
+      if (!isa<ProtocolDecl>(NTD)) {
+        for (auto Conf : NTD->getAllConformances()) {
+          for (auto Ext : Conf->getProtocol()->getExtensions()) {
+            if (Options.printExtensionContentAsMembers(Ext))
+              AddMembers(Ext);
+          }
         }
       }
     }
