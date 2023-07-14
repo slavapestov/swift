@@ -1027,8 +1027,11 @@ Type ConstraintSystem::openType(Type type, OpenedTypeMap &replacements,
       // that gets introduced by the interface type, see
       // \c openUnboundGenericType for more details.
       if (auto *packTy = type->getAs<PackType>()) {
-        if (auto expansion = packTy->unwrapSingletonPackExpansion())
-          type = expansion->getPatternType();
+        if (auto expansion = packTy->unwrapSingletonPackExpansion()) {
+          auto patternTy = expansion->getPatternType();
+          if (patternTy->is<GenericTypeParamType>())
+            type = patternTy;
+        }
       }
 
       if (auto *expansion = type->getAs<PackExpansionType>()) {
