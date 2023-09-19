@@ -586,9 +586,10 @@ RewriteContext::getRelativeSubstitutionSchemaFromType(
 
     result.push_back(Term::get(term, *this));
 
-    return CanGenericTypeParamType::get(/*isParameterPack=*/ false,
-                                        /*depth=*/ 0, index,
-                                        Context);
+    return CanGenericTypeParamType::get(
+        t->getRootGenericParam()->isParameterPack(),
+        /*depth=*/ 0, index,
+        Context);
   }));
 }
 
@@ -629,8 +630,9 @@ RewriteContext::getSubstitutionSchemaFromType(CanType concreteType,
 
     result.push_back(Term::get(term, *this));
 
-    return CanGenericTypeParamType::get(/*isParameterPack=*/ false,
-                                        /*depth=*/0, index,
-                                        Context);
+    return CanGenericTypeParamType::get(
+        t->getRootGenericParam()->isParameterPack(),
+        /*depth=*/0, index,
+        Context);
   }));
 }
