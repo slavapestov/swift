@@ -652,6 +652,8 @@ StringRef swift::constraints::getName(ConversionRestrictionKind kind) {
     return "[superclass]";
   case ConversionRestrictionKind::Existential:
     return "[existential]";
+  case ConversionRestrictionKind::MetatypeToMetatype:
+    return "[metatype-to-metatype]";
   case ConversionRestrictionKind::MetatypeToExistentialMetatype:
     return "[metatype-to-existential-metatype]";
   case ConversionRestrictionKind::ExistentialMetatypeToMetatype:

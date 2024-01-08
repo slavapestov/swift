@@ -278,6 +278,8 @@ enum class ConversionRestrictionKind {
   PointerToPointer,
   /// Value to existential value conversion, or existential erasure.
   Existential,
+  /// Metatype to metatype conversion.
+  MetatypeToMetatype,
   /// Metatype to existential metatype conversion.
   MetatypeToExistentialMetatype,
   /// Existential metatype to metatype conversion.

@@ -6977,6 +6977,7 @@ ConstraintSystem::isConversionEphemeral(ConversionRestrictionKind conversion,
   case ConversionRestrictionKind::DeepEquality:
   case ConversionRestrictionKind::Superclass:
   case ConversionRestrictionKind::Existential:
+  case ConversionRestrictionKind::MetatypeToMetatype:
   case ConversionRestrictionKind::MetatypeToExistentialMetatype:
   case ConversionRestrictionKind::ExistentialMetatypeToMetatype:
   case ConversionRestrictionKind::ValueToOptional:

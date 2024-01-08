@@ -7312,23 +7312,19 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
       break;
 
     case TypeKind::Metatype:
-    case TypeKind::ExistentialMetatype: {
-      auto meta1 = cast<AnyMetatypeType>(desugar1);
-      auto meta2 = cast<AnyMetatypeType>(desugar2);
+      conversionsOrFixes.push_back(ConversionRestrictionKind::MetatypeToMetatype);
+      break;
 
-      // A.Type < B.Type if A < B and both A and B are classes.
-      // P.Type < Q.Type if P < Q, both P and Q are protocols, and P.Type
-      // and Q.Type are both existential metatypes
-      auto subKind = std::min(kind, ConstraintKind::Subtype);
-      // If instance types can't have a subtype relationship
-      // it means that such types can be simply equated.
+    case TypeKind::ExistentialMetatype: {
+      auto meta1 = cast<ExistentialMetatypeType>(desugar1);
+      auto meta2 = cast<ExistentialMetatypeType>(desugar2);
+
       auto instanceType1 = meta1->getInstanceType();
       auto instanceType2 = meta2->getInstanceType();
-      if (isa<MetatypeType>(meta1) &&
-          !(instanceType1->mayHaveSuperclass() ||
-            instanceType2->getClassOrBoundGenericClass())) {
-        subKind = ConstraintKind::Bind;
-      }
+
+      // `any P.Type` is a subtype of `any Q.Type` iff `any P` is
+      // a subtype of `any Q`.
+      auto subKind = std::min(kind, ConstraintKind::Subtype);
 
       auto result =
           matchTypes(instanceType1, instanceType2, subKind, subflags,
@@ -8277,10 +8273,16 @@ ConstraintSystem::SolutionKind ConstraintSystem::simplifySubclassOfConstraint(
 
   // Record a fix if we didn't match one of the two cases above.
   if (shouldAttemptFixes()) {
-    if (auto *fix = fixRequirementFailure(*this, type, classType, locator)) {
-      if (recordFix(fix))
-        return SolutionKind::Error;
-      return SolutionKind::Solved;
+    SmallVector<LocatorPathElt, 4> path;
+    auto anchor = locator.getLocatorParts(path);
+
+    if (path.back().is<LocatorPathElt::AnyRequirement>()) {
+      if (auto *fix = fixRequirementFailure(*this, type, classType,
+                                            anchor, path)) {
+        if (recordFix(fix))
+          return SolutionKind::Error;
+        return SolutionKind::Solved;
+      }
     }
   }
 
@@ -13975,6 +13977,35 @@ ConstraintSystem::simplifyRestrictedConstraintImpl(
     return matchExistentialTypes(type1, type2,
                                  ConstraintKind::SelfObjectOfProtocol,
                                  subflags, locator);
+
+  // for $< in { <, <c, <oc }:
+  //   for A class-like, B class,
+  //     A subclass-of B ===> A.Type $< B.Type
+  case ConversionRestrictionKind::MetatypeToMetatype: {
+    addContextualScore();
+
+    auto instanceTy1 = type1->getMetatypeInstanceType();
+    auto instanceTy2 = type2->getMetatypeInstanceType();
+
+    if (matchKind >= ConstraintKind::Subtype &&
+        (instanceTy1->mayHaveSuperclass() ||
+         instanceTy2->getClassOrBoundGenericClass())) {
+      addConstraint(ConstraintKind::SubclassOf, instanceTy1, instanceTy2,
+                    locator.withPathElement(ConstraintLocator::InstanceType));
+      return SolutionKind::Solved;
+    }
+
+    auto result =
+        matchTypes(instanceTy1, instanceTy2, ConstraintKind::Bind, subflags,
+                   locator.withPathElement(ConstraintLocator::InstanceType));
+
+    if (!(shouldAttemptFixes() && result.isFailure()))
+      return result;
+
+    return fixContextualFailure(type1, type2, locator)
+               ? getTypeMatchSuccess()
+               : getTypeMatchFailure(locator);
+  }
 
   // for $< in { <, <c, <oc }:
   //   for P protocol, Q protocol,

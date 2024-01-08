@@ -6902,6 +6902,10 @@ Expr *ExprRewriter::coerceToType(Expr *expr, Type toType,
     case ConversionRestrictionKind::MetatypeToExistentialMetatype:
       return coerceExistential(expr, toType, locator);
 
+    case ConversionRestrictionKind::MetatypeToMetatype:
+      // Handled below.
+      break;
+
     case ConversionRestrictionKind::ClassMetatypeToAnyObject: {
       assert(ctx.LangOpts.EnableObjCInterop &&
              "metatypes can only be cast to objects w/ objc runtime!");
