@@ -645,7 +645,7 @@ option(SWIFT_ENABLE_EXPERIMENTAL_DISTRIBUTED
 
 option(SWIFT_ENABLE_EXPERIMENTAL_NONCOPYABLE_GENERICS
   "Enable experimental NoncopyableGenerics"
-  FALSE)
+  TRUE)
 
 option(SWIFT_ENABLE_EXPERIMENTAL_STRING_PROCESSING
   "Enable experimental string processing"
