@@ -4426,7 +4426,8 @@ public:
   /// Record the set of opened types for the given locator.
   void recordOpenedTypes(
          ConstraintLocatorBuilder locator,
-         const OpenedTypeMap &replacements);
+         const OpenedTypeMap &replacements,
+         bool fixmeAllowDuplicates=false);
 
   /// Check whether the given type conforms to the given protocol and if
   /// so return a valid conformance reference.
