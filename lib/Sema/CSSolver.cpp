@@ -1784,10 +1784,21 @@ ConstraintSystem::filterDisjunction(
       llvm::errs().indent(indent) << ")\n";
     }
 
-    if (restoreOnFail)
-      constraintsToRestoreOnFail.push_back(constraint);
-
     if (!constraint->isDisabled()) {
+      if (restoreOnFail)
+        constraintsToRestoreOnFail.push_back(constraint);
+      else if (solverState)
+        solverState->disableConstraint(constraint);
+      else
+        constraint->setDisabled();
+    }
+  }
+
+  if (numEnabledTerms == 0)
+    return SolutionKind::Error;
+
+  if (restoreOnFail) {
+    for (auto constraint : constraintsToRestoreOnFail) {
       if (solverState)
         solverState->disableConstraint(constraint);
       else
@@ -1795,14 +1806,7 @@ ConstraintSystem::filterDisjunction(
     }
   }
 
-  switch (numEnabledTerms) {
-  case 0:
-    for (auto constraint : constraintsToRestoreOnFail) {
-      constraint->setEnabled();
-    }
-    return SolutionKind::Error;
-
-  case 1: {
+  if (numEnabledTerms == 1) {
     // Only a single constraint remains. Retire the disjunction and make
     // the remaining constraint active.
     auto choice = disjunction->getNestedConstraints()[choiceIdx];
@@ -1851,9 +1855,7 @@ ConstraintSystem::filterDisjunction(
     return failedConstraint ? SolutionKind::Unsolved : SolutionKind::Solved;
   }
 
-  default:
-    return SolutionKind::Unsolved;
-  }
+  return SolutionKind::Unsolved;
 }
 
 // Attempt to find a disjunction of bind constraints where all options
