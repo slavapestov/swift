@@ -692,7 +692,6 @@ ConstraintSystem::SolverScope::SolverScope(ConstraintSystem &cs)
   numTypeVariables = cs.TypeVariables.size();
   numFixes = cs.Fixes.size();
   numKeyPaths = cs.KeyPaths.size();
-  numInferredClosureTypes = cs.ClosureTypes.size();
   numImpliedResults = cs.ImpliedResults.size();
   numContextualTypes = cs.contextualTypes.size();
   numTargets = cs.targets.size();
@@ -739,9 +738,6 @@ ConstraintSystem::SolverScope::~SolverScope() {
 
   /// Remove any key path expressions.
   truncate(cs.KeyPaths, numKeyPaths);
-
-  // Remove any inferred closure types (e.g. used in result builder body).
-  truncate(cs.ClosureTypes, numInferredClosureTypes);
 
   // Remove any implied results.
   truncate(cs.ImpliedResults, numImpliedResults);
