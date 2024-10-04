@@ -695,7 +695,6 @@ ConstraintSystem::SolverScope::SolverScope(ConstraintSystem &cs)
   numTypeVariables = cs.TypeVariables.size();
   numFixes = cs.Fixes.size();
   numKeyPaths = cs.KeyPaths.size();
-  numCaseLabelItems = cs.caseLabelItems.size();
   numPotentialThrowSites = cs.potentialThrowSites.size();
   numExprPatterns = cs.exprPatterns.size();
   numIsolatedParams = cs.isolatedParams.size();
@@ -738,9 +737,6 @@ ConstraintSystem::SolverScope::~SolverScope() {
 
   /// Remove any key path expressions.
   truncate(cs.KeyPaths, numKeyPaths);
-
-  // Remove any case label item infos.
-  truncate(cs.caseLabelItems, numCaseLabelItems);
 
   // Remove any potential throw sites.
   truncate(cs.potentialThrowSites, numPotentialThrowSites);
