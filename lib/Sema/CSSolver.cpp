@@ -323,8 +323,10 @@ void ConstraintSystem::applySolution(const Solution &solution) {
   }
 
   // Remember implied results.
-  for (auto impliedResult : solution.ImpliedResults)
-    ImpliedResults.insert(impliedResult);
+  for (auto impliedResult : solution.ImpliedResults) {
+    if (ImpliedResults.count(impliedResult.first) == 0)
+      recordImpliedResult(impliedResult.first, impliedResult.second);
+  }
 
   // Register the solution's opened types.
   for (const auto &opened : solution.OpenedTypes) {
@@ -692,7 +694,6 @@ ConstraintSystem::SolverScope::SolverScope(ConstraintSystem &cs)
   numTypeVariables = cs.TypeVariables.size();
   numFixes = cs.Fixes.size();
   numKeyPaths = cs.KeyPaths.size();
-  numImpliedResults = cs.ImpliedResults.size();
   numContextualTypes = cs.contextualTypes.size();
   numTargets = cs.targets.size();
   numCaseLabelItems = cs.caseLabelItems.size();
@@ -738,9 +739,6 @@ ConstraintSystem::SolverScope::~SolverScope() {
 
   /// Remove any key path expressions.
   truncate(cs.KeyPaths, numKeyPaths);
-
-  // Remove any implied results.
-  truncate(cs.ImpliedResults, numImpliedResults);
 
   // Remove any contextual types.
   truncate(cs.contextualTypes, numContextualTypes);
