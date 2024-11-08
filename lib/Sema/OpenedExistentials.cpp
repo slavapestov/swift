@@ -255,38 +255,9 @@ findGenericParameterReferencesRec(CanGenericSignature genericSig,
     return info;
   }
 
-  // Packs are invariant.
-  if (auto *pack = type->getAs<PackType>()) {
-    auto info = GenericParameterReferenceInfo();
-
-    for (auto arg : pack->getElementTypes()) {
-      info |= findGenericParameterReferencesRec(
-          genericSig, origParam, openedParam, arg,
-          TypePosition::Invariant, /*canBeCovariantResult=*/false);
-    }
-
-    return info;
-  }
-
-  // Pack expansions are invariant.
-  if (auto *expansion = type->getAs<PackExpansionType>()) {
-    return findGenericParameterReferencesRec(
-        genericSig, origParam, openedParam, expansion->getPatternType(),
-        TypePosition::Invariant, /*canBeCovariantResult=*/false);
-  }
-
-  // Specifically ignore parameterized protocols and existential
-  // metatypes because we can erase them to the upper bound.
-  if (type->is<ParameterizedProtocolType>() ||
-      type->is<ExistentialMetatypeType>()) {
-    return GenericParameterReferenceInfo();
-  }
-
   // Everything else should be a type parameter.
   if (!type->isTypeParameter()) {
-    llvm::errs() << "Unhandled type:\n";
-    type->dump(llvm::errs());
-    abort();
+    return GenericParameterReferenceInfo();
   }
 
   if (!type->getRootGenericParam()->isEqual(origParam)) {
