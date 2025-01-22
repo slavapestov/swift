@@ -6897,6 +6897,8 @@ static bool isTupleWithUnresolvedPackExpansion(Type type) {
   return false;
 }
 
+static bool optimizeConversionRestrictions = true;
+
 ConstraintSystem::TypeMatchResult
 ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
                              TypeMatchOptions flags,
@@ -8099,6 +8101,35 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
 
   if (conversionsOrFixes.empty())
     return getTypeMatchFailure(locator);
+
+  bool redundantDeepEquality = false;
+  bool sawDeepEquality = false;
+
+  for (auto potential : conversionsOrFixes) {
+    if (auto restriction = potential.getRestriction()) {
+      switch (*restriction) {
+      case ConversionRestrictionKind::DeepEquality:
+        sawDeepEquality = true;
+        break;
+      case ConversionRestrictionKind::OptionalToOptional:
+        redundantDeepEquality = true;
+        break;
+      default:
+        break;
+      }
+    }
+  }
+
+  if (optimizeConversionRestrictions && sawDeepEquality && redundantDeepEquality) {
+    conversionsOrFixes.erase(
+        llvm::remove_if(conversionsOrFixes,
+                        [&](RestrictionOrFix &potential) {
+                          if (auto restriction = potential.getRestriction())
+                            return *restriction == ConversionRestrictionKind::DeepEquality;
+                          return false;
+                        }),
+        conversionsOrFixes.end());
+  }
 
   // Where there is more than one potential conversion, create a disjunction
   // so that we'll explore all of the options.
@@ -14482,7 +14513,8 @@ ConstraintSystem::simplifyRestrictedConstraintImpl(
   // also:
   //   T <c U ===> T? <c U!
   case ConversionRestrictionKind::OptionalToOptional: {
-    addContextualScore();
+    if (!optimizeConversionRestrictions)
+      addContextualScore();
 
     assert(matchKind >= ConstraintKind::Subtype);
     if (auto generic1 = type1->getAs<BoundGenericType>()) {
