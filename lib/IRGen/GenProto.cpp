@@ -1774,10 +1774,11 @@ public:
           requirement.getAssociation(),
           requirement.getAssociatedRequirement());
 
+      auto associatedWitness = entry.getAssociatedConformanceWitness();
+
 #ifndef NDEBUG
       assert(entry.getKind() == SILWitnessTable::AssociatedConformance
              && "sil witness table does not match protocol");
-      auto associatedWitness = entry.getAssociatedConformanceWitness();
       assert(associatedWitness.Requirement == requirement.getAssociation()
              && "sil witness table does not match protocol");
       auto piIndex = PI.getAssociatedConformanceIndex(requirement);
