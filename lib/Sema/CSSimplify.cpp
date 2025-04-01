@@ -11690,7 +11690,7 @@ ConstraintSystem::simplifyValueWitnessConstraint(
     return formUnsolved();
 
   auto witness =
-      conformance.getWitnessByName(baseObjectType, requirement->getName());
+      conformance.getWitnessByName(requirement->getName());
   if (!witness)
     return fail();
 
