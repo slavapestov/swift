@@ -4320,8 +4320,8 @@ getOrCreateKeyPathEqualsAndHash(SILGenModule &SGM,
       auto hashable = index.Hashable;
       if (genericEnv) {
         formalTy = genericEnv->mapTypeIntoContext(formalTy)->getCanonicalType();
-        hashable = hashable.subst(index.FormalType,
-          [&](Type t) -> Type { return genericEnv->mapTypeIntoContext(t); },
+        hashable = hashable.subst(
+          QueryInterfaceTypeSubstitutions{genericEnv},
           LookUpConformanceInModule());
       }
 
