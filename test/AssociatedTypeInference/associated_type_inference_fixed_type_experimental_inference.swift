@@ -861,4 +861,6 @@ do {
   // expected-error@-1 {{type 'Conformer' does not conform to protocol 'P48a'}}
   // expected-error@-2 {{type 'Conformer' does not conform to protocol 'P48b'}}
   // expected-note@-3 {{add stubs for conformance}}
+  // expected-error@-4 {{circular reference}}
+  // expected-note@-5 3{{through reference here}}
 }
