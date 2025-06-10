@@ -4591,9 +4591,14 @@ TypeWitnessRequest::evaluate(Evaluator &eval,
   // FIXME: resolveTypeWitnessViaLookup() and ResolveTypeWitnessesRequest
   // pre-populate the type witnesses in this manner. This should be cleaned up.
   const auto known = conformance->TypeWitnesses.find(requirement);
-  assert(known != conformance->TypeWitnesses.end() &&
-         "Didn't resolve witness?");
-  return known->second;
+  if (known != conformance->TypeWitnesses.end())
+    return known->second;
+
+  auto type = ErrorType::get(requirement->getASTContext());
+  recordTypeWitness(conformance, requirement, type, nullptr);
+
+  const auto again = conformance->TypeWitnesses.find(requirement);
+  return again->second;
 }
 
 ProtocolConformanceRef
