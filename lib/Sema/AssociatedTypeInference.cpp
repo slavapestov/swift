@@ -1283,11 +1283,14 @@ class TypeReprCycleCheckWalker : private ASTWalker {
 public:
   TypeReprCycleCheckWalker(
       ASTContext &ctx,
-      const llvm::SetVector<AssociatedTypeDecl *> &allUnresolved)
+      const llvm::SetVector<AssociatedTypeDecl *> &allUnresolved,
+      bool distributedActorHack)
     : ctx(ctx), witness(nullptr), found(false) {
     for (auto *assocType : allUnresolved) {
       circularNames.insert(assocType->getName());
     }
+    if (distributedActorHack)
+      circularNames.insert(ctx.Id_ID);
   }
 
 private:
@@ -1669,7 +1672,9 @@ AssociatedTypeInference::getPotentialTypeWitnessesFromRequirement(
     });
   }
 
-  TypeReprCycleCheckWalker cycleCheck(dc->getASTContext(), allUnresolved);
+  TypeReprCycleCheckWalker cycleCheck(
+      dc->getASTContext(), allUnresolved,
+      proto->isSpecificProtocol(KnownProtocolKind::DistributedActor));
 
   InferredAssociatedTypesByWitnesses result;
 
