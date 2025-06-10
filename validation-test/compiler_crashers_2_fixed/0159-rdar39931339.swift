@@ -23,8 +23,8 @@ struct S0<T> : P0 {
 extension S0 : P3 where T : P2 {}
 
 struct S2 : P2 {
-  struct D : P1 {
-    let value: S2
+  struct D : P1 { // expected-error {{circular reference}}
+  // expected-note@-1 {{through reference here}}
   }
 }
 
