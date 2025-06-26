@@ -147,10 +147,14 @@ void ConstraintSystem::startExpressionTimer(ExpressionTimer::AnchorType anchor) 
   // If either the timeout is set, or we're asked to emit warnings,
   // start the timer. Otherwise, don't start the timer, it's needless
   // overhead.
-  if (timeout == 0 && opts.WarnLongExpressionTypeChecking == 0)
-    return;
+  if (timeout == 0) {
+    if (opts.WarnLongExpressionTypeChecking == 0)
+      return;
 
-  Timer.emplace(anchor, *this, timeout == 0 ? ExpressionTimer::NoLimit : 0);
+    timeout = ExpressionTimer::NoLimit;
+  }
+
+  Timer.emplace(anchor, *this, timeout);
 }
 
 void ConstraintSystem::incrementScopeCounter() {
