@@ -1,6 +1,8 @@
 /// This file implements the driver loop which attempts Knuth-Bendix completion
 /// with various strategies on all instances in parallel.
 
+let concurrentTasks = 32
+
 struct Dispatcher {
   let subset: [Int]
   let strategies: [Strategy]
@@ -274,8 +276,7 @@ struct Solver {
         }
       }
 
-      // We run 32 tasks at a time.
-      for _ in 0 ..< 32 {
+      for _ in 0 ..< concurrentTasks {
         startTask()
       }
 
