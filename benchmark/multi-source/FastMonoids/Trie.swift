@@ -6,6 +6,7 @@ struct Trie {
   var freeList: [Node] = []
 
   let emptyNode: [Node]
+  let maxNodes = 32000
   
   init(alphabet: Int) {
     self.emptyNode = Array(repeating: -1, count: alphabet)
@@ -21,7 +22,7 @@ struct Trie {
     }
 
     let result = values.count
-    if result + emptyNode.count >= 32000 {
+    if result + emptyNode.count >= maxNodes {
       throw RewritingError.tooManyNodes
     }
     values.append(contentsOf: emptyNode)
@@ -37,8 +38,7 @@ struct Trie {
 
   mutating func insert(_ key: Word, _ value: Int) throws(RewritingError) {
     var node = 0
-    for i in 0 ..< key.count - 1 {
-      let s = key[i]
+    for s in key[0 ..< key.count - 1] {
       if children[node + Int(s)] == -1 {
         children[node + Int(s)] = try createNode()
       }

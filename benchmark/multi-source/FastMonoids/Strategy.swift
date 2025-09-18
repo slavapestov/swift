@@ -81,6 +81,7 @@ struct Solution {
   let extra: [Rule]
   let cardinality: Int?
   let presentation: Presentation
+  let stats: RewritingSystem.Stats
 }
 
 extension RewritingSystem {
@@ -88,7 +89,8 @@ extension RewritingSystem {
     let p = presentation.sorted(order: strategy.order)
     return Solution(extra: strategy.extra,
                     cardinality: cardinality,
-                    presentation: p)
+                    presentation: p,
+                    stats: stats)
   }
 }
 

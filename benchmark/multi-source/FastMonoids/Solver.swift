@@ -50,7 +50,7 @@ struct Solver {
   mutating func solve() async {
     if output {
       print("# Remaining \(subset.count)")
-      print("# n:\tpresentation:\tcardinality:\tcomplete presentation:\tstrategy:")
+      print("# n:\tpresentation:\tcardinality:\tcomplete:\tstrategy:")
     }
 
     // The shortlex order with identity permutation of generators solves

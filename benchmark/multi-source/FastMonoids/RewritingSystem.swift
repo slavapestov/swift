@@ -57,6 +57,7 @@ struct RewritingSystem: ~Copyable {
   struct Stats {
     var numRounds = 0
     var numRulesRemaining = 0  // Number of rules that were not reduced away
+    var numRulesPeak = 0
     var numReductionSteps = 0
   }
 
@@ -120,6 +121,7 @@ struct RewritingSystem: ~Copyable {
 
     rules.append(rule)
     stats.numRulesRemaining += 1
+    stats.numRulesPeak = max(stats.numRulesPeak, stats.numRulesRemaining)
   }
 
   mutating func addRule(_ rule: inout Rule, order: Order)
