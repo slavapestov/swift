@@ -44,7 +44,12 @@ struct RewritingSystem: ~Copyable {
   var checkedRulesUpTo = 0  // Completion progress
   var reducedRules: [UInt32] = []  // Bitmap of reduced rules
 
-  typealias CriticalPair = (i: Int, from: Int, j: Int)
+  struct CriticalPair {
+    var i: UInt16
+    var from: UInt16
+    var j: UInt16
+  }
+
   var criticalPairs: [CriticalPair] = []  // Temporary array for completion
 
   var stats = Stats()
@@ -138,8 +143,12 @@ struct RewritingSystem: ~Copyable {
     }
   }
 
-  mutating func resolveOverlap(i: Int, from: Int, j: Int, order: Order)
+  mutating func resolveOverlap(_ criticalPair: CriticalPair, order: Order)
       throws(RewritingError) -> Bool {
+    let i = Int(criticalPair.i)
+    let j = Int(criticalPair.j)
+    let from = Int(criticalPair.from)
+
     let lhs = rules[i]
     let rhs = rules[j]
 
@@ -187,7 +196,8 @@ struct RewritingSystem: ~Copyable {
           if rules[j].lhs.count > lhs.lhs.count { return }
         }
 
-        criticalPairs.append((i: i, from: from, j: j))
+        let criticalPair = CriticalPair(i: UInt16(i), from: UInt16(from), j: UInt16(j))
+        criticalPairs.append(criticalPair)
       }
 
       from += 1
@@ -212,8 +222,8 @@ struct RewritingSystem: ~Copyable {
 
     do {
       log("Resolving critical pairs...")
-      for (i, from, j) in criticalPairs {
-        if try resolveOverlap(i: i, from: from, j: j, order: order) {
+      for criticalPair in criticalPairs {
+        if try resolveOverlap(criticalPair, order: order) {
           confluent = false
         }
       }
@@ -266,7 +276,6 @@ struct RewritingSystem: ~Copyable {
         setReduced(n)
         trie.remove(rule.lhs, n)
         stats.numRulesRemaining -= 1
-        continue
       }
     }
 
