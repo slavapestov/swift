@@ -9243,47 +9243,10 @@ ConstraintSystem::SolutionKind ConstraintSystem::simplifyConformsToConstraint(
 
       if (isExpr<UnresolvedMemberExpr>(anchor) &&
           req->is<LocatorPathElt::TypeParameterRequirement>()) {
-        auto signature = path[path.size() - 2]
-                             .castTo<LocatorPathElt::OpenedGeneric>()
-                             .getSignature();
-        auto requirement = signature.getRequirements()[req->getIndex()];
-
         auto *memberLoc = getConstraintLocator(anchor, path.front());
-        auto overload = findSelectedOverloadFor(memberLoc);
-
-        // To figure out what is going on here we need to wait until
-        // member overload is set in the constraint system.
-        if (!overload) {
-          // If it's not allowed to generate new constraints
-          // there is no way to control re-activation, so this
-          // check has to fail.
-          if (!flags.contains(TMF_GenerateConstraints))
-            return SolutionKind::Error;
-
-          return formUnsolved(/*activate=*/true);
-        }
-
-        auto *memberRef = overload->choice.getDeclOrNull();
-        if (!memberRef)
-          return SolutionKind::Error;
-
-        // If this is a `Self` conformance requirement from a static member
-        // reference on a protocol metatype, let's produce a tailored diagnostic.
-        if (memberRef->isStatic()) {
-          if (hasFixFor(memberLoc,
-                        FixKind::AllowInvalidStaticMemberRefOnProtocolMetatype))
-            return SolutionKind::Solved;
-
-          if (auto *protocolDecl =
-                  memberRef->getDeclContext()->getSelfProtocolDecl()) {
-            auto selfTy = protocolDecl->getSelfInterfaceType();
-            if (selfTy->isEqual(requirement.getFirstType())) {
-              auto *fix = AllowInvalidStaticMemberRefOnProtocolMetatype::create(
-                *this, memberLoc);
-              return recordFix(fix) ? SolutionKind::Error : SolutionKind::Solved;
-            }
-          }
-        }
+        auto *fix = AllowInvalidStaticMemberRefOnProtocolMetatype::create(
+            *this, memberLoc);
+        return recordFix(fix) ? SolutionKind::Error : SolutionKind::Solved;
       }
 
       if (auto *fix =
