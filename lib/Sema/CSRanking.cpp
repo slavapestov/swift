@@ -195,14 +195,19 @@ static bool sameDecl(Decl *decl1, Decl *decl2) {
   if (decl1 == decl2)
     return true;
 
-  // All types considered identical.
-  // FIXME: This is a hack. What we really want is to have substituted the
-  // base type into the declaration reference, so that we can compare the
-  // actual types to which two type declarations resolve. If those types are
-  // equivalent, then it doesn't matter which declaration is chosen.
-  if (isa<TypeDecl>(decl1) && isa<TypeDecl>(decl2))
-    return true;
-  
+  // Special hack to allow type aliases with same underlying type.
+  //
+  // FIXME: Check substituted types instead.
+  //
+  // FIXME: Perhaps this should be handled earlier in name lookup.
+  auto *typeDecl1 = dyn_cast<TypeDecl>(decl1);
+  auto *typeDecl2 = dyn_cast<TypeDecl>(decl2);
+  if (typeDecl1 && typeDecl2) {
+    auto type1 = typeDecl1->getDeclaredInterfaceType();
+    auto type2 = typeDecl2->getDeclaredInterfaceType();
+    return type1->isEqual(type2);
+  }
+
   if (decl1->getKind() != decl2->getKind())
     return false;
 
