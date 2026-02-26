@@ -1192,6 +1192,7 @@ SolutionCompareResult ConstraintSystem::compareSolutions(
     // FIXME: Along with the FIXME below, this is a hack to work around
     // problems with restating requirements in protocols.
     identical = false;
+    llvm::errs() << "not identical 1\n";
 
     if (cs.isForCodeCompletion()) {
       // Don't rank based on overload choices of function calls that contain the
@@ -1223,6 +1224,7 @@ SolutionCompareResult ConstraintSystem::compareSolutions(
     // If the kinds of overload choice don't match...
     if (choice1.getKind() != choice2.getKind()) {
       identical = false;
+      llvm::errs() << "not identical 2\n";
       
       // A declaration found directly beats any declaration found via dynamic
       // lookup, bridging, or optional unwrapping.
@@ -1540,6 +1542,7 @@ SolutionCompareResult ConstraintSystem::compareSolutions(
     // compare them. `isSubtypeOf` cannot be used with solver-allocated types.
     if (type1->hasTypeVariableOrPlaceholder() ||
         type2->hasTypeVariableOrPlaceholder()) {
+    llvm::errs() << "not identical 3\n";
       identical = false;
       continue;
     }
@@ -1570,10 +1573,12 @@ SolutionCompareResult ConstraintSystem::compareSolutions(
         }
       }
 
+      llvm::errs() << "not identical 4\n";
       identical = false;
       continue;
     }
 
+    llvm::errs() << "not identical 5\n";
     // The systems are not considered equivalent.
     identical = false;
 
