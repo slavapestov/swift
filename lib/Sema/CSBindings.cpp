@@ -1109,6 +1109,20 @@ static std::optional<bool> subsumeBinding(PotentialBinding &binding,
       if (binding.Kind == AllowedBindingKind::Exact)
         return true;
     }
+
+    if (existing.Kind == AllowedBindingKind::Subtypes &&
+        binding.Kind == AllowedBindingKind::Supertypes) {
+      // If new type has a type variable it shouldn't
+      // be considered viable.
+      if (binding.BindingType->hasTypeVariable())
+        return false;
+
+      // If new type doesn't have any type variables
+      // but the existing binding does, let's replace existing
+      // binding with new one.
+      if (existingType->hasTypeVariable())
+        return true;
+    }
   }
 
   if (!isClosureParameterType) {
