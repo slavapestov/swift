@@ -12987,8 +12987,10 @@ ConstraintSystem::simplifyKeyPathConstraint(
 
     if (auto bgt = contextualTy->getAs<BoundGenericType>()) {
       // We can get root and value from a concrete key path type.
-      assert(bgt->isKeyPath() || bgt->isWritableKeyPath() ||
-             bgt->isReferenceWritableKeyPath());
+      if (!(bgt->isKeyPath() || bgt->isWritableKeyPath() ||
+            bgt->isReferenceWritableKeyPath())) {
+        return true;
+      }
 
       contextualRootTy = bgt->getGenericArgs()[0];
       contextualValueTy = bgt->getGenericArgs()[1];
@@ -13221,6 +13223,24 @@ ConstraintSystem::simplifyKeyPathApplicationConstraint(
       return solveRValue();
     }
     if (bgt->isWritableKeyPath()) {
+      kpRootTy = getFixedTypeRecursive(kpRootTy, flags, /*wantRValueType=*/true);
+
+      // We might not know if the value is ultimately going to be used as an
+      // lvalue or rvalue yet, but this determines whether we can convert the
+      // base. To avoid introducing a disjunction, just guess if the keypath
+      // root type is already bound, and conservatively assume we will not
+      // convert the base if the keypath root type is not bound.
+      if (!kpRootTy->isTypeVariableOrMember()) {
+        auto result = isLikelyExactMatch(rootTy->getRValueType(), kpRootTy);
+        if (result && !*result) {
+          // Proceed as in the read-only case.
+          if (!matchRoot(ConstraintKind::Conversion))
+            return SolutionKind::Error;
+
+          return solveRValue();
+        }
+      }
+
       // Writable keypath. The result can be an lvalue if the root was.
       // We can't convert the base without giving up lvalue-ness, though.
       if (!matchRoot(ConstraintKind::Equal))
