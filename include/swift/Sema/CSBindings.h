@@ -430,7 +430,7 @@ class BindingSet {
 
   const PotentialBindings &Info;
 
-  llvm::SmallPtrSet<TypeVariableType *, 4> AdjacentVars;
+  llvm::SmallPtrSet<TypeVariableType *, 4> ReferencedVars;
 
   /// Generation number of PotentialBindings at the time this BindingSet
   /// was constructed.
