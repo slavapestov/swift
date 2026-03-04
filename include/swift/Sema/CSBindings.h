@@ -139,7 +139,6 @@ struct PotentialBinding {
   }
 
   PotentialBinding withSameSource(Type type, AllowedBindingKind kind) const {
-    ASSERT(kind != AllowedBindingKind::Fallback);
     return {type, kind, BindingSource, Originator};
   }
 
