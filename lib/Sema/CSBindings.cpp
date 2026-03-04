@@ -1223,6 +1223,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
     // attempt it next and fail as soon as possible.
     auto result = isLikelyExactMatch(binding.BindingType, existing.BindingType);
     if (result.has_value() && !*result) {
+      LLVM_DEBUG(llvm::dbgs() << "Exact vs exact conflict\n");
       markConflicting();
     }
 
@@ -1248,6 +1249,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       // Existing exact binding must be a supertype of the new lower bound.
       if (canPossiblyConvertTo(CS, binding.BindingType, existing.BindingType,
                                GenericSignature())) {
+        LLVM_DEBUG(llvm::dbgs() << "Exact vs supertype conflict\n");
         markConflicting();
       }
 
@@ -1267,6 +1269,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       // Existing exact binding must be a subtype of the new upper bound.
       if (canPossiblyConvertTo(CS, existing.BindingType, binding.BindingType,
                                GenericSignature())) {
+        LLVM_DEBUG(llvm::dbgs() << "Exact vs subtype conflict\n");
         markConflicting();
       }
 
@@ -1293,6 +1296,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       // Exact binding must be a supertype of the existing lower bound.
       if (canPossiblyConvertTo(CS, existing.BindingType, binding.BindingType,
                                GenericSignature())) {
+        LLVM_DEBUG(llvm::dbgs() << "Supertype vs exact conflict\n");
         markConflicting();
       }
 
@@ -1377,6 +1381,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       if (canPossiblyConvertTo(CS, existing.BindingType, binding.BindingType,
                                GenericSignature())) {
         binding.Kind = AllowedBindingKind::Exact;
+        LLVM_DEBUG(llvm::dbgs() << "Supertype vs subtype conflict\n");
         markConflicting();
         return true;
       }
@@ -1441,6 +1446,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       // The new exact binding should be a subtype of the existing upper bound.
       if (canPossiblyConvertTo(CS, binding.BindingType, existing.BindingType,
                                GenericSignature())) {
+        LLVM_DEBUG(llvm::dbgs() << "Subtype vs exact conflict\n");
         markConflicting();
       }
 
@@ -1468,6 +1474,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       if (canPossiblyConvertTo(CS, binding.BindingType, existing.BindingType,
                                GenericSignature())) {
         binding.Kind = AllowedBindingKind::Exact;
+        LLVM_DEBUG(llvm::dbgs() << "Subtype vs supertype conflict\n");
         markConflicting();
         return true;
       }
@@ -1517,6 +1524,7 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
 
       if (uninhabited) {
         binding.Kind = AllowedBindingKind::Exact;
+        LLVM_DEBUG(llvm::dbgs() << "Subtype vs supertype conflict\n");
         markConflicting();
       }
 
@@ -1610,6 +1618,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
     if (!conforms) {
       // Our partial solution so far is contradictory. Promote this
       // binding to attempt immediately.
+      LLVM_DEBUG(llvm::dbgs() << "Exact binding doesn't conform\n");
       markConflicting();
 
       // Preserve the binding kind, which is Exact.
@@ -1643,6 +1652,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
                       CS.lookupConformance(binding.BindingType, proto).isInvalid());
             });
         if (objectConforms) {
+          LLVM_DEBUG(llvm::dbgs() << "Optional unwrap due to conformance\n");
           binding.BindingType = objectType;
           // Preserve the binding kind of Subtypes. However, we might
           // upgrade it to Exact below if the object type has no
@@ -1668,6 +1678,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
         LLVM_FALLTHROUGH;
 
       case KnownLValueKind::RValue:
+        LLVM_DEBUG(llvm::dbgs() << "Subtype binding has no proper subtypes\n");
         binding.Kind = AllowedBindingKind::Exact;
         break;
       }
@@ -1688,6 +1699,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
       if (!conforms) {
         // Our partial solution so far is contradictory. Promote this
         // binding to attempt immediately.
+        LLVM_DEBUG(llvm::dbgs() << "Subtype binding doesn't conform\n");
         markConflicting();
         binding.Kind = AllowedBindingKind::Exact;
         break;
@@ -1736,6 +1748,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
       if (!conforms) {
         // Our partial solution so far is contradictory. Promote this
         // binding to attempt immediately.
+        LLVM_DEBUG(llvm::dbgs() << "Supertype binding doesn't conform\n");
         markConflicting();
         binding.Kind = AllowedBindingKind::Exact;
         break;
@@ -1754,6 +1767,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
       });
 
       if (condition) {
+        LLVM_DEBUG(llvm::dbgs() << "Supertype binding has no proper supertypes\n");
         binding.Kind = AllowedBindingKind::Exact;
         break;
       }
