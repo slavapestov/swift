@@ -1464,6 +1464,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
     if (!conforms) {
       // Our partial solution so far is contradictory. Promote this
       // binding to attempt immediately.
+      LLVM_DEBUG(llvm::dbgs() << "Exact binding doesn't conform\n");
       markConflicting();
 
       // Preserve the binding kind, which is Exact.
@@ -1485,6 +1486,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
                       CS.lookupConformance(binding.BindingType, proto).isInvalid());
             });
         if (objectConforms) {
+          LLVM_DEBUG(llvm::dbgs() << "Optional unwrap due to conformance\n");
           binding.BindingType = objectType;
           // Preserve the binding kind of Subtypes. However, we might
           // upgrade it to Exact below if the object type has no
@@ -1510,6 +1512,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
         LLVM_FALLTHROUGH;
 
       case KnownLValueKind::RValue:
+        LLVM_DEBUG(llvm::dbgs() << "Subtype binding has no proper subtypes\n");
         binding.Kind = AllowedBindingKind::Exact;
         break;
       }
@@ -1529,6 +1532,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
       if (!conforms) {
         // Our partial solution so far is contradictory. Promote this
         // binding to attempt immediately.
+        LLVM_DEBUG(llvm::dbgs() << "Subtype binding doesn't conform\n");
         markConflicting();
         binding.Kind = AllowedBindingKind::Exact;
         break;
@@ -1552,6 +1556,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
       if (!conforms) {
         // Our partial solution so far is contradictory. Promote this
         // binding to attempt immediately.
+        LLVM_DEBUG(llvm::dbgs() << "Supertype binding doesn't conform\n");
         markConflicting();
         binding.Kind = AllowedBindingKind::Exact;
         break;
@@ -1571,6 +1576,7 @@ void BindingSet::reduceBinding(PotentialBinding &binding) {
       });
 
       if (condition) {
+        LLVM_DEBUG(llvm::dbgs() << "Supertype binding has no proper supertypes\n");
         binding.Kind = AllowedBindingKind::Exact;
         break;
       }
