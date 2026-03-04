@@ -23,87 +23,6 @@ using namespace swift;
 using namespace constraints;
 using namespace inference;
 
-// Given a possibly-Optional type, return the direct superclass of the
-// (underlying) type wrapped in the same number of optional levels as
-// type.
-static Type getOptionalSuperclass(Type type) {
-  int optionalLevels = 0;
-  while (auto underlying = type->getOptionalObjectType()) {
-    ++optionalLevels;
-    type = underlying;
-  }
-
-  Type superclass;
-  if (auto *existential = type->getAs<ExistentialType>()) {
-    auto constraintTy = existential->getConstraintType();
-    if (auto *compositionTy = constraintTy->getAs<ProtocolCompositionType>()) {
-      SmallVector<Type, 2> members;
-      bool found = false;
-      // Preserve all of the protocol requirements of the type i.e.
-      // if the type was `any B & P` where `B : A` the supertype is
-      // going to be `any A & P`.
-      //
-      // This is especially important for Sendable key paths because
-      // to reserve sendability of the original type.
-      for (auto member : compositionTy->getMembers()) {
-        if (member->getClassOrBoundGenericClass()) {
-          member = member->getSuperclass();
-          if (!member)
-            return Type();
-          found = true;
-        }
-        members.push_back(member);
-      }
-
-      if (!found)
-        return Type();
-
-      superclass = ExistentialType::get(
-          ProtocolCompositionType::get(type->getASTContext(), members,
-                                       compositionTy->getInverses(),
-                                       compositionTy->hasExplicitAnyObject()));
-    } else {
-      // Avoid producing superclass for situations like `any P` where `P` is
-      // `protocol P : C`.
-      return Type();
-    }
-  } else {
-    superclass = type->getSuperclass();
-  }
-
-  if (!superclass)
-    return Type();
-
-  while (optionalLevels--)
-    superclass = OptionalType::get(superclass);
-
-  return superclass;
-}
-
-/// Enumerates all of the 'direct' supertypes of the given type.
-///
-/// The direct supertype S of a type T is a supertype of T (e.g., T < S)
-/// such that there is no type U where T < U and U < S.
-static SmallVector<Type, 4> enumerateDirectSupertypes(Type type) {
-  SmallVector<Type, 4> result;
-
-  if (type->is<InOutType>() || type->is<LValueType>()) {
-    type = type->getWithoutSpecifierType();
-    result.push_back(type);
-  }
-
-  if (auto superclass = getOptionalSuperclass(type)) {
-    // FIXME: Can also weaken to the set of protocol constraints, but only
-    // if there are any protocols that the type conforms to but the superclass
-    // does not.
-
-    result.push_back(superclass);
-  }
-
-  // FIXME: lots of other cases to consider!
-  return result;
-}
-
 TypeVarBindingProducer::TypeVarBindingProducer(
     ConstraintSystem &cs,
     TypeVariableType *typeVar,
@@ -388,18 +307,6 @@ bool TypeVarBindingProducer::computeNext() {
           !binding.BindingType->isPlaceholder()) {
         auto voidType = CS.getASTContext().TheEmptyTupleType;
         addNewBinding(binding.withSameSource(voidType, BindingKind::Exact));
-      }
-
-      for (auto supertype : enumerateDirectSupertypes(type)) {
-        // If we're not allowed to try this binding, skip it.
-        if (checkTypeOfBinding(TypeVar, supertype)) {
-          // A key path type cannot be bound to type-erased key path variants.
-          if (TypeVar->getImpl().isKeyPathType() &&
-              isTypeErasedKeyPathType(supertype))
-            continue;
-
-          addNewBinding(binding.withType(supertype));
-        }
       }
     }
   }

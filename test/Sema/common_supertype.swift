@@ -29,7 +29,7 @@ func testClass1(x: C, y: E) -> B {
 }
 
 func testClass2(x: E, y: F) {
-  _ = test(x, y) // expected-error {{conflicting arguments to generic parameter 'T' ('E' vs. 'F' vs. 'D' vs. 'B' vs. 'A')}}
+  _ = test(x, y) // expected-error {{conflicting arguments to generic parameter 'T' ('E' vs. 'F')}}
 }
 
 func testMetatype1(x: C.Type, y: E.Type) -> B.Type {
