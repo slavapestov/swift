@@ -262,7 +262,7 @@ struct PotentialBindings {
   TypeVariableType *TypeVar;
 
   /// The set of all constraints that have been added via infer().
-  llvm::SmallSetVector<Constraint *, 2> Constraints;
+  llvm::SmallSetVector<Constraint *, 4> Constraints;
 
   /// The set of potential bindings.
   llvm::SmallVector<PotentialBinding, 4> Bindings;
@@ -287,19 +287,19 @@ struct PotentialBindings {
   /// is a subtype of, supertype of or is equivalent to. This is used
   /// to determine ordering inside of a chain of subtypes to help infer
   /// transitive bindings  and protocol requirements.
-  llvm::SmallVector<std::pair<TypeVariableType *, Constraint *>, 4> SubtypeOf;
-  llvm::SmallVector<std::pair<TypeVariableType *, Constraint *>, 4> SupertypeOf;
-  llvm::SmallVector<std::pair<TypeVariableType *, Constraint *>, 4> EquivalentTo;
+  llvm::SmallVector<std::pair<TypeVariableType *, Constraint *>, 1> SubtypeOf;
+  llvm::SmallVector<std::pair<TypeVariableType *, Constraint *>, 1> SupertypeOf;
+  llvm::SmallVector<std::pair<TypeVariableType *, Constraint *>, 1> EquivalentTo;
 
   /// The set of protocol conformance requirements imposed on this type variable.
   llvm::SmallVector<Constraint *, 4> Protocols;
 
   /// The set of unique literal protocol requirements placed on this
   /// type variable.
-  llvm::SmallVector<LiteralRequirement, 2> Literals;
+  llvm::SmallVector<LiteralRequirement, 1> Literals;
 
   /// The set of fallback constraints imposed on this type variable.
-  llvm::SmallVector<Constraint *, 2> Defaults;
+  llvm::SmallVector<Constraint *, 1> Defaults;
 
   ASTNode AssociatedCodeCompletionToken = ASTNode();
 
