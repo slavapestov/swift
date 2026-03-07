@@ -448,46 +448,7 @@ void Constraint::print(llvm::raw_ostream &Out, SourceManager *sm,
   case ConstraintKind::BindOverload: {
     Out << " bound to ";
     auto overload = getOverloadChoice();
-    auto printDecl = [&] {
-      auto decl = overload.getDecl();
-      decl->dumpRef(Out);
-      Out << " : " << decl->getInterfaceType();
-    };
-
-    switch (overload.getKind()) {
-    case OverloadChoiceKind::Decl:
-      Out << "decl ";
-      printDecl();
-      break;
-    case OverloadChoiceKind::DeclViaDynamic:
-      Out << "decl-via-dynamic ";
-      printDecl();
-      break;
-    case OverloadChoiceKind::DeclViaBridge:
-      Out << "decl-via-bridge ";
-      printDecl();
-      break;
-    case OverloadChoiceKind::DeclViaUnwrappedOptional:
-      Out << "decl-via-unwrapped-optional ";
-      printDecl();
-      break;
-    case OverloadChoiceKind::DynamicMemberLookup:
-    case OverloadChoiceKind::KeyPathDynamicMemberLookup:
-      Out << "dynamic member lookup '" << overload.getName() << "'";
-      break;
-    case OverloadChoiceKind::TupleIndex:
-      Out << "tuple index " << overload.getTupleIndex();
-      break;
-    case OverloadChoiceKind::MaterializePack:
-      Out << "materialize pack";
-      break;
-    case OverloadChoiceKind::ExtractFunctionIsolation:
-      Out << "extract function islation";
-      break;
-    case OverloadChoiceKind::KeyPathApplication:
-      Out << "key path application";
-      break;
-    }
+    overload.dump(Type(), sm, Out);
 
     skipSecond = true;
     break;
