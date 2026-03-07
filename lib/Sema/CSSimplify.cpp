@@ -12011,25 +12011,10 @@ ConstraintSystem::simplifyUnresolvedMemberChainBaseConstraint(
     if (shouldAttemptFixes() && hasFixFor(memberLoc))
       return SolutionKind::Solved;
 
-    auto *memberRef = findResolvedMemberRef(memberLoc);
-    if (memberRef && (memberRef->isStatic() || isa<TypeAliasDecl>(memberRef))) {
-      auto layout = baseTy->getExistentialLayout();
-      ASSERT(!layout.explicitSuperclass);
-      auto locator =
-        getConstraintLocator(memberLoc, ConstraintLocator::MemberRefBase);
-      auto lFlags = getDefaultDecompositionOptions(flags);
-
-      for (auto *proto : layout.getProtocols()) {
-        auto solution =
-          simplifyConformsToConstraint(resultTy, proto,
-                                       ConstraintKind::ConformsTo,
-                                       locator, lFlags);
-        if (solution == SolutionKind::Error) {
-          return SolutionKind::Error;
-        }
-      }
-      return SolutionKind::Solved;
-    }
+    return simplifyConformsToConstraint(
+        resultTy, baseTy, ConstraintKind::ConformsTo,
+        getConstraintLocator(memberLoc, ConstraintLocator::MemberRefBase),
+        flags);
   }
 
   return matchTypes(baseTy, resultTy, ConstraintKind::Equal, flags, locator);
