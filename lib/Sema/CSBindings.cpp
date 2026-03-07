@@ -89,9 +89,6 @@ BindingSet::BindingSet(ConstraintSystem &CS, TypeVariableType *TypeVar,
       addDefault(constraint);
   }
 
-  for (auto &entry : info.AdjacentVars)
-    AdjacentVars.insert(entry.first);
-
   ASSERT(!IsDirty);
 }
 
@@ -399,12 +396,15 @@ bool BindingSet::involvesTypeVariables() const {
       TypeVar->getImpl().canBindToPack())
     return true;
 
+  if (!Info.AdjacentVars.empty())
+    return true;
+
   // This is effectively a no-op right now since bindings are re-computed
   // on each step of the solver and fixed types won't appear in AdjancentVars,
   // but once bindings are computed incrementally it becomes important
   // to double-check that any adjacent type variables found previously are
   // still unresolved.
-  return llvm::any_of(AdjacentVars, [](TypeVariableType *typeVar) {
+  return llvm::any_of(ReferencedVars, [](TypeVariableType *typeVar) {
     return !typeVar->getImpl().getFixedType(/*record=*/nullptr);
   });
 }
@@ -757,9 +757,9 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
     // Make a note that the key path root is transitively adjacent
     // to contextual root type variable and all of its variables.
     // This is important for ranking.
-    AdjacentVars.insert(contextualRootVar);
-    AdjacentVars.insert(contextualRootBindings.AdjacentVars.begin(),
-                        contextualRootBindings.AdjacentVars.end());
+    ReferencedVars.insert(contextualRootVar);
+    ReferencedVars.insert(contextualRootBindings.ReferencedVars.begin(),
+                          contextualRootBindings.ReferencedVars.end());
   } else {
     // We have a concrete root type. Add a binding for it to our binding set.
     auto newBinding = binding.withSameSource(inferredRootTy, inferredRootKind);
@@ -1795,7 +1795,7 @@ void BindingSet::addBinding(PotentialBinding binding) {
         SmallPtrSet<TypeVariableType *, 4> referencedVars;
         existing->BindingType->getTypeVariables(referencedVars);
         for (auto *var : referencedVars)
-          AdjacentVars.erase(var);
+          ReferencedVars.erase(var);
       }
 
       // Remove the existing binding.
@@ -1803,7 +1803,7 @@ void BindingSet::addBinding(PotentialBinding binding) {
 
       // Insert the possibly updated binding.
       for (auto *adjacentVar : referencedTypeVars)
-        AdjacentVars.insert(adjacentVar);
+        ReferencedVars.insert(adjacentVar);
 
       joined.insert(binding);
       continue;
@@ -1825,7 +1825,7 @@ void BindingSet::addBinding(PotentialBinding binding) {
     return;
 
   for (auto *adjacentVar : referencedTypeVars)
-    AdjacentVars.insert(adjacentVar);
+    ReferencedVars.insert(adjacentVar);
 
   DEBUG_ASSERT(std::find(Bindings.begin(), Bindings.end(), binding)
                == Bindings.end());
@@ -1922,7 +1922,7 @@ void PotentialBindings::inferFromLiteral(Constraint *constraint) {
 }
 
 bool BindingSet::operator==(const BindingSet &other) const {
-  if (AdjacentVars != other.AdjacentVars)
+  if (ReferencedVars != other.ReferencedVars)
     return false;
 
   if (Bindings.size() != other.Bindings.size())
@@ -3444,15 +3444,17 @@ void BindingSet::dump(llvm::raw_ostream &out, unsigned indent) const {
   if (!attributes.empty())
     out << "] ";
 
-  if (!AdjacentVars.empty()) {
-    out << "[adjacent to: ";
-    SmallVector<TypeVariableType *> adjacentVars(AdjacentVars.begin(),
-                                                 AdjacentVars.end());
-    llvm::sort(adjacentVars,
+  Info.printVars(out, indent, /*showVia=*/false);
+
+  if (!ReferencedVars.empty()) {
+    out << "[references: ";
+    SmallVector<TypeVariableType *> referencedVars(ReferencedVars.begin(),
+                                                   ReferencedVars.end());
+    llvm::sort(referencedVars,
                [](const TypeVariableType *lhs, const TypeVariableType *rhs) {
                    return lhs->getID() < rhs->getID();
                });
-    interleave(adjacentVars,
+    interleave(referencedVars,
                [&](auto *typeVar) {
                  out << typeVar->getString(PO);
                  if (typeVar->getImpl().getFixedType(/*record=*/nullptr))
