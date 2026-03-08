@@ -709,6 +709,9 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
 
     // The parameter of a function type is contravariant.
     inferredRootKind = flipBindingKind(binding.Kind);
+  } else {
+    // Something else is going on, perhaps the code is invalid, bail out.
+    return;
   }
 
   // If contextual root is not yet resolved, let's try to see if
