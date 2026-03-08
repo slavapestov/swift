@@ -834,7 +834,7 @@ void BindingSet::inferTransitiveKeyPathBindings() {
   // we check if it is a subtype of another type variable.
   // If so, we repeat the above with this type variable
   // instead.
-  auto &keyPathPotentialBindings = keyPathNode.getPotentialBindings();
+  const auto &keyPathPotentialBindings = keyPathNode.getPotentialBindings();
 
   // We can only reason about the case of just one adjacent conversion
   // constraint.
