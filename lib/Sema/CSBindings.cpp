@@ -812,10 +812,43 @@ void BindingSet::inferTransitiveKeyPathBindings() {
 
   const auto &keyPathBindings = keyPathNode.getBindingSet();
 
-  // Look through all of the keypath type's bindings.
-  for (auto &binding : keyPathBindings.Bindings) {
-    inferTransitiveKeyPathBindingFrom(binding, keyPathTy);
+  // Check if the key path type has bindings at all.
+  if (!keyPathBindings.Bindings.empty()) {
+    // If so, look through all of the keypath type's bindings.
+    for (auto &binding : keyPathBindings.Bindings)
+      inferTransitiveKeyPathBindingFrom(binding, keyPathTy);
+
+    return;
   }
+
+  // If not, attempt a more advanced analysis to cope with
+  // cases such as [\A.foo, \.bar]. Here, the setup is this:
+  //
+  // KeyPath<A, Foo> conv $T0
+  // $T1 conv $T0
+  //
+  // Where $T0 is the type of the array, and $T1 is the key
+  // path type of \.bar. To infer the root type of \.bar,
+  // we check if it is a subtype of another type variable.
+  // If so, we repeat the above with this type variable
+  // instead.
+  const auto &keyPathPotentialBindings = keyPathNode.getPotentialBindings();
+
+  // We can only reason about the case of just one adjacent conversion
+  // constraint.
+  if (keyPathPotentialBindings.SubtypeOf.size() != 1)
+    return;
+
+  auto pair = keyPathPotentialBindings.SubtypeOf[0];
+  auto *superKeyPathTy = pair.first;
+
+  const auto &superKeyPathNode = CS.getConstraintGraph()[superKeyPathTy];
+  if (!superKeyPathNode.hasBindingSet())
+    return;
+
+  const auto &superKeyPathBindings = superKeyPathNode.getBindingSet();
+  for (auto &binding : superKeyPathBindings.Bindings)
+    inferTransitiveKeyPathBindingFrom(binding, superKeyPathTy);
 }
 
 void BindingSet::inferTransitiveSupertypeBindings() {
