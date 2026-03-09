@@ -222,7 +222,14 @@ TypeVarBindingProducer::TypeVarBindingProducer(
   // until all of the direct & transitive bindings and
   // their derivatives have been attempted.
   if (Bindings.empty() && !DelayedDefaults.empty()) {
-    Bindings.append(DelayedDefaults.begin(), DelayedDefaults.end());
+    for (auto binding : DelayedDefaults) {
+      bool inserted = ExploredTypes.insert(
+          binding.BindingType->getCanonicalType()).second;
+      if (!inserted)
+        continue;
+
+      Bindings.push_back(binding);
+    }
     DelayedDefaults.clear();
   }
 }
