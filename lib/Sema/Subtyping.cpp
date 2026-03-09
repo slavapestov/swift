@@ -115,43 +115,44 @@ void swift::constraints::getTypeVariablesWithVariance(
       return;
     }
 
+    // We return upon encountering a known case above.
     break;
   }
   case TypePosition::Invariant:
-  case TypePosition::Shape: {
-    // Handle all remaining occurrences.
-    class Walker : public TypeWalker {
-      SmallPtrSetImpl<TypeVariableType *> &invariant;
-      SmallPtrSetImpl<TypeVariableType *> &base;
-
-    public:
-      explicit Walker(SmallPtrSetImpl<TypeVariableType *> &invariant,
-                      SmallPtrSetImpl<TypeVariableType *> &base)
-          : invariant(invariant), base(base) {}
-
-      Action walkToTypePre(Type ty) override {
-        // Skip children that don't contain type variables.
-        if (!ty->hasTypeVariable())
-          return Action::SkipNode;
-
-        if (ty->is<DependentMemberType>()) {
-          if (auto *tv = ty->getDependentMemberRoot()->getAs<TypeVariableType>())
-            base.insert(tv);
-
-          return Action::SkipNode;
-        } else if (auto *tv = dyn_cast<TypeVariableType>(ty.getPointer())) {
-          invariant.insert(tv);
-        }
-
-        return Action::Continue;
-      }
-    };
-
-    Walker walker(result->invariant, result->base);
-    type.walk(walker);
+  case TypePosition::Shape:
     break;
   }
-  }
+
+  // Handle all remaining occurrences.
+  class Walker : public TypeWalker {
+    SmallPtrSetImpl<TypeVariableType *> &invariant;
+    SmallPtrSetImpl<TypeVariableType *> &base;
+
+  public:
+    explicit Walker(SmallPtrSetImpl<TypeVariableType *> &invariant,
+                    SmallPtrSetImpl<TypeVariableType *> &base)
+        : invariant(invariant), base(base) {}
+
+    Action walkToTypePre(Type ty) override {
+      // Skip children that don't contain type variables.
+      if (!ty->hasTypeVariable())
+        return Action::SkipNode;
+
+      if (ty->is<DependentMemberType>()) {
+        if (auto *tv = ty->getDependentMemberRoot()->getAs<TypeVariableType>())
+          base.insert(tv);
+
+        return Action::SkipNode;
+      } else if (auto *tv = dyn_cast<TypeVariableType>(ty.getPointer())) {
+        invariant.insert(tv);
+      }
+
+      return Action::Continue;
+    }
+  };
+
+  Walker walker(result->invariant, result->base);
+  type.walk(walker);
 }
 
 /// Determine whether the candidate type is a subclass of the superclass type.
