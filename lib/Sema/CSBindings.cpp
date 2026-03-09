@@ -1836,12 +1836,17 @@ void BindingSet::determineLiteralCoverage() {
 
 static int rankConversionKind(Constraint *constraint, ConstraintSystem &cs) {
   switch (constraint->getKind()) {
+  case ConstraintKind::Bind:
+  case ConstraintKind::Equal:
+    return 0;
+  case ConstraintKind::SubclassOf:
+    return 10;
   case ConstraintKind::Subtype:
   case ConstraintKind::Conversion:
-    return 0;
+    return 20;
   case ConstraintKind::ArgumentConversion:
   case ConstraintKind::OperatorArgumentConversion:
-    return 1;
+    return 30;
   default:
     ABORT([&](llvm::raw_ostream &out) {
       out << "Unexpected constraint: ";
