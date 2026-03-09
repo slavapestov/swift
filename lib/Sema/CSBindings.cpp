@@ -2921,10 +2921,11 @@ void PotentialBindings::infer(Constraint *constraint) {
     // application constraint. This ensures we try to bind the key path type
     // first, which can allow us to discover additional bindings for the result
     // type.
-    SmallPtrSet<TypeVariableType *, 4> typeVars;
     auto third = CS.simplifyType(constraint->getThirdType());
-    third->getTypeVariables(typeVars, /*skipDependentMemberTypes=*/true);
-    if (typeVars.count(TypeVar)) {
+
+    TypeVarOccurrences result;
+    getTypeVariablesWithVariance(&result, third, TypePosition::Invariant);
+    if (result.invariant.count(TypeVar)) {
       recordDelayedBy(constraint);
     }
 
