@@ -5,10 +5,8 @@
 //   Array<T> arg conv $T1
 //   $T1 subtype UnsafePointer<T>
 //
-// we have to be careful when choosing a type binding for $T1; usually we would
-// pick the supertype and bind $T1 to inout Array<T>, but because subtype
-// constraints does not convert pointers, in this situation we want the other
-// binding UnsafePointer<T>.
+// We have to bind $T1 to UnsafePointer<T> and not Array<T>, because
+// subtype constraints do not allow array-to-pointer conversions.
 
 protocol Trivial {}
 
