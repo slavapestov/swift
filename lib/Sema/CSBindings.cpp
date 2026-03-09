@@ -1928,18 +1928,27 @@ void BindingSet::promoteBindings() {
   if (supertypeCount != 1)
     return;
 
-  // If we have both a subtype and a supertype binding, prefer the
-  // supertype binding, unless the subtype binding comes from a
-  // weaker form of conversion constraint.
+  // If we have both a subtype and a supertype binding, we usually prefer the
+  // supertype binding, except for a few cases.
   //
-  // This handles situations like
+  // 1) If the subtype binding comes from a weaker form of conversion constraint,
+  // for example:
   //
   //   Array<T> arg conv $T1
-  //   $T1 subtype UnsafePointer<T>
+  //   $T1 conv UnsafePointer<T>
   //
   // We have to bind $T1 to UnsafePointer<T> and not Array<T>, because
-  // subtype constraints do not allow array-to-pointer conversions.
+  // conv constraints do not allow array-to-pointer conversions.
+  //
+  // 2) If this type variable represents a closure result, prefer the subtype
+  // binding, to push the conversion into the closure body. This avoids
+  // creating a function conversion thunk if possible.
   if (subtypeCount == 1) {
+    if (TypeVar->getImpl().isClosureResultType()) {
+      promoteBinding(*std::move(promotedSubtype));
+      return;
+    }
+
     auto result = isLikelyExactMatch(promotedSupertype->BindingType,
                                      promotedSubtype->BindingType);
     if (!(result.has_value() && *result)) {
