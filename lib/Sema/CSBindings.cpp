@@ -2569,17 +2569,14 @@ PotentialBindings::inferFromRelational(Constraint *constraint) {
     //
     // $T1 conv [$T0.A]
     if (firstTypeVar) {
-      llvm::SmallPtrSet<TypeVariableType *, 2> covariant;
-      llvm::SmallPtrSet<TypeVariableType *, 2> contravariant;
-      llvm::SmallPtrSet<TypeVariableType *, 2> invariant;
+      TypeVarOccurrences result;
+      getTypeVariablesWithVariance(&result, second, TypePosition::Contravariant);
 
-      getTypeVariablesWithVariance(second, TypePosition::Contravariant,
-                                   covariant, contravariant, invariant);
-      if (invariant.count(TypeVar))
+      if (result.invariant.count(TypeVar))
         recordAdjacentVar(firstTypeVar, constraint);
-      if (covariant.count(TypeVar))
+      if (result.covariant.count(TypeVar))
         recordSubtypeDelay(firstTypeVar, constraint);
-      if (contravariant.count(TypeVar))
+      if (result.contravariant.count(TypeVar))
         recordSupertypeDelay(firstTypeVar, constraint);
 
     // The other direction:
@@ -2587,17 +2584,14 @@ PotentialBindings::inferFromRelational(Constraint *constraint) {
     // [$T0] conv $T1
     // [$T0] conv $T1.A
     } else if (secondTypeVar) {
-      llvm::SmallPtrSet<TypeVariableType *, 2> covariant;
-      llvm::SmallPtrSet<TypeVariableType *, 2> contravariant;
-      llvm::SmallPtrSet<TypeVariableType *, 2> invariant;
+      TypeVarOccurrences result;
+      getTypeVariablesWithVariance(&result, first, TypePosition::Covariant);
 
-      getTypeVariablesWithVariance(first, TypePosition::Covariant,
-                                   covariant, contravariant, invariant);
-      if (invariant.count(TypeVar))
+      if (result.invariant.count(TypeVar))
         recordAdjacentVar(secondTypeVar, constraint);
-      if (covariant.count(TypeVar))
+      if (result.covariant.count(TypeVar))
         recordSubtypeDelay(secondTypeVar, constraint);
-      if (contravariant.count(TypeVar))
+      if (result.contravariant.count(TypeVar))
         recordSupertypeDelay(secondTypeVar, constraint);
     }
 
