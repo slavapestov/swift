@@ -89,47 +89,7 @@ BindingSet::BindingSet(ConstraintSystem &CS, TypeVariableType *TypeVar,
       addDefault(constraint);
   }
 
-  if (CS.getASTContext().TypeCheckerOpts.SolverEnableBindingOptimizations &&
-      !CS.shouldAttemptFixes() &&
-      Info.SupertypeOf.empty() &&
-      Info.SupertypeDelay.empty() &&
-      Info.AdjacentVars.empty() &&
-      !isDelayed()) {
-    unsigned count = 0;
-    std::optional<PotentialBinding> promoteBinding;
-
-    for (const auto binding : Bindings) {
-      if (binding.Kind == AllowedBindingKind::Supertypes) {
-        ++count;
-
-        if (llvm::all_of(Protocols, [&](ProtocolDecl *proto) {
-          return CS.lookupConformance(binding.BindingType, proto);
-        })) {
-          promoteBinding = binding;
-        }
-      }
-    }
-
-    if (count == 1 && promoteBinding.has_value()) {
-      promoteBinding->Kind = AllowedBindingKind::Exact;
-      addBinding(*promoteBinding);
-
-      // If this is a type variable representing closure result,
-      // which is on the right-side of some relational constraint
-      // let's have it try `Void` as well because there is an
-      // implicit conversion `() -> T` to `() -> Void` and this
-      // helps to avoid creating a thunk to support it.
-      // Avoid doing this is we already have a hole binding since
-      // introducing Void will just cause local solution ambiguities.
-      auto *locator = TypeVar->getImpl().getLocator();
-      if (locator->isLastElement<LocatorPathElt::ClosureResult>() &&
-          !promoteBinding->BindingType->isPlaceholder()) {
-        auto voidType = CS.getASTContext().TheEmptyTupleType;
-        addBinding(promoteBinding->withSameSource(
-            voidType, AllowedBindingKind::Fallback));
-      }
-    }
-  }
+  promoteBindings();
 
   ASSERT(!IsDirty);
 }
@@ -1872,6 +1832,123 @@ void BindingSet::determineLiteralCoverage() {
       break;
     }
   }
+}
+
+static int rankConversionKind(Constraint *constraint, ConstraintSystem &cs) {
+  switch (constraint->getKind()) {
+  case ConstraintKind::Subtype:
+  case ConstraintKind::Conversion:
+    return 0;
+  case ConstraintKind::ArgumentConversion:
+  case ConstraintKind::OperatorArgumentConversion:
+    return 1;
+  default:
+    ABORT([&](llvm::raw_ostream &out) {
+      out << "Unexpected constraint: ";
+      constraint->print(out, &cs.getASTContext().SourceMgr);
+      out << "\n";
+    });
+  }
+}
+void BindingSet::promoteBindings() {
+  if (!CS.getASTContext().TypeCheckerOpts.SolverEnableBindingOptimizations)
+    return;
+
+  // FIXME: Get this working in diagnostic mode too.
+  if (CS.shouldAttemptFixes())
+    return;
+
+  // Can't do anything if this type variable appears in invariant position
+  // within some other unsolved constraint.
+  if (isDelayed() || !Info.AdjacentVars.empty())
+    return;
+
+  unsigned supertypeCount = 0;
+  std::optional<PotentialBinding> promotedSupertype;
+
+  unsigned subtypeCount = 0;
+  std::optional<PotentialBinding> promotedSubtype;
+
+  bool considerSupertypes =
+      Info.SupertypeOf.empty() &&
+      Info.SupertypeDelay.empty();
+
+  bool considerSubtypes =
+      Info.SubtypeOf.empty() &&
+      Info.SubtypeDelay.empty();
+
+  if (!considerSupertypes && !considerSubtypes)
+    return;
+
+  for (const auto binding : Bindings) {
+    switch (binding.Kind) {
+    case AllowedBindingKind::Supertypes:
+      if (considerSupertypes) {
+        ++supertypeCount;
+        promotedSupertype = binding;
+      }
+      break;
+
+    case AllowedBindingKind::Subtypes:
+      if (considerSubtypes) {
+        ++subtypeCount;
+        promotedSubtype = binding;
+      }
+
+      break;
+
+    case AllowedBindingKind::Exact:
+    case AllowedBindingKind::Fallback:
+      break;
+    }
+  }
+
+  auto promoteBinding = [&](PotentialBinding &&binding) {
+    // This binding will subsume all existing non-fallback bindings.
+    binding.Kind = AllowedBindingKind::Exact;
+    addBinding(binding);
+
+    // If this is a type variable representing closure result,
+    // which is on the right-side of some relational constraint
+    // let's have it try `Void` as well because there is an
+    // implicit conversion `() -> T` to `() -> Void` and this
+    // helps to avoid creating a thunk to support it.
+    // Avoid doing this is we already have a hole binding since
+    // introducing Void will just cause local solution ambiguities.
+    auto *locator = TypeVar->getImpl().getLocator();
+    if (locator->isLastElement<LocatorPathElt::ClosureResult>() &&
+        !binding.BindingType->isPlaceholder()) {
+      auto voidType = CS.getASTContext().TheEmptyTupleType;
+      addBinding(binding.withSameSource(
+          voidType, AllowedBindingKind::Fallback));
+    }
+  };
+
+  // FIXME: Promote unconstrained subtypes as well.
+  if (supertypeCount != 1)
+    return;
+
+  // If we have both a subtype and a supertype binding, prefer the
+  // supertype binding, unless the subtype binding comes from a
+  // weaker form of conversion constraint.
+  //
+  // This handles situations like
+  //
+  //   Array<T> arg conv $T1
+  //   $T1 subtype UnsafePointer<T>
+  //
+  // We have to bind $T1 to UnsafePointer<T> and not Array<T>, because
+  // subtype constraints do not allow array-to-pointer conversions.
+  if (subtypeCount == 1) {
+    auto *first = promotedSupertype->getSource();
+    auto *second = promotedSubtype->getSource();
+    if (rankConversionKind(second, CS) < rankConversionKind(first, CS)) {
+      promoteBinding(*std::move(promotedSubtype));
+      return;
+    }
+  }
+
+  promoteBinding(*std::move(promotedSupertype));
 }
 
 void BindingSet::coalesceIntegerAndFloatLiteralRequirements() {
