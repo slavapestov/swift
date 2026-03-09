@@ -1940,11 +1940,15 @@ void BindingSet::promoteBindings() {
   // We have to bind $T1 to UnsafePointer<T> and not Array<T>, because
   // subtype constraints do not allow array-to-pointer conversions.
   if (subtypeCount == 1) {
-    auto *first = promotedSupertype->getSource();
-    auto *second = promotedSubtype->getSource();
-    if (rankConversionKind(second, CS) < rankConversionKind(first, CS)) {
-      promoteBinding(*std::move(promotedSubtype));
-      return;
+    auto result = isLikelyExactMatch(promotedSupertype->BindingType,
+                                     promotedSubtype->BindingType);
+    if (!(result.has_value() && *result)) {
+      auto *first = promotedSupertype->getSource();
+      auto *second = promotedSubtype->getSource();
+      if (rankConversionKind(second, CS) < rankConversionKind(first, CS)) {
+        promoteBinding(*std::move(promotedSubtype));
+        return;
+      }
     }
   }
 

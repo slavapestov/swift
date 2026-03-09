@@ -18,10 +18,7 @@ do {
   let _: Array<(any Command.Type)?> = [Cut.self, Copy.self, Paste.self]
 
   let _ = Array<any Command>([Cut(), Copy(), Paste()])
-  // expected-error@-1 {{no exact matches in call to initializer}}
   let _ = Array<(any Command)?>([Cut(), Copy(), Paste()])
-  // expected-error@-1 {{cannot convert value of type '[Any]' to expected argument type '[(any Command)?]'}}
-  // expected-note@-2 {{arguments to generic parameter 'Element' ('Any' and '(any Command)?') are expected to be equal}}
   let _ = Array<any Command.Type>([Cut.self, Copy.self, Paste.self])
   let _ = Array<(any Command.Type)?>([Cut.self, Copy.self, Paste.self])
 }
