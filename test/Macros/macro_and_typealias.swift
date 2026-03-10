@@ -40,8 +40,8 @@ struct Test {
     }
 
     let _ = ConcretePrint<Object> { // expected-error {{cannot specialize non-generic type 'ConcretePrint' (aka 'Printer<Any>')}}
-      // expected-error@-1 {{cannot infer type of closure parameter '$0' without a type annotation}}
       compute(root: $0, \.prop)
+      // expected-error@-1 {{cannot infer key path type from context; consider explicitly specifying a root type}}
     }
 
     let _ = MultiPrint<Int>()

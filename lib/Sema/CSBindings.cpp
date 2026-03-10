@@ -89,7 +89,11 @@ BindingSet::BindingSet(ConstraintSystem &CS, TypeVariableType *TypeVar,
       addDefault(constraint);
   }
 
-  promoteBindings();
+  // Key path roots are "incomplete" even though they do not have any
+  // adjacent conversion constraints; we complete the binding set in
+  // inferTransitiveKeyPathBindings().
+  if (!TypeVar->getImpl().isKeyPathRoot())
+    promoteBindings();
 
   ASSERT(!IsDirty);
 }
@@ -686,7 +690,7 @@ static AllowedBindingKind flipBindingKind(AllowedBindingKind kind) {
   }
 }
 
-void BindingSet::inferTransitiveKeyPathBindingFrom(
+bool BindingSet::inferTransitiveKeyPathBindingFrom(
     const PotentialBinding &binding, TypeVariableType *keyPathTy) {
   auto bindingTy = binding.BindingType->lookThroughAllOptionalTypes();
 
@@ -695,7 +699,7 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
   if (bindingTy->isKnownKeyPathType()) {
     // AnyKeyPath doesn't have a root type.
     if (bindingTy->isAnyKeyPath())
-      return;
+      return false;
 
     auto *BGT = bindingTy->castTo<BoundGenericType>();
     inferredRootTy = BGT->getGenericArgs()[0];
@@ -707,7 +711,7 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
     // root type from the function type.
     if (fnType->getNumParams() != 1) {
       // Looks like an invalid function conversion, will be diagnosed later.
-      return;
+      return false;
     }
 
     inferredRootTy = fnType->getParams()[0].getParameterType();
@@ -716,7 +720,7 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
     inferredRootKind = flipBindingKind(binding.Kind);
   } else {
     // Something else is going on, perhaps the code is invalid, bail out.
-    return;
+    return false;
   }
 
   // If contextual root is not yet resolved, let's try to see if
@@ -724,13 +728,16 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
   if (auto *contextualRootVar = inferredRootTy->getAs<TypeVariableType>()) {
     auto &contextualRootNode = CS.getConstraintGraph()[contextualRootVar];
     if (!contextualRootNode.hasBindingSet())
-      return;
+      return false;
 
     const auto &contextualRootBindings = contextualRootNode.getBindingSet();
 
     // Don't infer if root is not yet fully resolved.
     if (contextualRootBindings.isDelayed())
-      return;
+      return false;
+
+    if (contextualRootBindings.Bindings.empty())
+      return false;
 
     // Look at all of the inferred root type's bindings, and copy
     // them over to our binding set.
@@ -774,6 +781,8 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
 
   // Note the fact that we modified the binding set.
   markDirty();
+
+  return true;
 }
 
 /// Infers bindings for a key path root type from the bindings of
@@ -797,15 +806,15 @@ void BindingSet::inferTransitiveKeyPathBindingFrom(
 ///   KeyPath<$T3, Y> conv $T0
 ///
 /// In this case, we copy bindings from $T3 to $T1.
-void BindingSet::inferTransitiveKeyPathBindings() {
+bool BindingSet::inferTransitiveKeyPathBindings() {
   if (!TypeVar->getImpl().isKeyPathRoot())
-    return;
+    return true;
 
   auto *locator = TypeVar->getImpl().getLocator();
   auto *keyPathTy =
       CS.getType(locator->getAnchor())->getAs<TypeVariableType>();
   if (!keyPathTy)
-    return;
+    return false;
 
   const auto &keyPathNode = CS.getConstraintGraph()[keyPathTy];
 
@@ -813,17 +822,19 @@ void BindingSet::inferTransitiveKeyPathBindings() {
   // we're about to solve the relevant constraints anyway, so don't attempt
   // anything below.
   if (!keyPathNode.hasBindingSet())
-    return;
+    return false;
 
   const auto &keyPathBindings = keyPathNode.getBindingSet();
 
   // Check if the key path type has bindings at all.
   if (!keyPathBindings.Bindings.empty()) {
+    bool result = false;
+
     // If so, look through all of the keypath type's bindings.
     for (auto &binding : keyPathBindings.Bindings)
-      inferTransitiveKeyPathBindingFrom(binding, keyPathTy);
+      result |= inferTransitiveKeyPathBindingFrom(binding, keyPathTy);
 
-    return;
+    return result;
   }
 
   // If not, attempt a more advanced analysis to cope with
@@ -842,14 +853,16 @@ void BindingSet::inferTransitiveKeyPathBindings() {
   // We can only reason about the case of just one adjacent conversion
   // constraint.
   if (keyPathPotentialBindings.SubtypeOf.size() != 1)
-    return;
+    return false;
 
   auto pair = keyPathPotentialBindings.SubtypeOf[0];
   auto *superKeyPathTy = pair.first;
 
   const auto &superKeyPathNode = CS.getConstraintGraph()[superKeyPathTy];
   if (!superKeyPathNode.hasBindingSet())
-    return;
+    return false;
+
+  bool result = false;
 
   const auto &superKeyPathBindings = superKeyPathNode.getBindingSet();
   for (auto &binding : superKeyPathBindings.Bindings) {
@@ -860,9 +873,11 @@ void BindingSet::inferTransitiveKeyPathBindings() {
     // until more bindings are promoted properly.
     if (binding.Kind == AllowedBindingKind::Exact ||
         binding.Kind == AllowedBindingKind::Supertypes) {
-      inferTransitiveKeyPathBindingFrom(binding, superKeyPathTy);
+      result |= inferTransitiveKeyPathBindingFrom(binding, superKeyPathTy);
     }
   }
+
+  return result;
 }
 
 void BindingSet::inferTransitiveSupertypeBindings() {
@@ -2295,7 +2310,13 @@ const BindingSet *ConstraintSystem::determineBestBindings() {
 #endif
 
     // Special handling for key paths.
-    bindings.inferTransitiveKeyPathBindings();
+    if (bindings.inferTransitiveKeyPathBindings()) {
+      // If we inferred a key path root type, try promoting it, because
+      // we skipped the promoteBindings() call in the BindingSet
+      // constructor in this case.
+      bindings.promoteBindings();
+    }
+
     if (!bindings.finalizeKeyPathBindings())
       continue;
 
