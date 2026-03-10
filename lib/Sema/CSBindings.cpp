@@ -1889,13 +1889,21 @@ void BindingSet::promoteBindings() {
     switch (binding.Kind) {
     case AllowedBindingKind::Supertypes:
       if (considerSupertypes) {
-        ++supertypeCount;
-        promotedSupertype = binding;
+        // FIXME: Also check if Optional<T> conforms to all protocols
+        // and satisfies the subtype binding
+        if (llvm::all_of(Protocols, [&](ProtocolDecl *proto) -> bool {
+          return !CS.lookupConformance(binding.BindingType, proto).isInvalid();
+        })) {
+          ++supertypeCount;
+          promotedSupertype = binding;
+        }
       }
       break;
 
     case AllowedBindingKind::Subtypes:
       if (considerSubtypes) {
+        // FIXME: If T = Optional<U>, check if U conforms to all protocols
+        // and satisfies the supertype binding
         if (llvm::all_of(Protocols, [&](ProtocolDecl *proto) -> bool {
           return !CS.lookupConformance(binding.BindingType, proto).isInvalid();
         })) {
