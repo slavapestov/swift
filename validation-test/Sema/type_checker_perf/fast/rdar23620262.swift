@@ -1,12 +1,5 @@
-// RUN: %target-typecheck-verify-swift -solver-scope-threshold=1000 -solver-enable-performance-hacks
-// RUN: %target-typecheck-verify-swift -solver-scope-threshold=15000 -solver-disable-performance-hacks
+// RUN: %target-typecheck-verify-swift -solver-scope-threshold=500
 // REQUIRES: tools-release,no_asan
-
-// UNSUPPORTED: OS=linux-gnu
-
-// FIXME: this test is flaky (expression too complex to typecheck) on FreeBSD
-//        (very infrequent failure) rdar://170773776
-// ALLOW_RETRIES: 1
 
 let a: [Double] = []
 _ = a.map { $0 - 1.0 }

@@ -207,3 +207,16 @@ do {
     }
   }
 }
+
+// Generic argument matches involving 'any Sendable' are special-cased to
+// allow matching against 'Any' for backward compatibility with preconcurrency
+// code. Make sure this does the right thing here.
+do {
+  class G<T> {
+    init(_ t: T) {}
+  }
+
+  struct S {}  // note: not Sendable, but that's OK, we're in Swift 5 mode
+
+  let _: G<any Sendable> = G(S())
+}
