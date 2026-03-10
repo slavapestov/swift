@@ -1896,8 +1896,12 @@ void BindingSet::promoteBindings() {
 
     case AllowedBindingKind::Subtypes:
       if (considerSubtypes) {
-        ++subtypeCount;
-        promotedSubtype = binding;
+        if (llvm::all_of(Protocols, [&](ProtocolDecl *proto) -> bool {
+          return !CS.lookupConformance(binding.BindingType, proto).isInvalid();
+        })) {
+          ++subtypeCount;
+          promotedSubtype = binding;
+        }
       }
 
       break;
