@@ -1973,13 +1973,31 @@ void BindingSet::promoteBindings() {
 
     case AllowedBindingKind::Subtypes:
       if (considerSubtypes) {
-        // FIXME: If T = Optional<U>, check if U conforms to all protocols
-        // and satisfies the supertype binding
-        if (llvm::all_of(Protocols, [&](ProtocolDecl *proto) -> bool {
-          return !CS.lookupConformance(binding.BindingType, proto).isInvalid();
-        })) {
-          ++subtypeCount;
-          promotedSubtype = binding;
+        auto newBinding = binding;
+
+        switch (getLValueState()) {
+        case KnownLValueKind::Unknown:
+          // Can't do anything.
+          break;
+
+        case KnownLValueKind::LValue:
+          if (!binding.BindingType->is<LValueType>())
+            newBinding.BindingType = LValueType::get(binding.BindingType);
+          LLVM_FALLTHROUGH;
+
+        case KnownLValueKind::RValue: {
+          LLVM_DEBUG(llvm::dbgs() << "Subtype binding has no proper subtypes\n");
+          newBinding.Kind = AllowedBindingKind::Exact;
+
+          // FIXME: If T = Optional<U>, check if U conforms to all protocols
+          // and satisfies the supertype binding
+          if (llvm::all_of(Protocols, [&](ProtocolDecl *proto) -> bool {
+            return !CS.lookupConformance(binding.BindingType, proto).isInvalid();
+          })) {
+            ++subtypeCount;
+            promotedSubtype = binding;
+          }
+        }
         }
       }
 
