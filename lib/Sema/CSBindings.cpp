@@ -3129,6 +3129,56 @@ PotentialBindings::inferFromRelational(Constraint *constraint) {
 
 #undef DEBUG_BAILOUT
 
+void PotentialBindings::inferFromApplicableFunction(Constraint *constraint) {
+  auto funcTy = CS.simplifyType(constraint->getFirstType());
+  auto overloadTy = CS.simplifyType(constraint->getSecondType())
+      ->getAs<TypeVariableType>();
+
+  if (!overloadTy) {
+    recordDelayedBy(constraint);
+    return;
+  }
+
+  // If the current type variable represents an overload set being applied to
+  // the arguments, it can't be delayed by the application constraint,
+  // because it doesn't depend on argument/result types being resolved first.
+  if (overloadTy == TypeVar)
+    return;
+
+  recordDelayedBy(constraint);
+  return;
+
+  // When we simplify an an applicable function constraint, we introduce
+  // conversions for the arguments, but we bind the result types, so we
+  // treat any occurrences of our type variable within the result type as
+  // invariant.
+  TypeVarOccurrences result;
+  getTypeVariablesWithVariance(&result, funcTy, TypePosition::Contravariant,
+                               /*funcResultIsInvariant=*/true);
+
+  // Suppose we have:
+  //
+  // (($T0) -> $T1) -> $T2 applicable fn $T3
+  //
+  // Now, we can immediately solve the following:
+  //
+  // $T0 conv X
+  // X conv $T1
+  //
+  // However, we must delay the following:
+  //
+  // X conv $T0
+  // $T1 conv X
+  // X conv $T2
+  // $T2 conv X
+  if (result.invariant.count(TypeVar))
+    recordDelayedBy(constraint);
+  if (result.covariant.count(TypeVar))
+    recordSubtypeDelay(overloadTy, constraint);
+  if (result.contravariant.count(TypeVar))
+    recordSupertypeDelay(overloadTy, constraint);
+}
+
 /// Retrieve the set of potential type bindings for the given
 /// representative type variable, along with flags indicating whether
 /// those types should be opened.
@@ -3270,17 +3320,9 @@ void PotentialBindings::infer(Constraint *constraint) {
     break;
 
   case ConstraintKind::ApplicableFunction:
-  case ConstraintKind::DynamicCallableApplicableFunction: {
-    auto overloadTy = constraint->getSecondType();
-    // If current type variable represents an overload set
-    // being applied to the arguments, it can't be delayed
-    // by application constraints, because it doesn't
-    // depend on argument/result types being resolved first.
-    if (overloadTy->isEqual(TypeVar))
-      break;
-
-    LLVM_FALLTHROUGH;
-  }
+  case ConstraintKind::DynamicCallableApplicableFunction:
+    inferFromApplicableFunction(constraint);
+    break;
 
   case ConstraintKind::BindOverload: {
     recordDelayedBy(constraint);
