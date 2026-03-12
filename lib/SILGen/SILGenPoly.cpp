@@ -652,7 +652,13 @@ ManagedValue Transform::transform(ManagedValue v,
       } else if (inputSubstType->isSet()) {
         fn = SGF.SGM.getSetUpCast(Loc);
       } else {
-        llvm::report_fatal_error("unsupported collection upcast kind");
+        ABORT([&](llvm::raw_ostream &out) {
+          out << "Unsupported collection upcast kind\n";
+          v.dump(out);
+          loweredResultTy.getASTType()->dump(out);
+          inputSubstType->dump(out);
+          outputSubstType->dump(out);
+        });
       }
 
       return SGF.emitCollectionConversion(Loc, fn, inputSubstType,
@@ -752,6 +758,18 @@ ManagedValue Transform::transform(ManagedValue v,
     if (result.isInContext())
       return ManagedValue::forInContext();
     return std::move(result).getAsSingleValue(SGF, Loc);
+  }
+
+  // CGFloat to Double.
+  if (inputSubstType->isCGFloat() &&
+      outputSubstType->isDouble()) {
+    return SGF.emitCGFloatToDouble(Loc, v.getUnmanagedValue(), ctxt);
+  }
+
+  // Double to CGFloat.
+  if (inputSubstType->isDouble() &&
+      outputSubstType->isCGFloat()) {
+    return SGF.emitDoubleToCGFloat(Loc, v.getUnmanagedValue(), ctxt);
   }
 
   // - T.TangentVector to Optional<T>.TangentVector
