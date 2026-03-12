@@ -924,28 +924,30 @@ bool ConstraintGraph::contractEdges() {
     // only get its bindings from related overload, which gives
     // us enough information to decided on l-valueness.
     if (rep1->getImpl().canBindToInOut()) {
-      bool isNotContractable = true;
-      auto bindings = CS.getBindingsFor(rep1);
-      if (bindings.isViable()) {
-        // Holes can't be contracted.
-        if (bindings.isHole())
-          continue;
+      bool isNotContractable = false;
 
-        for (auto &binding : bindings.Bindings) {
-          auto type = binding.BindingType;
-          isNotContractable = type.findIf([&](Type nestedType) -> bool {
-            if (auto tv = nestedType->getAs<TypeVariableType>()) {
-              if (tv->getImpl().canBindToInOut())
-                return true;
-            }
+      const auto &node = (*this)[rep1];
+      const auto &potentialBindings = node.getPotentialBindings();
 
-            return nestedType->is<InOutType>();
-          });
+      if (!potentialBindings.SupertypeDelay.empty()) {
+        isNotContractable = true;
+      }
 
-          // If there is at least one non-contractable binding, let's
-          // not risk contracting this edge.
-          if (isNotContractable)
+      // If we're a supertype of a type variable that cannot be inout,
+      // we cannot be inout.
+      if (!potentialBindings.SupertypeOf.empty()) {
+        for (auto pair : potentialBindings.SupertypeOf) {
+          if (pair.first->getImpl().canBindToInOut()) {
+            isNotContractable = true;
             break;
+          }
+        }
+      }
+
+      for (const auto &binding : potentialBindings.Bindings) {
+        if (binding.BindingType->is<InOutType>()) {
+          isNotContractable = true;
+          break;
         }
       }
 
