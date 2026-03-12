@@ -672,6 +672,138 @@ system, each term in the disjunction will be visited separately. Each
 solver state binds the type variable `T0` and explores
 whether the selected overload leads to a suitable solution.
 
+###### Disjunction pruning
+
+This adds a new "lookahead" disjunction processing pass to complement the disjunction selection / favoring done by solver-perf. This pass disables disjunction choices which it can definitely prove, via a conservative match of the argument and parameter types, will not be taken.
+
+The new pass is disabled by default. When / if it is enabled, it will benefit performanace in two cases:
+- when the disjunction with the disabled choices is not the immediate next disjunction, but is only considered inside a nested scope, disabling choices now can avoid duplicated work in those nested scopes.
+- also, disabling choices can change disjunction ranking, so some disjunction _becomes_ the next disjunction. This may turn out to be beneficial, especially if that disjunction now only has a small number of active choices.
+
+So far this is just an experiment, and I only implemented a couple of heuristics. Also it is not fully correct, pending filling in `shouldBeConservativeWithProto()` in CSLookahead.cpp.
+
+To avoid breaking any existing behaviors, I copy and pasted a bunch of code from CSOptimizer.cpp here, but if we go ahead with this approach I'll merge the new code into CSOptimizer.cpp or extract the common utilities out.
+
+Besides the cleanup, there's an optimization I plan on doing here. Instead of processing every disjunction on every step, we should be able to do this lazily, only when type variables mentioned from an applicable function constraint are changed. (In fact, we should already be able to do this with determineBestChoices(), and make selectDisjunction() essentially constant-time.) I'll investigate this in a follow-up PR.
+
+Suppose you declare a variable of implicitly unwrapped optional type:
+
+var x: Int! = ...
+
+The value of x is stored like an ordinary optional "Int?", but a reference to x from inside an expression is presented as a disjunction---the type of the reference is either "Int", or "Int?". If both lead to a solution, we favor the "Int?" choice; otherwise, we get the "Int" choice, and the compiler then lowers the reference to a runtime check.
+
+Now, consider this expression:
+
+let result = x + x + x + x + x + x
+
+Well, in 6.3, disjunction selection doesn't have much to go on, so we fall back to selecting the disjunction with the fewest number of active choices at each step.
+
+The implicitly unwrapped optional has fewer choices (2) than + (around 30), so we bind the first IUO, and our picture looks sort of like this, where the _ represent type variables yet to be bound:
+
+let result = Int? + _ + _ + _ + _ + _
+
+We then select the next disjunction, which again will be one of the IUOs, and attempt a choice:
+
+let result = Int? + Int? + _ + _ + _ + _
+
+In fact, Swift 6.3 will bind all IUO disjunctions first, and there are 2^6 possible combinations:
+
+let result = Int? + Int? + Int? + Int? + Int? + Int?
+let result = Int? + Int? + Int? + Int? + Int? + Int
+let result = Int? + Int? + Int? + Int? + Int + Int?
+let result = Int? + Int? + Int? + Int? + Int + Int
+...
+
+Of these 2^N combinations, exactly one, where we select the "Int" choice from every IUO disjunction, can be extended to a solution, because in fact + has no overloads that take Optional<Int>:
+
+let result = Int + Int + Int + Int + Int + Int
+
+We must consider all combinations though, and so the simply rest fail.
+
+With latest Swift from main, things go differently. We still bind the first IUO first:
+
+let result = Int? + _ + _ + _ + _ + _
+
+But before we select the next disjunction, we run the new disjunction pruning pass. Since + has no overloads where the first argument matches the type "Int?", we end up disabling all active choices in the first + disjunction.
+
+Now, disjunction selection sees that one of the remaining disjunctions has zero active choices. This means the current partial solution cannot be extended to a full solution no matter what choices we make, so we back track.
+
+We attempt the next choice in the first IUO:
+
+let result = Int + _ + _ + _ + _ + _
+
+This time, some choices from the first + disjunction are pruned, but nothing fails. We select the next IUO disjunction:
+
+let result = Int + Int? + _ + _ + _ + _
+
+Once again, pruning detects that there are no suitable choices for the first + that take an "Int" and an "Int?", so we are left with zero active choices and we attempt the next choice in the second IUO:
+
+let result = Int + Int + _ + _ + _ + _
+
+This continues:
+
+let result = Int + Int + Int? + _ + _ + _
+let result = Int + Int + Int + _ + _ + _
+let result = Int + Int + Int + Int? + _ + _
+let result = Int + Int + Int + Int + _ + _
+...
+let result = Int + Int + Int + Int + Int + Int
+
+At this stage, we've bound all the IUO disjunctions in linear time, and only the + disjunctions remain. Disjunction selection favors the (Int, Int) -> Int overload in each +, these favored choices succeed, and the rest of the problem is solved without further backtracking.
+
+###### Disjunction selection
+
+This algorithm attempts to ensure that the solver always picks a disjunction
+it knows the most about given the previously deduced type information.
+
+For example in chains of operators like: `let _: (Double) -> Void = { 1 * 2 + $0 - 5 }`
+
+The solver is going to start from `2 + $0` because `$0` is known to be `Double` and
+then proceed to `1 * ...` and only after that to `... - 5`.
+
+The algorithm is pretty simple:
+
+```
+- Collect "candidate" types for each argument
+  - If argument is bound then the set going to be represented by just one type
+    - Otherwise:
+      - Collect all the possible bindings
+      - Add default literal type (if any)
+
+- Collect "candidate" types for result
+
+- For each disjunction in the current scope:
+  - Compute a favoring score for each viable* overload choice:
+    - Compute score for each parameter:
+      - Match parameter flags to argument flags
+      - Match parameter types to a set of candidate argument types
+        - If it's an exact match:
+          - Concrete type: score = 1.0
+          - Literal default: score = 0.3
+        - Highest scored candidate type wins.
+      - If none of the candidates match and they are all non-literal
+         remove overload choice from consideration.
+
+  - Average the score by dividing it by the number of parameters
+     to avoid disfavoring disjunctions with fewer arguments.
+
+  - Match result type to a set of candidates; add 1 to the score
+     if one of the candidate types matches exactly.
+
+  - The best choice score becomes a disjunction score
+
+  - Compute disjunction scores for all of the disjunctions in scope.
+
+  - Pick disjunction with the best overall score and favor choices with
+    the best local candidate scores (if some candidates have equal scores).
+```
+
+- Viable overloads include:
+  - non-disfavored
+  - non-disabled
+  - available
+  - non-generic (with current exception to SIMD)
+
 ##### Type Variable Bindings
 
 A second way in which the solver makes assumptions is to guess at the
@@ -683,6 +815,159 @@ The solver does not conjure concrete type bindings from nothing, nor
 does it perform an exhaustive search. Rather, it uses the constraints
 placed on that type variable to produce potential candidate
 types. There are several strategies employed by the solver.
+
+Attempting disjunctions in the correct order can make a huge difference in performance, and for disjunction selection to work, type information must "flow through" the constraint system from function arguments to results, and through closures, and so on.
+
+A complication is that Swift has implicit conversions. If you have something like f(g()), then not only can both f() and g() be overloaded, but the result of g() might not exactly match f(); there might be an implicit conversion involved.
+
+Some of the implicit conversions are straightforward (subclass to base class, concrete type to existential, etc) others are more esoteric (collection conversions, etc). But, there's a fixed set, and no possibility of user-defined conversions, so it's something we can analyze.
+
+If both sides of a conversion constraint are concrete types, it becomes a yes/no a question. For example, Int can be converted to Any:
+
+Int conv Any
+
+Every type is also a subtype of itself wrapped in an optional:
+
+Int conv Optional<Int>
+
+Arrays are covariant:
+
+Array<Int> conv Array<Any>
+
+... and so on.
+
+However, String cannot convert to Int, so this constraint fails:
+
+String conv Int
+
+Now, when one side of a conversion is a type variable, it's trickier. Suppose you have:
+
+String conv $T0
+
+At this point, all we can say that $T0 is a supertype of String, but we don't know what $T0 is. If $T0 is then the argument to an overloaded call, this lack of type information can cause problems.
+
+The problem here is to basically compute the domain for each type variable--the set of possible concrete types it might have.
+
+Often, constraint systems have quite simple domains, finite sets for example (and in SAT it's just {0, 1}). In Swift's case, the set of "all possible types" is infinite, because of generics, and quite complicated, so we cannot represent a domain exactly, but we can apply some rough heuristics.
+
+If we can prove that a type variable's domain consists of exactly one type, we can bind it to that type variable, and if we can prove the domain is empty, we can bind it to anything; no matter what, some constraint will fail.
+
+The question of "bindings" is how to solve conversion constraints like $T0 conv Foo or Foo conv $T0. Without further information, this just tells us that $T0 is either a subtype or supertype of Foo, respectively, but it need not be Foo itself. The goal of binding inference is to collect candidate bindings for each type variable, and to determine when this set is complete and can be attempted, by analyzing the adjacent constraints that involve this type variable.
+
+In the main loop of the solver, we pick the best binding set, the best disjunction, and the best conjunction. We attempt the best binding set if it satisfies certain conditions, otherwise we attempt the disjunction or conjunction. It is desirable to attempt bindings before disjunctions, because solving conversion constraints gives disjunction selection more information.
+
+This optimization had the problem that it was not compatible with the binding set order that determines best bindings. It was possible to have a situation where $T0 was preferred over a disjunction, but $T1 had the best binding set overall, so we would declare $T1 to be the best binding set and then attempt the disjunction. This would result in missed opportunities to bind type variables, resulting in unnecessary exploration of disjunctions.
+
+In binding inference, we had an existing optimization that would consider types that have no proper subtypes. For example, if you have
+
+$T0 conv Int
+
+Then in fact we know that Int (like almost all structs, and all user-defined structs) has no proper subtypes, that is, types that convert to it. So we can always bind $T0 to Int in this case.
+
+I generalized this idea further. Suppose you instead have:
+
+Int conv $T0
+
+You can't apply the same optimization here, and just say that $T0 is Int. In Swift, _every_ type has supertypes; those are an optional wrapping the type, the existential types to which this type conforms, and the special standard library AnyHashable type, which is a supertype of every concrete type that conforms to Hashable.
+
+The specific condition where we would attempt a binding set before a disjunction was where we had a conversion of the form $T0 conv Foo, and Foo did not have any proper subtypes, for example, Int. The only thing that can delay such a binding is not knowing the lvalue-ness of $T0, because in that case, @lvalue Int is a subtype of Int. To make the logic more explicit, such bindings are now promoted to AllowableBindingKind::Exact. In the binding set order, a binding set with one exact binding is always preferred over one with zero or more than one exact bindings. Now, a binding set with only one exact binding will always be attempted if possible, which is desirable because such a move does not introduce any backtracking; it only gets us closer to finding the solution (or realizing one does not exist).
+
+Also, consolidate the logic for coalescing bindings together. Previously, we would drop any binding with the same type as an existing one, without looking at the binding kind. Now, an exact binding subsumes everything else. I haven't done much to strengthen the optimizations here apart from that, but I'm working on a subsequent PR that will. Also, this replaces three loops over existing bindings in addBinding() with one.
+
+## Conformance constraints
+
+**Case 1:** Suppose we have:
+```
+Foo conv $T0
+$T0 conforms P
+```
+If `Foo` conforms to `P`, and no proper supertype of `Foo` conforms to `P`, we can record an exact binding to `Foo`.
+
+If `Foo` does not conform to `P`, and no proper supertype of `Foo` conforms to `P`, we have a conflict, so we can also record an exact binding to `Foo`.
+
+**Case 2:** Suppose we have:
+```
+$T0 conv Foo
+$T0 conforms P
+```
+If `Foo` does not conform to `P`, and no proper subtype of `Foo` conforms to `P`, we have a conflict, so we can record an exact binding to `Foo`.
+
+**Case 3:** Suppose we have:
+```
+$T0 conv Optional<Foo>
+$T0 conforms P
+```
+If `Optional` does not conform to `P`, we can replace the `subtypes of Optional<Foo>` binding with `subtypes of Foo`.
+
+## Subtype relationships
+
+When comparing existing bindings against the new binding, we now handle these situations:
+- exact vs exact
+- subtype vs exact
+- supertype vs exact
+- exact vs subtype
+- exact vs supertype
+- subtype vs supertype
+- supertype vs subtype
+
+The simplest case is when we end up with two exact bindings, we can drop one or the other, it doesn't matter.
+
+If we have an existing exact binding on one hand, and we're recording a new subtype or supertype binding on the other hand, we can check if the types convert using the `canPossiblyConvertTo()` entry point that I use in disjunction pruning. If they do not, we have a conflict. Regardless of the outcome, we can drop the new binding in favor of the existing exact one.
+
+The other direction where we have an existing subtype or supertype binding and we're recording an exact binding is symmetric, except here we prefer to drop the existing binding.
+
+Finally, if we have a subtype binding and a supertype binding, we can check if the supertype binding's type converts to the subtype binding type's. If it does, it's not sound to drop either binding (but we do in a couple of cases to maintain some old hacks that I hope to remove soon). However, if they do not convert, we again have a conflict.
+
+## Type join and meet
+
+The old implementation of type joins that was used for merging supertype bindings was quite incomplete. I rewrote it in the new `Subtyping.cpp` style and implemented various missing cases, such as collections, tuples, CGFloat, and so on. Also, I implemented the dual "meet" operation, and I use this to merge subtype bindings.
+
+With the join, there is always a theoretical upper bound (`any ~Copyable & ~Escapable`, for example), whereas a meet may be the empty set. In this case, we can promote the subtype binding to an exact binding and fail. For example, if we have `$T0 conv Int?`, `$T0 conv String?`, then we now recognize that the two types have an empty meet.
+
+## Removing supertype enumeration
+
+Sometimes if a supertype binding would fail, we would attempt to enumerate some of its supertypes, and attempt those too. There are very few cases where a type does not satisfy adjacent constraints but its _supertype_ does, because usually those have fewer protocol conformances and so on. It seems that this was required primarily to work around some issues with keypath constraints, which I have attempted to fix.
+
+There was one difficult behavior I was not able to fully maintain. Evaluating source compatibility impact of this is TBD. When applying a `WritableKeyPath` with a keypath subscript, we expect the base to be invariant so that we can project an lvalue. But a `KeyPath` can be applied with a converted base. Previously, enumerating supertypes served as a sort of disjunction here, attempting both possibilities when solving the keypath subscript. I have to replaced this with a hack, which does a bit of lookahead to guess if the base should be converted or not. This won't work if the constraint system is sufficiently abstract that the types involved are type variables at the time.
+
+Another interesting example appears in our test suite, an array literal whose first element is a fully qualified keypath, and subsequent elements are leading dots, like `[\A.foo, \.bar, \.baz]`. Previously, we would incorrectly bind the array result type first to the type of `\A.foo`, which gives us a root type for `\.bar` and `\.baz`, but those have different value types so would fail, and then attempt the superclasses of `\A.foo`'s type, which would eventually succeed with `PartialKeyPath<A>`. I expanded the analysis in `inferTransitiveKeyPathBindings()` to be able to directly infer the root type in this situation, avoiding the supertype enumeration.
+
+## Fine-grained adjacency tracking
+
+When constructing a type variable's BindingSet, we would collect the following in the AdjacentVars:
+1. Any type variables that appear in the type variable's potential binding types. 
+4. If `$T0` is our type variable and both `$T0` and `$T1` appear in the same relational constraint, eg `($T0, $T1) conv $T2`, then `$T0` and `$T1` would both be adjacent to each other.
+5. If the type variable appears in a constraint relating two type variables, like `$T0 conv $T1`, we would again say that `$T0` and `$T1` were adjacent to each other.
+
+The second and third were collected by PotentialBindings, and then the BindingSet constructor would copy the AdjacentVars from the PotentialBindings into its own.
+
+The general idea here was that we delay binding type variables with adjacent variables, but the above scheme meant that in practice, pairs of type variables would often be adjacent, delaying each other. This caused many performance problems and necessitates various other hacks throughout the solver.
+
+The new scheme is the following:
+1. Type variables referenced by potential binding types are now collected in a `BindingSet::ReferencedVars`, which no longer contains a copy of `PotentialBindings::AdjacentVars`. For now, this is still used to rank non-exact binding sets, but it can be removed once we get to the point where we only attempt exact bindings.
+2. `PotentialBindings::AdjacentVars` now only contains a type variable if it is one side of a relational constraint, and the other side contains this type variable in **invariant position**. For example, `$T0`'s AdjacentVars will contain `$T1` if we have a constraint `G<$T0> conv $T1`.
+3. When the type variable appears in **covariant** or **contravariant** position, we record the usages in two new sets, `PotentialBindings::SubtypeDelay` and `PotentialBindings::SupertypeDelay`, respectively. For example, if we have `[$T0] conv $T1`, then `$T0` has a SupertypeDelay of `$T1`.
+6. In the case of a constraint like `($T0, $T1) conv $T2`, the adajcency between `$T0` and `$T1` is not tracked at all, because it does not seem necessary.
+
+Now, a supertype binding can be promoted to exact binding as long as nothing is blocking it "from below". For example, here `$T0` is blocked by `$T1`:
+```
+Int conv $T0
+$T1 conv $T0
+```
+We cannot bind `$T0` to `Int`, because it remains possible that `$T1` is bound to a type that is not `Int`. On the other hand, if we have this for example, and no other adjacent constraints:
+```
+Int conv $T0
+[$T0] conv $T1
+```
+Since `$T0` appears in covariant position in the left-hand side of the conversion, it is in fact sound to bind `$T0` to `Int`. Previously, the solver would record an adjacency between `$T0` and `$T1` and make no further progress before attempting a disjunction.
+
+## Next steps
+
+I still need to untangle the applicable function constraint adjacency, which currently is recorded on the PotentialBindings::DelayedBy list. We can similarly analyze the variance of type variable occurrences in the applied function type as well.
+
+I also plan on revisiting the optimizations in the last three PRs, and get them to work in diagnostic mode. For now, they are all disabled when `CS.shouldApplyFixes()` returns true. Making them unconditional will allow some code to be removed.
+
+Finally, once we figure out the correct "binding promotion" conditions for subtype bindings, literals, and defaults, we will hopefully be at the point where only exact bindings need to be attempted. Most of the existing logic around ranking binding sets can then be removed; the only relevant ranking will be if a binding set has an exact binding, which determines if its attempted at all, and if its marked as conflicting, in case we attempt it ahead of non-conflicting binding sets as an optimization.
 
 ###### Meets and Joins
 
