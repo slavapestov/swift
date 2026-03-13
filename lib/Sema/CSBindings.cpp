@@ -1374,6 +1374,26 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       ASSERT(existing.BindingType->hasTypeVariable());
       return true;
     }
+
+    // FIXME: Hack to avoid finding duplicate solutions that only differ
+    // in CGFloat vs Double.
+    //
+    // This will be going away shortly. Once we're always promoting
+    // supertype bindings when they're ready, the subtype binding is not
+    // attempted unless its the only one, so we will not end up with
+    // duplicate solutions.
+    if (!TypeVar->getImpl().isClosureParameterType()) {
+      auto lhs = existing.BindingType;
+      auto rhs = binding.BindingType;
+
+      auto lhsUnwrap = lhs->lookThroughAllOptionalTypes();
+      auto rhsUnwrap = rhs->lookThroughAllOptionalTypes();
+
+      if ((lhsUnwrap->isDouble() || lhsUnwrap->isCGFloat()) &&
+          (rhsUnwrap->isDouble() || rhsUnwrap->isCGFloat())) {
+        return true;
+      }
+    }
   }
 
   // (Supertypes, Fallback)
@@ -1438,6 +1458,26 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       binding.Kind = AllowedBindingKind::Subtypes;
       return true;
     }
+
+    // FIXME: Hack to avoid finding duplicate solutions that only differ
+    // in CGFloat vs Double.
+    //
+    // This will be going away shortly. Once we're always promoting
+    // supertype bindings when they're ready, the subtype binding is not
+    // attempted unless its the only one, so we will not end up with
+    // duplicate solutions.
+    if (!TypeVar->getImpl().isClosureParameterType()) {
+      auto lhs = existing.BindingType;
+      auto rhs = binding.BindingType;
+
+      auto lhsUnwrap = lhs->lookThroughAllOptionalTypes();
+      auto rhsUnwrap = rhs->lookThroughAllOptionalTypes();
+
+      if ((lhsUnwrap->isDouble() || lhsUnwrap->isCGFloat()) &&
+          (rhsUnwrap->isDouble() || rhsUnwrap->isCGFloat())) {
+        return true;
+      }
+    }
   }
 
   // (Subtypes, Subtypes)
@@ -1495,22 +1535,6 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
       binding.Kind == AllowedBindingKind::Fallback) {
     // Drop duplicate Fallback bindings.
     if (binding.BindingType->isEqual(existing.BindingType))
-      return true;
-  }
-
-  // FIXME: Refactor or remove this
-  if (!TypeVar->getImpl().isClosureParameterType()) {
-    // Since Double and CGFloat are effectively the same type due to an
-    // implicit conversion between them, always prefer Double over CGFloat
-    // when possible.
-    //
-    // Note: This optimization can't be performed for closure parameters
-    //       because their type could be converted only at the point of
-    //       use in the closure body.
-    if (binding.BindingType->isCGFloat() && existing.BindingType->isDouble())
-      return false;
-
-    if (binding.BindingType->isDouble() && existing.BindingType->isCGFloat())
       return true;
   }
 
