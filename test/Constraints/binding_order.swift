@@ -8,6 +8,7 @@
 do {
   protocol Command {}
 
+  struct Undo: Command {}
   struct Cut: Command {}
   struct Copy: Command {}
   struct Paste: Command {}
@@ -18,16 +19,33 @@ do {
   let _: Array<(any Command.Type)?> = [Cut.self, Copy.self, Paste.self]
 
   let _ = Array<any Command>([Cut(), Copy(), Paste()])
-  // expected-error@-1 {{no exact matches in call to initializer}}
   let _ = Array<(any Command)?>([Cut(), Copy(), Paste()])
-  // expected-error@-1 {{cannot convert value of type '[Any]' to expected argument type '[(any Command)?]'}}
-  // expected-note@-2 {{arguments to generic parameter 'Element' ('Any' and '(any Command)?') are expected to be equal}}
   let _ = Array<any Command.Type>([Cut.self, Copy.self, Paste.self])
-  // expected-error@-1 {{cannot convert value of type '[Any]' to expected argument type '[any Command.Type]'}}
-  // expected-note@-2 {{arguments to generic parameter 'Element' ('Any' and 'any Command.Type') are expected to be equal}}
   let _ = Array<(any Command.Type)?>([Cut.self, Copy.self, Paste.self])
-  // expected-error@-1 {{cannot convert value of type '[Any]' to expected argument type '[(any Command.Type)?]'}}
-  // expected-note@-2 {{arguments to generic parameter 'Element' ('Any' and '(any Command.Type)?') are expected to be equal}}
+
+  var commands1: [any Command] = [Undo(), Cut()]
+  commands1.append(contentsOf: [Copy(), Paste()])
+
+  var commands2: [any Command.Type] = [Undo.self, Cut.self]
+  commands2.append(contentsOf: [Copy.self, Paste.self])
+
+  var commands3: [(any Command)?] = [Undo(), Cut()]
+  commands3.append(contentsOf: [Copy(), Paste()])
+
+  var commands4: [(any Command.Type)?] = [Undo.self, Cut.self]
+  commands4.append(contentsOf: [Copy.self, Paste.self])
+
+  func perform1<S: Sequence>(_: S) where S.Element == Any {}
+  perform1([Undo(), Cut(), Copy()])
+
+  func perform2<S: Sequence>(_: S) where S.Element == Any.Type {}
+  perform2([Undo.self, Cut.self, Copy.self])
+
+  func perform3<S: Sequence>(_: S) where S.Element == Any? {}
+  perform3([Undo(), Cut(), Copy()])
+
+  func perform4<S: Sequence>(_: S) where S.Element == Any.Type? {}
+  perform4([Undo.self, Cut.self, Copy.self])
 }
 
 // This expression first appeared in test/embedded/dict-init.swift.

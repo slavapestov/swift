@@ -1310,7 +1310,15 @@ BindingSet::subsumeBinding(PotentialBinding &binding,
           subtypeJoin(existing.BindingType, binding.BindingType,
                       &existentialUpperBound);
 
-      if (!existentialUpperBound) {
+      // If this is an Array type variable that falls back to Any, allow joins with
+      // the existential upper bound as well.
+      bool allowExistentialUpperBound =
+        (Info.Defaults.size() == 1 &&
+         Info.Defaults[0]->getSecondType()->isAny());
+
+      bool isViableJoin = allowExistentialUpperBound || !existentialUpperBound;
+
+      if (isViableJoin) {
         // Result of the join has to use new binding because it refers
         // to the constraint that triggered the join that replaced the
         // existing binding.
