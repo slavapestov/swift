@@ -847,8 +847,17 @@ void BindingSet::inferTransitiveKeyPathBindings() {
     return;
 
   const auto &superKeyPathBindings = superKeyPathNode.getBindingSet();
-  for (auto &binding : superKeyPathBindings.Bindings)
-    inferTransitiveKeyPathBindingFrom(binding, superKeyPathTy);
+  for (auto &binding : superKeyPathBindings.Bindings) {
+    // FIXME: Remove the check.
+    //
+    // The 'if' statement makes this analysis a bit more conservative to
+    // work around the issue with duplicate solutions, that will persist
+    // until more bindings are promoted properly.
+    if (binding.Kind == AllowedBindingKind::Exact ||
+        binding.Kind == AllowedBindingKind::Supertypes) {
+      inferTransitiveKeyPathBindingFrom(binding, superKeyPathTy);
+    }
+  }
 }
 
 void BindingSet::inferTransitiveSupertypeBindings() {
