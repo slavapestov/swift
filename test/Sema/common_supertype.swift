@@ -126,6 +126,10 @@ func testAnyHashable4(x: AnyHashable?, y: AnyHashable) -> Exactly<AnyHashable?> 
   return result
 }
 
+////
+//// More complex examples
+////
+
 struct URLComponents {
   var queryItems: [URLQueryItem]?
 }
@@ -139,10 +143,26 @@ extension String {
   var removingPercentEncoding: String? { fatalError() }
 }
 
-func moreComplexExample(_ urlComponents: URLComponents) -> [String: AnyHashable] {
+func moreComplexExample1(_ urlComponents: URLComponents) -> [String: AnyHashable] {
   let result = urlComponents.queryItems?.reduce(into: [String: AnyHashable]()) { partialResult, queryItem in
       partialResult[queryItem.name] = queryItem.value?.removingPercentEncoding
   } ?? [:]
 
   return result
+}
+
+//
+
+class Instruction: Equatable {
+  static func ==(_: Instruction, _: Instruction) -> Bool {}
+}
+
+protocol FullApplySite: Instruction {}
+
+class BeginApplyInst: Instruction, FullApplySite {}
+
+extension FullApplySite {
+  func moreComplexExample2(_ inst: BeginApplyInst) {
+    if inst != self {}
+  }
 }

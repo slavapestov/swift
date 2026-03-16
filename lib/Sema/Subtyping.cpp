@@ -1328,16 +1328,36 @@ static Type subtypeJoinMeetImpl(Operation op, Type lhs, Type rhs,
 
   // The join and meet operations are symmetric.
   auto either = [&](ConversionBehavior kind) {
-    if (rhsKind == kind) {
+    if (lhsKind == kind) {
+      return true;
+    } else if (rhsKind == kind) {
       std::swap(lhs, rhs);
       std::swap(lhsKind, rhsKind);
-      return true;
-    } else if (lhsKind == kind) {
       return true;
     } else {
       return false;
     }
   };
+
+  if (either(ConversionBehavior::Class)) {
+    if (rhsKind == ConversionBehavior::None &&
+        rhs->is<ArchetypeType>()) {
+      // If T has a superclass bound D:
+      //
+      // C join T = C join D
+      // C meet T = T if C is a superclass of D, otherwise uninhabited
+      if (op == Operation::Join) {
+        auto superclassTy = rhs->getSuperclass();
+        if (!superclassTy)
+          return fail();
+        return rec(lhs, superclassTy);
+      } else {
+        if (!isSubclassOf(rhs, lhs))
+          return fail();
+        return rhs;
+      }
+    }
+  }
 
   if (either(ConversionBehavior::AnyHashable)) {
     if (rhsKind == ConversionBehavior::Optional &&
@@ -1347,8 +1367,8 @@ static Type subtypeJoinMeetImpl(Operation op, Type lhs, Type rhs,
       // AnyHashable join AnyHashable? = AnyHashable?
       // AnyHashable meet AnyHashable? = AnyHashable
       if (op == Operation::Join)
-        return lhs;
-      return rhs;
+        return rhs;
+      return lhs;
     }
 
     // If T conforms to Hashable:
@@ -1363,7 +1383,8 @@ static Type subtypeJoinMeetImpl(Operation op, Type lhs, Type rhs,
       return fail();
     if (op == Operation::Join)
       return lhs;
-    return rhs;
+    else
+      return rhs;
   }
 
   if (either(ConversionBehavior::Optional)) {
@@ -1372,7 +1393,8 @@ static Type subtypeJoinMeetImpl(Operation op, Type lhs, Type rhs,
     auto joined = rec(lhs->getOptionalObjectType(), rhs);
     if (op == Operation::Join)
       return OptionalType::get(joined);
-    return joined;
+    else
+      return joined;
   }
 
   if (either(ConversionBehavior::Existential)) {
