@@ -133,6 +133,7 @@ add_swift_host_library(swiftAST STATIC
   Type.cpp
   TypeCheckRequests.cpp
   TypeDeclFinder.cpp
+  TypeJoinMeet.cpp
   TypeRepr.cpp
   TypeSubstitution.cpp
   TypeWalker.cpp
