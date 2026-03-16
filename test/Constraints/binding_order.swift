@@ -48,6 +48,12 @@ do {
   perform4([Undo.self, Cut.self, Copy.self])
 }
 
+do {
+  let _: [ObjectIdentifier: Bool] = .init(uniqueKeysWithValues: [
+    String.self, Optional<String>.self, Array<String>.self
+  ].map { (ObjectIdentifier($0), false) })
+}
+
 // This expression first appeared in test/embedded/dict-init.swift.
 // Test some variations.
 do {
