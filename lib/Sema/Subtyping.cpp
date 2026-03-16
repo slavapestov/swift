@@ -1339,21 +1339,23 @@ static Type subtypeJoinMeetImpl(Operation op, Type lhs, Type rhs,
     }
   };
 
-  if (either(ConversionBehavior::Optional)) {
-    // Optional<T> join U = Optional<T join U>
-    // Optional<T> meet U = T meet U
-    auto joined = rec(lhs->getOptionalObjectType(), rhs);
-    if (op == Operation::Join)
-      return OptionalType::get(joined);
-    return joined;
-  }
-
   if (either(ConversionBehavior::AnyHashable)) {
+    if (rhsKind == ConversionBehavior::Optional &&
+        rhs->getOptionalObjectType()->isAnyHashable()) {
+      // Special case.
+      //
+      // AnyHashable join AnyHashable? = AnyHashable?
+      // AnyHashable meet AnyHashable? = AnyHashable
+      if (op == Operation::Join)
+        return lhs;
+      return rhs;
+    }
+
     // If T conforms to Hashable:
     //
     // AnyHashable join T = AnyHashable
     // AnyHashable meet T = T
-    auto &ctx = lhs->getASTContext();
+    auto &ctx = rhs->getASTContext();
     auto *hashableProto = ctx.getProtocol(KnownProtocolKind::Hashable);
     if (!hashableProto)
       return fail();
@@ -1362,6 +1364,15 @@ static Type subtypeJoinMeetImpl(Operation op, Type lhs, Type rhs,
     if (op == Operation::Join)
       return lhs;
     return rhs;
+  }
+
+  if (either(ConversionBehavior::Optional)) {
+    // U join Optional<T> = Optional<T join U>
+    // U meet Optional<T> = T meet U
+    auto joined = rec(lhs->getOptionalObjectType(), rhs);
+    if (op == Operation::Join)
+      return OptionalType::get(joined);
+    return joined;
   }
 
   if (either(ConversionBehavior::Existential)) {
