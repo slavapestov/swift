@@ -5654,7 +5654,7 @@ public:
 
   /// Reasons why a parameter disqualifies the subscript from meeting a
   /// `@dynamicMemberLookup` requirement.
-  enum class InvalidParameterFlag {
+  enum class InvalidParameterFlag: uint8_t {
     /// The subscript has no `dynamicMember` parameter (so likely isn't eligible
     /// for `@dynamicMemberLookup` subscript checking at all), but _could_ be
     /// made valid if the parameter had a `"dynamicMember"` argument label

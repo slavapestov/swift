@@ -3438,6 +3438,7 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
 
   auto &ctx = SD->getASTContext();
   auto *indices = SD->getIndices();
+  bool isSourceFile = SD->getParentSourceFile() != nullptr;
 
   // We want to check for the presence of a `dynamicMember` label to determine
   // intent so we can offer fix-its for invalid types; this is inherently
@@ -3464,7 +3465,8 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
     auto argLabel = param->getArgumentName();
     auto paramLabel = param->getParameterName();
     if (argLabel == ctx.Id_dynamicMember ||
-        (param->getArgumentNameLoc().isInvalid() &&
+        (isSourceFile &&
+         param->getArgumentNameLoc().isInvalid() &&
          paramLabel == ctx.Id_dynamicMember)) {
       seenDynamicMemberLabel = true;
       dynamicMemberIdx = idx;
@@ -3495,7 +3497,7 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
         flags |= InvalidParameterFlag::DynamicMemberInvalidOrder;
       }
 
-      if (param->getArgumentNameLoc().isInvalid()) {
+      if (isSourceFile && param->getArgumentNameLoc().isInvalid()) {
         flags |= InvalidParameterFlag::DynamicMemberMissingParameterLabel;
       }
     } else if (param->getParameterName() == ctx.Id_dynamicMember) {
