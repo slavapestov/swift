@@ -2284,14 +2284,20 @@ namespace {
     /// \param args The argument list of the subscript.
     /// \param locator The locator used to refer to the subscript.
     /// \param isImplicit Whether this is an implicit subscript.
+    /// \param isDynamicMemberLookup Whether this is an implicit
+    /// subscript inserted as a result of dynamic member access. This
+    /// changes how we fish out the call argument match for the call.
     Expr *buildSubscript(Expr *base, ArgumentList *args,
                          ConstraintLocatorBuilder locator,
                          ConstraintLocatorBuilder memberLocator,
-                         bool isImplicit, AccessSemantics semantics,
+                         bool isImplicit, bool isDynamicMemberLookup,
+                         AccessSemantics semantics,
                          const SelectedOverload &selected) {
       // Build the new subscript.
       auto newSubscript = buildSubscriptHelper(base, args, selected,
-                                               locator, isImplicit, semantics);
+                                               locator, isImplicit,
+                                               isDynamicMemberLookup,
+                                               semantics);
       return forceUnwrapIfExpected(newSubscript, memberLocator,
                                    IUOReferenceKind::ReturnValue);
     }
@@ -2299,7 +2305,8 @@ namespace {
     Expr *buildSubscriptHelper(Expr *base, ArgumentList *args,
                                const SelectedOverload &selected,
                                ConstraintLocatorBuilder locator,
-                               bool isImplicit, AccessSemantics semantics) {
+                               bool isImplicit, bool isDynamicMemberLookup,
+                               AccessSemantics semantics) {
       auto choice = selected.choice;
 
       // Apply a key path if we have one.
@@ -2436,9 +2443,17 @@ namespace {
 
       auto appliedWrappers =
           solution.getAppliedPropertyWrappers(memberLoc->getAnchor());
+
+      auto tempLoc = ConstraintLocatorBuilder(memberLoc);
+      auto callArgLoc =
+          (isDynamicMemberLookup
+           ? tempLoc.withPathElement(
+                ConstraintLocator::ImplicitDynamicMemberSubscript)
+           : locator);
+
       args = coerceCallArguments(
           args, fullSubscriptTy, subscriptRef, nullptr,
-          locator.withPathElement(ConstraintLocator::ApplyArgument),
+          callArgLoc.withPathElement(ConstraintLocator::ApplyArgument),
           appliedWrappers);
       if (!args)
         return nullptr;
@@ -3653,47 +3668,38 @@ namespace {
     ArgumentList *buildArgumentListForDynamicMemberLookupSubscript(
         const SelectedOverload &overload, SourceLoc componentLoc,
         ConstraintLocator *locator) {
-      assert(overload.choice.isAnyDynamicMemberLookup() &&
+      ASSERT(overload.choice.isAnyDynamicMemberLookup() &&
              "Overload must be for dynamic member lookup");
-      auto *SD = cast<SubscriptDecl>(overload.choice.getDecl());
+      ASSERT(isa<SubscriptDecl>(overload.choice.getDecl()));
+
       auto memberLoc = cs.getCalleeLocator(locator);
-      auto subscript = resolveConcreteDeclRef(SD, memberLoc);
 
       // We specifically don't want the full type here to avoid losing parameter
       // pack references.
       auto fnType = overload.adjustedOpenedType->castTo<FunctionType>();
 
       auto params = fnType->getParams();
-      SmallVector<Expr *, 4> args;
-      for (auto paramIdx : indices(params)) {
-        auto param = params[paramIdx];
-        auto paramTy =
-            simplifyType(param.getParameterType(/*forCanonical=*/true, &ctx));
+      ASSERT(params.size() >= 1);
 
-        Expr *argExpr;
-        if (paramIdx == 0) {
-          if (overload.choice.isKeyPathDynamicMemberLookup()) {
-            argExpr = buildKeyPathDynamicMemberArgExpr(paramTy, componentLoc,
-                                                       memberLoc);
-          } else {
-            auto fieldName =
-                overload.choice.getName().getBaseIdentifier().str();
-            argExpr = buildDynamicMemberLookupArgExpr(fieldName, componentLoc,
-                                                      paramTy);
-          }
-        } else {
-          argExpr = new (ctx) DefaultArgumentExpr(subscript, paramIdx,
-                                                  componentLoc, paramTy, dc);
-        }
+      auto param = params[0];
+      auto paramTy = simplifyType(param.getParameterType());
 
-        if (!argExpr) {
-          return nullptr;
-        }
+      SmallVector<AnyFunctionType::Param, 1> args;
+      AnyFunctionType::Param arg(paramTy, ctx.Id_dynamicMember);
+      args.push_back(arg);
 
-        args.emplace_back(cs.cacheType(argExpr));
+      Expr *argExpr;
+      if (overload.choice.isKeyPathDynamicMemberLookup()) {
+        argExpr = buildKeyPathDynamicMemberArgExpr(paramTy, componentLoc,
+                                                   memberLoc);
+      } else {
+        auto fieldName =
+            overload.choice.getName().getBaseIdentifier().str();
+        argExpr = buildDynamicMemberLookupArgExpr(fieldName, componentLoc,
+                                                  paramTy);
       }
 
-      return ArgumentList::forImplicitCallTo(SD->getIndices(), args, ctx);
+      return ArgumentList::forImplicitSingle(ctx, arg.getLabel(), argExpr);
     }
 
     /// Form a type checked expression for the argument of a
@@ -3726,11 +3732,11 @@ namespace {
         return nullptr;
       }
 
-      solution.recordSingleArgMatchingChoice(cs.getConstraintLocator(expr));
-
       // Build and return a subscript that uses this string as the index.
       return buildSubscript(base, argList, cs.getConstraintLocator(expr),
-                            memberLocator, /*isImplicit*/ true,
+                            memberLocator,
+                            /*isImplicit*/ true,
+                            /*isDynamicMemberLookup*/true,
                             AccessSemantics::Ordinary, overload);
     }
 
@@ -3852,7 +3858,8 @@ namespace {
 
       return buildSubscript(expr->getBase(), expr->getArgs(),
                             cs.getConstraintLocator(expr), memberLocator,
-                            expr->isImplicit(), expr->getAccessSemantics(),
+                            expr->isImplicit(), /*isDynamicMemberLookup*/false,
+                            expr->getAccessSemantics(),
                             overload);
     }
 
@@ -3957,7 +3964,8 @@ namespace {
           cs.getConstraintLocator(expr, ConstraintLocator::SubscriptMember);
       return buildSubscript(expr->getBase(), expr->getArgs(),
                             cs.getConstraintLocator(expr), memberLocator,
-                            expr->isImplicit(), AccessSemantics::Ordinary,
+                            expr->isImplicit(), /*isDynamicMemberLookup=*/false,
+                            AccessSemantics::Ordinary,
                             solution.getOverloadChoice(memberLocator));
     }
 
@@ -5418,10 +5426,6 @@ namespace {
       if (overload.choice.isAnyDynamicMemberLookup()) {
         args = buildArgumentListForDynamicMemberLookupSubscript(
             overload, componentLoc, locator);
-
-        // Record the implicit subscript expr's parameter bindings and matching
-        // direction as `coerceCallArguments` requires them.
-        solution.recordSingleArgMatchingChoice(locator);
       }
 
       auto subscriptType =

@@ -146,6 +146,15 @@ let p = Pack()
 assert(p.member == ())
 assert(p.member == 0)
 
+@dynamicMemberLookup
+struct Pack2 {
+  subscript<each T>(dynamicMember str: String, xs: repeat each T, k k: Int = 123) -> Int {
+    return k
+  }
+}
+
+assert(Pack2().foo == 123)
+
 //===----------------------------------------------------------------------===//
 // Isolation
 //===----------------------------------------------------------------------===//
@@ -161,3 +170,16 @@ Task<Void, Never>.immediate { @MainActor in
   let `actor` = await Isolated().actor
   assert(`actor` === MainActor.shared)
 }
+
+//===----------------------------------------------------------------------===//
+// Classic varargs
+//===----------------------------------------------------------------------===//
+
+@dynamicMemberLookup
+struct Vararg {
+  subscript(dynamicMember str: String, xs: Int...) -> Int {
+    return xs.count
+  }
+}
+
+assert(Vararg().foo == 0)

@@ -1019,6 +1019,9 @@ void MatchCallArgumentResult::dump(llvm::raw_ostream &out) {
         out << arg;
         first = false;
       }
+      if (first) {
+        out << "<not present>";
+      }
       out << "]";
     }
   };
