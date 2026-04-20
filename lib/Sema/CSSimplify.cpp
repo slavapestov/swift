@@ -997,6 +997,42 @@ static bool requiresBothTrailingClosureDirections(
   return false;
 }
 
+void MatchCallArgumentResult::dump(llvm::raw_ostream &out) {
+  switch (trailingClosureMatching) {
+  case TrailingClosureMatching::Forward:
+    out << "[forward]";
+    break;
+  case TrailingClosureMatching::Backward:
+    out << "[backward]";
+    break;
+  }
+
+  auto printBindings = [&](const SmallVector<ParamBinding, 4> &parameterBindings) {
+    for (unsigned i = 0, e = parameterBindings.size(); i < e; ++i) {
+      const auto &bindings = parameterBindings[i];
+      out << " [" << i << ": ";
+      bool first = true;
+      for (auto arg : bindings) {
+        if (!first) {
+          out << ", ";
+        }
+        out << arg;
+        first = false;
+      }
+      out << "]";
+    }
+  };
+
+  printBindings(parameterBindings);
+
+  if (backwardParameterBindings.has_value()) {
+    out << " backward: ";
+    printBindings(*backwardParameterBindings);
+  }
+
+  out << "\n";
+}
+
 std::optional<MatchCallArgumentResult> constraints::matchCallArguments(
     SmallVectorImpl<AnyFunctionType::Param> &args,
     ArrayRef<AnyFunctionType::Param> params, const ParameterListInfo &paramInfo,
