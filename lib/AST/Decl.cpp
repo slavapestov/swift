@@ -10200,11 +10200,6 @@ SourceRange SubscriptDecl::getSignatureSourceRange() const {
   return getSubscriptLoc();
 }
 
-bool SubscriptDecl::isValidDynamicMemberLookupSubscript(
-    std::optional<const DeclContext *> useDC) const {
-  return (bool)getDynamicMemberLookupKind(useDC);
-}
-
 std::optional<SubscriptDecl::DynamicMemberLookupKind>
 SubscriptDecl::getDynamicMemberLookupKind(
     std::optional<const DeclContext *> useDC) const {

@@ -7731,15 +7731,6 @@ public:
   /// implies.
   ObjCSubscriptKind getObjCSubscriptKind() const;
 
-  /// Returns whether the decl can be used to satisfy an `@dynamicMemberLookup`
-  /// requirement.
-  ///
-  /// If `useDC` is provided (where the decl is being used), validates that
-  /// access control is being used consistently and that `decl` is appropriately
-  /// accessible, returning `false` if inaccessible.
-  bool isValidDynamicMemberLookupSubscript(
-      std::optional<const DeclContext *> useDC) const;
-
   /// If the decl can be used to satisfy an `@dynamicMemberLookup` requirement,
   /// returns whether it satisfies the requirement using a key-path- or string-
   /// based type.

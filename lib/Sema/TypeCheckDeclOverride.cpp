@@ -2015,7 +2015,7 @@ static bool checkSingleOverride(ValueDecl *override, ValueDecl *base) {
     if (auto parentSubscript = dyn_cast<SubscriptDecl>(baseASD)) {
       auto owningTy = override->getDeclContext()->getDeclaredInterfaceType();
       if (owningTy->hasDynamicMemberLookupAttribute() &&
-          parentSubscript->isValidDynamicMemberLookupSubscript(std::nullopt)) {
+          (bool) parentSubscript->getDynamicMemberLookupKind(std::nullopt)) {
         auto overrideSubscript = cast<SubscriptDecl>(overrideASD);
 
         auto [eligibility, _] = evaluateOrFatal(
