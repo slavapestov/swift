@@ -10220,7 +10220,7 @@ BoundGenericType *SubscriptDecl::getDynamicMemberLookupKeyPathType(
   }
 
   auto *indices = getIndices();
-  assert(indices->size() > 0 && "subscript must have at least one arg");
+  ASSERT(indices->size() > 0 && "subscript must have at least one arg");
   return getDynamicMemberParamTypeAsKeyPathType(
       indices->get(0)->getInterfaceType());
 }
