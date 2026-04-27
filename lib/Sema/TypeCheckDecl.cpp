@@ -3501,10 +3501,9 @@ bool DynamicMemberLookupSubscriptEligibility::diagnose() {
   return diagnosed;
 }
 
-DynamicMemberLookupSubscriptRequest::Result
+DynamicMemberLookupSubscriptEligibility
 DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
-                                              const SubscriptDecl *SD,
-                                              const DeclContext *useDC) const {
+                                              const SubscriptDecl *SD) const {
   using DynamicMemberKind =
       DynamicMemberLookupSubscriptEligibility::DynamicMemberKind;
   using InvalidParameterFlag =
@@ -3618,8 +3617,6 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
     paramFlags.push_back(flags);
   }
 
-  auto eligibility = DynamicMemberLookupSubscriptEligibility(
+  return DynamicMemberLookupSubscriptEligibility(
       SD, dynamicMemberIdx, kind, paramFlags);
-  auto isAccessible = SD->isAccessibleFrom(useDC);
-  return std::pair(eligibility, isAccessible);
 }

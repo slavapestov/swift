@@ -2163,11 +2163,10 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
       continue;
     }
 
-    auto result = evaluateOrFatal(
-        ctx.evaluator, DynamicMemberLookupSubscriptRequest{SD, accessDC});
-    auto [eligibility, isAccessible] = result;
+    auto eligibility = evaluateOrFatal(
+        ctx.evaluator, DynamicMemberLookupSubscriptRequest{SD});
     if (eligibility.isValid()) {
-      if (isAccessible) {
+      if (SD->isAccessibleFrom(accessDC)) {
         return;
       }
 

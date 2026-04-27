@@ -2018,9 +2018,9 @@ static bool checkSingleOverride(ValueDecl *override, ValueDecl *base) {
           (bool) parentSubscript->getDynamicMemberLookupKind(std::nullopt)) {
         auto overrideSubscript = cast<SubscriptDecl>(overrideASD);
 
-        auto [eligibility, _] = evaluateOrFatal(
+        auto eligibility = evaluateOrFatal(
             overrideSubscript->getASTContext().evaluator,
-            DynamicMemberLookupSubscriptRequest{overrideSubscript, nullptr});
+            DynamicMemberLookupSubscriptRequest{overrideSubscript});
         if (eligibility.diagnose()) {
           return true;
         }

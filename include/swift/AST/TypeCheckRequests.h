@@ -5782,26 +5782,18 @@ public:
 class DynamicMemberLookupSubscriptRequest
     : public SimpleRequest<
           DynamicMemberLookupSubscriptRequest,
-          std::pair<DynamicMemberLookupSubscriptEligibility, bool>(
-              const SubscriptDecl *, const DeclContext *),
+          DynamicMemberLookupSubscriptEligibility(const SubscriptDecl *),
           RequestFlags::Cached> {
 public:
   using SimpleRequest::SimpleRequest;
 
-  // This type alias is provided primarily for use from
-  // `TypeCheckerTypeIDZone.def`, where the comma inside `std::pair<>`
-  // interferes with macro parsing.
-  using Result = std::pair<DynamicMemberLookupSubscriptEligibility,
-                           bool /* isAccessible */>;
-
 private:
   friend SimpleRequest;
 
-  /// Given a `SubscriptDecl` and its use (`useDC`), returns whether the decl is
-  /// a viable candidate for `@dynamicMemberLookup` accessible from that point
-  /// of use.
-  Result evaluate(Evaluator &evaluator, const SubscriptDecl *decl,
-                  const DeclContext *useDC) const;
+  /// Given a `SubscriptDecl`, returns whether the decl is a viable candidate
+  /// for `@dynamicMemberLookup`.
+  DynamicMemberLookupSubscriptEligibility
+  evaluate(Evaluator &evaluator, const SubscriptDecl *decl) const;
 
 public:
   SourceLoc getNearestLoc() const {

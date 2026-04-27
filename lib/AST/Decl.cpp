@@ -10204,13 +10204,15 @@ std::optional<SubscriptDecl::DynamicMemberLookupKind>
 SubscriptDecl::getDynamicMemberLookupKind(
     std::optional<const DeclContext *> useDC) const {
   auto &ctx = getASTContext();
-  auto [eligibility, isAccessible] = evaluateOrFatal(
+  auto eligibility = evaluateOrFatal(
       ctx.evaluator,
-      DynamicMemberLookupSubscriptRequest{this, useDC ? *useDC : nullptr});
+      DynamicMemberLookupSubscriptRequest{this});
+
+  if (useDC && !isAccessibleFrom(*useDC))
+    return std::nullopt;
 
   // `getDynamicMemberKind()` checks `isValid()`
-  return (isAccessible || !useDC) ? eligibility.getDynamicMemberKind()
-                                  : std::nullopt;
+  return eligibility.getDynamicMemberKind();
 }
 
 BoundGenericType *SubscriptDecl::getDynamicMemberLookupKeyPathType(

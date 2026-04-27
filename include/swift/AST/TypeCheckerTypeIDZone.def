@@ -675,8 +675,7 @@ SWIFT_REQUEST(TypeChecker, EmitPerformanceHints,
               Cached, NoLocationInfo)
 
 SWIFT_REQUEST(TypeChecker, DynamicMemberLookupSubscriptRequest,
-              std::optional<DynamicMemberLookupSubscriptRequest::Result>
-              (const SubscriptDecl *, const DeclContext *),
+              DynamicMemberLookupSubscriptEligibility(const SubscriptDecl *),
               Cached, NoLocationInfo)
 
 SWIFT_REQUEST(TypeChecker, DesugarForEachStmtRequest,
