@@ -3461,11 +3461,7 @@ bool DynamicMemberLookupSubscriptEligibility::diagnose() {
           param);
       if (param->getArgumentName().is("_")) {
         diag.highlight(param->getSourceRange())
-            .fixItReplace(
-                SourceRange(
-                    param->getArgumentNameLoc(),
-                    param->getArgumentNameLoc().getAdvancedLocOrInvalid(1)),
-                "dynamicMember");
+            .fixItReplace(param->getArgumentNameLoc(), "dynamicMember");
       }
       diagnosed = true;
     }
