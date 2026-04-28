@@ -2152,8 +2152,8 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
   // group. (2) produces warnings in the current language mode, which will be
   // upgraded to errors in the next language mode (hence the separate diagnostic
   // stages).
-  SmallVector<DynamicMemberLookupSubscriptEligibility> validButInacessible,
-      invalid, potentiallyValid;
+  SmallVector<DynamicMemberLookupSubscriptEligibility> validButInacessible;
+  SmallVector<DynamicMemberLookupSubscriptEligibility> invalid;
 
   auto requiredAccessScope = decl->getFormalAccessScope();
   auto accessDC = requiredAccessScope.getDeclContext();
@@ -2171,11 +2171,10 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
       }
 
       validButInacessible.emplace_back(eligibility);
-    } else if (eligibility.isEligibleForArgumentLabelFixIt()) {
-      potentiallyValid.emplace_back(eligibility);
-    } else {
-      invalid.emplace_back(eligibility);
+      continue;
     }
+
+    invalid.emplace_back(eligibility);
   }
 
   if (!validButInacessible.empty()) {
@@ -2207,15 +2206,6 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
 
   if (!invalid.empty()) {
     for (auto &candidate : invalid) {
-      candidate.diagnose();
-    }
-
-    attr->setInvalid();
-    return;
-  }
-
-  if (!potentiallyValid.empty()) {
-    for (auto &candidate : potentiallyValid) {
       candidate.diagnose();
     }
 
