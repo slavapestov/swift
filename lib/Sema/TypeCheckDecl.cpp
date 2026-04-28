@@ -3422,9 +3422,9 @@ SourceLoc PrettyPrintDeclRequest::evaluate(Evaluator &eval, const Decl *decl) co
 
 bool DynamicMemberLookupSubscriptEligibility::diagnose() {
   auto &diags = Decl->getASTContext().Diags;
-  auto *indices = Decl->getIndices();
+  auto *params = Decl->getParameterList();
   if (isEligibleForArgumentLabelFixIt()) {
-    auto *param = const_cast<ParamDecl *>(indices->get(0));
+    auto *param = const_cast<ParamDecl *>(params->get(0));
     diags
         .diagnose(param,
                   diag::invalid_dynamic_member_subscript_invalid_arg_label,
@@ -3435,13 +3435,13 @@ bool DynamicMemberLookupSubscriptEligibility::diagnose() {
   }
 
   auto diagnosed = false;
-  for (auto idx : range(0, indices->size())) {
+  for (auto idx : indices(*params)) {
     auto flags = ParamFlags[idx];
     if (!flags) {
       continue;
     }
 
-    auto *param = const_cast<ParamDecl *>(indices->get(idx));
+    auto *param = const_cast<ParamDecl *>(params->get(idx));
     if (flags & InvalidParameterFlag::DynamicMemberMissingParameterLabel) {
       // Technically, a `ParamDecl` can't have an argument label without a
       // parameter label, but we treat `dynamicMember:` as if it were an
@@ -3512,7 +3512,7 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
       DynamicMemberLookupSubscriptEligibility::InvalidParameterFlags;
 
   auto &ctx = SD->getASTContext();
-  auto *indices = SD->getIndices();
+  auto *params = SD->getParameterList();
   bool isSourceFile = SD->getParentSourceFile() != nullptr;
 
   // We want to check for the presence of a `dynamicMember` label to determine
@@ -3534,8 +3534,8 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
   //     `subscript(member: String)`)
   auto seenDynamicMemberLabel = false;
   std::optional<unsigned> dynamicMemberIdx = std::nullopt;
-  for (auto idx : range(0, indices->size())) {
-    auto *param = indices->get(idx);
+  for (auto idx : indices(*params)) {
+    auto *param = params->get(idx);
 
     auto argLabel = param->getArgumentName();
     auto paramLabel = param->getParameterName();
@@ -3556,8 +3556,8 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
   auto seenDynamicMemberParamLabel = false;
   std::optional<DynamicMemberKind> kind = std::nullopt;
   SmallVector<InvalidParameterFlags> paramFlags;
-  for (auto idx : range(0, indices->size())) {
-    auto *param = indices->get(idx);
+  for (auto idx : indices(*params)) {
+    auto *param = params->get(idx);
     InvalidParameterFlags flags;
 
     auto isDynamicMemberParam = false;
