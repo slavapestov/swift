@@ -3420,9 +3420,9 @@ SourceLoc PrettyPrintDeclRequest::evaluate(Evaluator &eval, const Decl *decl) co
   return memBufferStartLoc.getAdvancedLoc(targetDeclOffsetInBuffer);
 }
 
-bool DynamicMemberLookupSubscriptEligibility::diagnose() {
-  auto &diags = Decl->getASTContext().Diags;
-  auto *params = Decl->getParameterList();
+bool DynamicMemberLookupSubscriptEligibility::diagnose(SubscriptDecl *decl) const {
+  auto &diags = decl->getASTContext().Diags;
+  auto *params = decl->getParameterList();
   if (isEligibleForArgumentLabelFixIt()) {
     auto *param = const_cast<ParamDecl *>(params->get(0));
     diags
@@ -3434,7 +3434,7 @@ bool DynamicMemberLookupSubscriptEligibility::diagnose() {
     return true;
   }
 
-  auto diagnosed = false;
+  bool diagnosed = false;
   for (auto idx : indices(*params)) {
     auto flags = ParamFlags[idx];
     if (!flags) {
@@ -3614,5 +3614,5 @@ DynamicMemberLookupSubscriptRequest::evaluate(Evaluator &evaluator,
   }
 
   return DynamicMemberLookupSubscriptEligibility(
-      SD, dynamicMemberIdx, kind, paramFlags);
+      dynamicMemberIdx, kind, paramFlags);
 }

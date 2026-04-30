@@ -2152,8 +2152,9 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
   // group. (2) produces warnings in the current language mode, which will be
   // upgraded to errors in the next language mode (hence the separate diagnostic
   // stages).
-  SmallVector<DynamicMemberLookupSubscriptEligibility> validButInacessible;
-  SmallVector<DynamicMemberLookupSubscriptEligibility> invalid;
+  SubscriptDecl *validButInacessible = nullptr;
+  SmallVector<std::pair<SubscriptDecl *, DynamicMemberLookupSubscriptEligibility>>
+      invalid;
 
   auto requiredAccessScope = decl->getFormalAccessScope();
   auto accessDC = requiredAccessScope.getDeclContext();
@@ -2170,14 +2171,14 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
         return;
       }
 
-      validButInacessible.emplace_back(eligibility);
+      validButInacessible = SD;
       continue;
     }
 
-    invalid.emplace_back(eligibility);
+    invalid.emplace_back(SD, eligibility);
   }
 
-  if (!validButInacessible.empty()) {
+  if (validButInacessible != nullptr) {
     const auto languageModeForError = LanguageMode::future;
     bool shouldError = ctx.isLanguageModeAtLeast(languageModeForError);
 
@@ -2187,12 +2188,10 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
     shouldError |= decl->getModuleContext()->isResilient() &&
                    !decl->getDeclContext()->isInSwiftinterface();
 
-    auto firstInaccessible =
-        const_cast<SubscriptDecl *>(validButInacessible[0].getDecl());
-    auto diag = diagnose(firstInaccessible->getLoc(),
+    auto diag = diagnose(validButInacessible->getLoc(),
                          diag::dynamic_member_lookup_candidate_inaccessible,
-                         firstInaccessible);
-    fixItAccess(diag, firstInaccessible,
+                         validButInacessible);
+    fixItAccess(diag, validButInacessible,
                 requiredAccessScope.requiredAccessForDiagnostics(),
                 /*isForSetter=*/false, /*useDefaultAccess=*/false,
                 /*updateAttr=*/false);
@@ -2205,8 +2204,8 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
   }
 
   if (!invalid.empty()) {
-    for (auto &candidate : invalid) {
-      candidate.diagnose();
+    for (const auto &pair : invalid) {
+      pair.second.diagnose(pair.first);
     }
 
     attr->setInvalid();

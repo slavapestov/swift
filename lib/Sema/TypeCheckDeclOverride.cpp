@@ -2021,7 +2021,7 @@ static bool checkSingleOverride(ValueDecl *override, ValueDecl *base) {
         auto eligibility = evaluateOrFatal(
             overrideSubscript->getASTContext().evaluator,
             DynamicMemberLookupSubscriptRequest{overrideSubscript});
-        if (eligibility.diagnose()) {
+        if (eligibility.diagnose(overrideSubscript)) {
           return true;
         }
       }

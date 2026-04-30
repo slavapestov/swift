@@ -5695,9 +5695,6 @@ public:
   using InvalidParameterFlags = OptionSet<InvalidParameterFlag>;
 
 private:
-  /// The declaration this eligibility describes.
-  const SubscriptDecl *Decl;
-
   /// The subscript index of the `dynamicMember` parameter, if present.
   std::optional<unsigned> DynamicMemberIdx;
 
@@ -5710,13 +5707,11 @@ private:
 
 public:
   DynamicMemberLookupSubscriptEligibility(
-      const SubscriptDecl *decl, std::optional<unsigned> dynamicMemberIdx,
+      std::optional<unsigned> dynamicMemberIdx,
       std::optional<DynamicMemberKind> kind,
       SmallVector<InvalidParameterFlags> paramFlags)
-      : Decl(decl), DynamicMemberIdx(dynamicMemberIdx), Kind(kind),
-        ParamFlags(paramFlags) {
-    ASSERT(decl->getIndices()->size() == paramFlags.size());
-  }
+      : DynamicMemberIdx(dynamicMemberIdx), Kind(kind),
+        ParamFlags(paramFlags) {}
 
   bool isValid() const {
     return DynamicMemberIdx == 0 && Kind &&
@@ -5734,8 +5729,6 @@ public:
                        [&](const InvalidParameterFlags &f) { return !f; });
   }
 
-  const SubscriptDecl *getDecl() const { return Decl; }
-
   /// Returns the kind of the `dynamicMember` parameter if the decl is eligible
   /// for dynamic member lookup; `std::nullopt` otherwise.
   std::optional<DynamicMemberKind> getDynamicMemberKind() const {
@@ -5744,10 +5737,8 @@ public:
 
   /// If invalid, produces diagnostics describing the ineligibility.
   ///
-  /// Uses the diagnostic engine belonging to the `SubscriptDecl`'s AST context.
-  ///
   /// Returns whether an error diagnostic was produced.
-  bool diagnose();
+  bool diagnose(SubscriptDecl *decl) const;
 
   friend llvm::hash_code
   hash_value(const DynamicMemberLookupSubscriptEligibility &e) {
