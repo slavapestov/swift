@@ -3705,7 +3705,6 @@ namespace {
       // Build and type check the string literal index value to the specific
       // string type expected by the subscript.
       auto *nameExpr = new (ctx) StringLiteralExpr(name, loc, /*implicit*/true);
-      nameExpr->setType(literalTy);
       cs.setType(nameExpr, literalTy);
       return handleStringLiteralExpr(nameExpr);
     }
