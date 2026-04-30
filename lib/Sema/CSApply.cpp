@@ -3684,10 +3684,6 @@ namespace {
       auto param = params[0];
       auto paramTy = simplifyType(param.getParameterType());
 
-      SmallVector<AnyFunctionType::Param, 1> args;
-      AnyFunctionType::Param arg(paramTy, ctx.Id_dynamicMember);
-      args.push_back(arg);
-
       Expr *argExpr;
       if (overload.choice.isKeyPathDynamicMemberLookup()) {
         argExpr = buildKeyPathDynamicMemberArgExpr(paramTy, componentLoc,
@@ -3699,7 +3695,7 @@ namespace {
                                                   paramTy);
       }
 
-      return ArgumentList::forImplicitSingle(ctx, arg.getLabel(), argExpr);
+      return ArgumentList::forImplicitSingle(ctx, ctx.Id_dynamicMember, argExpr);
     }
 
     /// Form a type checked expression for the argument of a
