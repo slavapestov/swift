@@ -1008,7 +1008,7 @@ void MatchCallArgumentResult::dump(llvm::raw_ostream &out) {
   }
 
   auto printBindings = [&](const SmallVector<ParamBinding, 4> &parameterBindings) {
-    for (unsigned i = 0, e = parameterBindings.size(); i < e; ++i) {
+    for (unsigned i : indices(parameterBindings)) {
       const auto &bindings = parameterBindings[i];
       out << " [" << i << ": ";
       bool first = true;
