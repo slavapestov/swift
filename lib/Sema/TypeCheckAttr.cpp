@@ -2178,6 +2178,8 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
     invalid.emplace_back(SD, eligibility);
   }
 
+  bool diagnosed = false;
+
   if (validButInacessible != nullptr) {
     const auto languageModeForError = LanguageMode::future;
     bool shouldError = ctx.isLanguageModeAtLeast(languageModeForError);
@@ -2197,6 +2199,8 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
                 /*updateAttr=*/false);
     diag.warnUntilLanguageModeIf(!shouldError, languageModeForError);
 
+    diagnosed = true;
+
     if (shouldError) {
       attr->setInvalid();
       return;
@@ -2205,16 +2209,13 @@ void AttributeChecker::visitDynamicMemberLookupAttr(
 
   if (!invalid.empty()) {
     for (const auto &pair : invalid) {
-      pair.second.diagnose(pair.first);
+      diagnosed |= pair.second.diagnose(pair.first);
     }
-
-    attr->setInvalid();
-    return;
   }
 
-  // There were no candidates at all.
   attr->setInvalid();
-  diagnose(attr->getStartLoc(), diag::invalid_dynamic_member_lookup_type, type);
+  if (!diagnosed)
+    diagnose(attr->getStartLoc(), diag::invalid_dynamic_member_lookup_type, type);
 }
 
 /// Get the innermost enclosing declaration for a declaration.
