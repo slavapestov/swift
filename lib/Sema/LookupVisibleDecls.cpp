@@ -1126,7 +1126,7 @@ static void lookupVisibleDynamicMemberLookupDecls(
 
   for (ValueDecl *VD : subscripts) {
     auto *subscript = dyn_cast<SubscriptDecl>(VD);
-    if (!subscript || subscript->getDynamicMemberLookupKind(dc) !=
+    if (!subscript || subscript->getDynamicMemberLookupKind() !=
                           SubscriptDecl::DynamicMemberLookupKind::KeyPath) {
       continue;
     }

@@ -7734,12 +7734,7 @@ public:
   /// If the decl can be used to satisfy an `@dynamicMemberLookup` requirement,
   /// returns whether it satisfies the requirement using a key-path- or string-
   /// based type.
-  ///
-  /// If `useDC` is provided (where the decl is being used), validates that
-  /// access control is being used consistently and that `decl` is appropriately
-  /// accessible, returning `std::nullopt` if inaccessible.
-  std::optional<DynamicMemberLookupKind>
-  getDynamicMemberLookupKind(std::optional<const DeclContext *> useDC) const;
+  std::optional<DynamicMemberLookupKind> getDynamicMemberLookupKind() const;
 
   /// If the decl can be used to satisfy an `@dynamicMemberLookup` requirement
   /// using a `{{Reference}Writable}KeyPath` dynamic member parameter, returns
@@ -7748,8 +7743,7 @@ public:
   /// If `useDC` is provided (where the decl is being used), validates that
   /// access control is being used consistently and that `decl` is appropriately
   /// accessible, returning `nullptr` if inaccessible.
-  BoundGenericType *getDynamicMemberLookupKeyPathType(
-      std::optional<const DeclContext *> useDC) const;
+  BoundGenericType *getDynamicMemberLookupKeyPathType() const;
 
   SubscriptDecl *getOverriddenDecl() const {
     return cast_or_null<SubscriptDecl>(

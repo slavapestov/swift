@@ -10201,23 +10201,18 @@ SourceRange SubscriptDecl::getSignatureSourceRange() const {
 }
 
 std::optional<SubscriptDecl::DynamicMemberLookupKind>
-SubscriptDecl::getDynamicMemberLookupKind(
-    std::optional<const DeclContext *> useDC) const {
+SubscriptDecl::getDynamicMemberLookupKind() const {
   auto &ctx = getASTContext();
   auto eligibility = evaluateOrFatal(
       ctx.evaluator,
       DynamicMemberLookupSubscriptRequest{this});
 
-  if (useDC && !isAccessibleFrom(*useDC))
-    return std::nullopt;
-
   // `getDynamicMemberKind()` checks `isValid()`
   return eligibility.getDynamicMemberKind();
 }
 
-BoundGenericType *SubscriptDecl::getDynamicMemberLookupKeyPathType(
-    std::optional<const DeclContext *> useDC) const {
-  if (getDynamicMemberLookupKind(useDC) != DynamicMemberLookupKind::KeyPath) {
+BoundGenericType *SubscriptDecl::getDynamicMemberLookupKeyPathType() const {
+  if (getDynamicMemberLookupKind() != DynamicMemberLookupKind::KeyPath) {
     return nullptr;
   }
 

@@ -10889,7 +10889,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclNameRef memberName,
     // (in that case label is expected to match).
     if (auto *SD = dyn_cast<SubscriptDecl>(cand)) {
       if (memberLocator && instanceTy->hasDynamicMemberLookupAttribute()) {
-        if (SD->getDynamicMemberLookupKind(instanceTy->getAnyNominal()) ==
+        if (SD->getDynamicMemberLookupKind() ==
             SubscriptDecl::DynamicMemberLookupKind::KeyPath) {
           auto *args = getArgumentList(memberLocator);
           auto isDirectCallToSubscript =
@@ -11029,7 +11029,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclNameRef memberName,
       auto name = memberName.getBaseIdentifier();
       for (const auto &candidate : subscripts.ViableCandidates) {
         auto *SD = cast<SubscriptDecl>(candidate.getDecl());
-        auto kind = SD->getDynamicMemberLookupKind(DC);
+        auto kind = SD->getDynamicMemberLookupKind();
         if (!kind) {
           continue;
         }
@@ -11043,7 +11043,7 @@ performMemberLookup(ConstraintKind constraintKind, DeclNameRef memberName,
       for (auto index : indices(subscripts.UnviableCandidates)) {
         auto *SD =
             cast<SubscriptDecl>(subscripts.UnviableCandidates[index].getDecl());
-        auto kind = SD->getDynamicMemberLookupKind(DC);
+        auto kind = SD->getDynamicMemberLookupKind();
         if (!kind) {
           continue;
         }

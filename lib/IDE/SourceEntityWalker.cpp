@@ -476,7 +476,7 @@ ASTWalker::PreWalkResult<Expr *> SemaAnnotator::walkToExprPre(Expr *E) {
       if (baseType) {
         baseType = baseType->getWithoutSpecifierType();
         if (baseType->hasDynamicMemberLookupAttribute() &&
-            SD->getDynamicMemberLookupKind(SD->getDeclContext()) ==
+            SD->getDynamicMemberLookupKind() ==
                 SubscriptDecl::DynamicMemberLookupKind::KeyPath) {
           isKeyPathDynamicMemberLookup = true;
         }

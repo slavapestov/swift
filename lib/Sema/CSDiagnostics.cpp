@@ -2538,7 +2538,7 @@ AssignmentFailure::getMemberRef(ConstraintLocator *locator) const {
                  ? dyn_cast<SubscriptDecl>(member->choice.getDecl())
                  : nullptr;
 
-  auto kind = SD ? SD->getDynamicMemberLookupKind(getDC()) : std::nullopt;
+  auto kind = SD ? SD->getDynamicMemberLookupKind() : std::nullopt;
   if (!kind) {
     // Not a decl, subscript, or dynamic member lookup subscript; stick with the
     // existing overload choice.
@@ -2554,8 +2554,7 @@ AssignmentFailure::getMemberRef(ConstraintLocator *locator) const {
   case SubscriptDecl::DynamicMemberLookupKind::KeyPath: {
     // Access control has already been checked above when fetching `kind`; no
     // need to repeat here.
-    auto keyPathType =
-        SD->getDynamicMemberLookupKeyPathType(/*useDC=*/std::nullopt);
+    auto keyPathType = SD->getDynamicMemberLookupKeyPathType();
     ASSERT(keyPathType && "KeyPath-based dynamic member lookup subscripts must "
                           "have a valid dynamic member type");
 
