@@ -113,34 +113,8 @@ RequirementEnvironment::RequirementEnvironment(
       }
       return substGenericParam;
     },
-    [substConcreteType, conformance, conformanceDC, covariantSelf, &ctx](
-        InFlightSubstitution &IFS, Type type, ProtocolDecl *proto)
+    [](InFlightSubstitution &IFS, Type type, ProtocolDecl *proto)
           -> ProtocolConformanceRef {
-      // The protocol 'Self' conforms concretely to the conforming type.
-      if (type->isEqual(ctx.TheSelfType) && !covariantSelf && conformance) {
-        ProtocolConformance *specialized = conformance;
-
-        if (conformance->getGenericSignature()) {
-          auto concreteSubs =
-            substConcreteType->getContextSubstitutionMap(conformanceDC);
-          specialized =
-            ctx.getSpecializedConformance(substConcreteType,
-                                          cast<NormalProtocolConformance>(conformance),
-                                          concreteSubs);
-        }
-
-        // findWitnessedObjCRequirements() does a weird thing by passing in a
-        // DC that is not the conformance DC. Work around it here.
-        if (!specialized->getType()->isEqual(substConcreteType)) {
-          ASSERT(specialized->getType()->isExactSuperclassOf(substConcreteType));
-          specialized = ctx.getInheritedConformance(substConcreteType, specialized);
-        }
-
-        return ProtocolConformanceRef(specialized);
-      }
-
-      // All other generic parameters come from the requirement itself
-      // and conform abstractly.
       return lookupConformance(type.subst(IFS), proto);
     });
 
